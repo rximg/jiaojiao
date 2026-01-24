@@ -27,6 +27,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onTodoUpdate: (callback) => {
       ipcRenderer.on('agent:todoUpdate', (_event, data) => callback(data));
     },
+    onConfirmRequest: (callback) => {
+      ipcRenderer.on('agent:confirmRequest', (_event, data) => callback(data));
+    },
+    confirmAction: (ok) => ipcRenderer.send('agent:confirmAction', { ok }),
     stopStream: () => ipcRenderer.invoke('agent:stopStream'),
   },
 });

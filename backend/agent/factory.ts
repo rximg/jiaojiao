@@ -3,10 +3,52 @@ import { ChatOpenAI } from '@langchain/openai';
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { loadConfig } from './config.js';
+import type { BrowserWindow as BWType, IpcMain as IpcMainType } from 'electron';
 
 export async function createMainAgent() {
   // 加载配置
   const config = await loadConfig();
+
+  // Human-in-the-loop 确认：在 T2I/TTS 工具执行前请求用户确认
+  const requestHumanConfirm = async (action: 't2i' | 'tts', payload: any) => {
+    // 测试/无窗口时直接放行
+    if (process.env.RUN_INTEGRATION_TESTS === 'false' || process.env.NODE_ENV === 'test') return;
+    try {
+      const { BrowserWindow, ipcMain } = await import('electron') as {
+        BrowserWindow: typeof BWType;
+        ipcMain: typeof IpcMainType;
+      };
+      const win = BrowserWindow.getAllWindows()[0];
+      if (!win) return;
+
+      // 发送确认请求到渲染进程
+      win.webContents.send('agent:confirmRequest', { action, payload });
+
+      const result = await new Promise<{ ok: boolean }>((resolve) => {
+        let settled = false;
+        const timer = setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            resolve({ ok: false });
+          }
+        }, 30_000);
+
+        ipcMain.once('agent:confirmAction', (_event, data) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve(data || { ok: false });
+        });
+      });
+
+      if (!result?.ok) {
+        throw new Error(`${action} cancelled by user`);
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[confirm] fallback allow:', err);
+    }
+  };
 
   // 创建 LLM
   // 注意：ChatOpenAI 的配置可能需要根据实际版本调整
@@ -18,85 +60,24 @@ export async function createMainAgent() {
     configuration: {
       baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     },
+    // 回调日志，便于观察每次 LLM 调用
+    callbacks: [
+      {
+        // handleLLMStart({ name }, prompts) {
+        //   // eslint-disable-next-line no-console
+        //   console.log('[LLM start]', name ?? 'llm', prompts);
+        // },
+        handleLLMEnd(output) {
+          // eslint-disable-next-line no-console
+          console.log('[LLM end]', JSON.stringify(output, null, 2));
+        },
+        handleLLMError(err) {
+          // eslint-disable-next-line no-console
+          console.error('[LLM error]', err);
+        },
+      },
+    ],
   });
-
-  const loadAgentAIMessage = async () => {
-    const { AIMessage } = await import('deepagents/node_modules/@langchain/core/messages');
-    return AIMessage;
-  };
-
-  const toAgentAIMessage = async (maybeMessage: any) => {
-    const AIMessage = await loadAgentAIMessage();
-    if (maybeMessage instanceof AIMessage) return maybeMessage;
-    const content = typeof maybeMessage?.content === 'string'
-      ? maybeMessage.content
-      : JSON.stringify(maybeMessage?.content ?? '');
-    return new AIMessage(content);
-  };
-
-  // 包装模型，确保所有输出路径都返回 deepagents 版本的 AIMessage
-  const wrapModel = (baseModel: ChatOpenAI): any => {
-    return {
-      lc_serializable: baseModel.lc_serializable,
-      lc_namespace: baseModel.lc_namespace,
-      lc_secrets: baseModel.lc_secrets,
-      lc_attributes: baseModel.lc_attributes,
-      modelName: (baseModel as any).modelName,
-      invocationParams: (baseModel as any).invocationParams,
-      _llmType: (baseModel as any)._llmType,
-      async invoke(input: any, options: any) {
-        const res = await baseModel.invoke(input, options);
-        return toAgentAIMessage(res);
-      },
-      async generate(messages: any, options: any, runManager?: any) {
-        const result = await (baseModel as any).generate(messages, options, runManager);
-        const AIMessage = await loadAgentAIMessage();
-        result.generations = result.generations.map((gens: any[]) =>
-          gens.map((g: any) => ({
-            ...g,
-            message: g.message instanceof AIMessage
-              ? g.message
-              : new AIMessage(
-                  typeof g.message?.content === 'string'
-                    ? g.message.content
-                    : JSON.stringify(g.message?.content ?? '')
-                ),
-          }))
-        );
-        return result;
-      },
-      async stream(input: any, options?: any) {
-        // stream 的块也包一层，避免混入其他 message 实例
-        const iterable = await (baseModel as any).stream(input, options);
-        const AIMessage = await loadAgentAIMessage();
-        async function* wrapped() {
-          for await (const chunk of iterable as any) {
-            if (chunk instanceof AIMessage) {
-              yield chunk;
-            } else if (chunk?.message) {
-              const msg = chunk.message instanceof AIMessage
-                ? chunk.message
-                : new AIMessage(
-                    typeof chunk.message?.content === 'string'
-                      ? chunk.message.content
-                      : JSON.stringify(chunk.message?.content ?? '')
-                  );
-              yield { ...chunk, message: msg };
-            } else {
-              yield chunk;
-            }
-          }
-        }
-        return wrapped();
-      },
-      bind(kwargs: any) {
-        const bound = baseModel.bind(kwargs);
-        return wrapModel(bound as ChatOpenAI);
-      },
-    };
-  };
-
-  const agentModel = wrapModel(llm);
 
   // 创建 parse_premise 工具
   const parsePremiseTool = tool(
@@ -127,6 +108,7 @@ export async function createMainAgent() {
       style?: string;
       count?: number;
     }) => {
+      await requestHumanConfirm('t2i', params);
       const { generateImage } = await import('../mcp/t2i.js');
       return await generateImage(params);
     },
@@ -149,6 +131,7 @@ export async function createMainAgent() {
       voice?: string;
       format?: string;
     }) => {
+      await requestHumanConfirm('tts', params);
       const { synthesizeSpeech } = await import('../mcp/tts.js');
       return await synthesizeSpeech(params);
     },
@@ -186,9 +169,9 @@ export async function createMainAgent() {
   ];
 
   // 创建 Deep Agent
-  // @ts-ignore - Type compatibility between different langchain versions
+  // @ts-ignore - Type compatibility with deepagents
   const agent = createDeepAgent({
-    model: agentModel as any,
+    model: llm,
     tools,
     systemPrompt: mainAgentPrompt,
     subagents: subAgents,
@@ -203,30 +186,34 @@ async function loadPromptTemplate(name: string): Promise<string> {
   if (name === 'main_agent') {
     return `你是有声绘本制作助手，负责协调整个绘本生成流程。
 
-你的工作流程：
+## 你的职责：
+根据用户输入，使用工具生成绘本相关资源（图片和音频），然后将结果总结并返回给用户。
+
+## 工作流程：
+
 1. **解析用户输入**：调用 parse_premise 工具，将用户输入（如"3岁森林卡通"）解析为标准JSON格式，包含age、theme、style、language等字段。
 
-2. **生成文生图提示词**：使用 task 工具委派给 prompt_generator 子代理，传递前提变量JSON。子代理会返回详细的文生图提示词。
+2. **生成文生图提示词**：调用 task 工具委派给 prompt_generator 子代理，基于前提变量生成文生图提示词。
 
 3. **生成绘本图片**：调用 generate_image 工具，使用生成的提示词生成绘本图片。参数：
    - prompt: 子代理返回的提示词
-   - size: "1024x1024"（默认）
-   - style: 将前提变量中的style映射为API格式（如"卡通"→"<3d cartoon>"）
+   - size: "1024*1024"
    - count: 1
 
-4. **生成台词**：使用 task 工具委派给 script_generator 子代理，传递图片提示词和前提变量。子代理会返回JSON格式的台词数组。
+4. **生成台词**：调用 task 工具委派给 script_generator 子代理，根据图片提示词和前提变量生成适配年龄的台词。
 
 5. **生成语音**：调用 synthesize_speech 工具，将台词转换为语音。参数：
-   - texts: 子代理返回的scripts数组
-   - voice: "chinese_female"（默认）
-   - format: "mp3"（默认）
+   - texts: 子代理返回的台词数组
+   - voice: "chinese_female"
+   - format: "mp3"
 
-6. **整合结果**：返回完整的绘本制作结果，包括：
-   - 图片URI列表
-   - 音频URI列表
-   - 台词文本列表
+6. **整合结果**：返回完整的绘本制作结果，包括图片路径、音频路径和台词文本。
 
-请严格按照流程执行。对于提示词生成和台词生成，必须使用 task 工具委派给对应的子代理处理。如果某个步骤失败，请提供明确的错误信息。`;
+## 重要规则：
+- 严格按照上述6个步骤顺序执行
+- 每个步骤只执行一次
+- 完成第6步后立即停止，不要重复任何步骤
+- 如果某个步骤失败，报告错误并停止`;
   }
   
   if (name === 'prompt_generator') {
@@ -240,7 +227,11 @@ async function loadPromptTemplate(name: string): Promise<string> {
 3. Visual Guidelines(视觉规范) - 包括构图布局、拆解内容、风格与注释
 4. Workflow(执行流程) - 分析主体特征、提取拆解元素、设计深度元素、整合生成全图
 
-请根据前提变量生成详细的文生图提示词。`;
+请根据前提变量生成详细的文生图提示词。
+
+**不要使用 write_todos 工具**，直接生成提示词并返回。
+
+完成后，只返回生成的提示词，然后停止。`;
   }
   
   if (name === 'script_generator') {
@@ -256,7 +247,11 @@ async function loadPromptTemplate(name: string): Promise<string> {
 {
   "text": "台词文本",
   "order": 序号
-}`;
+}
+
+**不要使用 write_todos 工具**，直接生成台词并返回。
+
+完成后，只返回JSON格式的台词数组，然后停止。`;
   }
   
   return '';

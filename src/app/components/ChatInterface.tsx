@@ -5,7 +5,8 @@ import { Textarea } from '@/components/ui/textarea';
 import ChatMessage from './ChatMessage';
 import WelcomeMessage from './WelcomeMessage';
 import QuickOptions from './QuickOptions';
-import { useChat } from '@/providers/ChatProvider';
+import TodoPanel from './TodoPanel';
+import { useChat } from '../../providers/ChatProvider';
 
 interface ChatInterfaceProps {
   threadId: string | null;
@@ -21,7 +22,7 @@ export default function ChatInterface({
   const [input, setInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { messages, isLoading, sendMessage, stopStream } = useChat();
+  const { messages, todos, isLoading, sendMessage, stopStream } = useChat();
   const [showWelcome, setShowWelcome] = useState(true);
 
   const handleSubmit = useCallback(
@@ -87,8 +88,14 @@ export default function ChatInterface({
           {/* 历史记录 */}
         </div>
 
-        {/* 聊天内容 */}
+        {/* 聊天内容 + 待办面板 */}
         <div className="flex-1 flex flex-col overflow-hidden">
+          {/* 待办进度 */}
+          <div className="px-6 pt-4">
+            <TodoPanel todos={todos} />
+            <div className="text-xs text-muted-foreground mt-1">Debug: todos.length = {todos.length}</div>
+          </div>
+
           <div
             className="flex-1 overflow-y-auto p-6 space-y-4"
             ref={messagesEndRef}

@@ -1,8 +1,23 @@
 import type { AppConfig } from '../../src/types/types';
 import Store from 'electron-store';
 
-// Provide projectName to support Node (vitest) runtime without Electron
-const store = new Store({ name: 'config', projectName: 'agent-app' });
+// Initialize Store - use projectName when in Electron, handle Node environment
+let store: Store<Partial<AppConfig>>;
+try {
+  store = new Store(
+    { 
+      name: 'config',
+      projectName: 'agent-app' 
+    } as any
+  );
+} catch {
+  // In Node.js/test environment, create a minimal mock store
+  store = {
+    store: {},
+    set: () => {},
+    get: () => undefined,
+  } as any;
+}
 
 export async function loadConfig(): Promise<AppConfig> {
   try {

@@ -1,12 +1,14 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import type { Message, TodoItem } from '../types/types';
 
 interface ChatContextType {
   messages: Message[];
   todos: TodoItem[];
+  pendingAction: { action: 't2i' | 'tts'; payload: any } | null;
   isLoading: boolean;
   currentThreadId: string | null;
   sendMessage: (text: string, threadId?: string) => Promise<void>;
+  respondConfirm: (ok: boolean) => Promise<void>;
   stopStream: () => Promise<void>;
   setCurrentThreadId: (id: string | null) => void;
 }
@@ -16,14 +18,25 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [todos, setTodos] = useState<TodoItem[]>([]);
+  const [pendingAction, setPendingAction] = useState<{ action: 't2i' | 'tts'; payload: any } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
+  const threadRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    threadRef.current = currentThreadId;
+  }, [currentThreadId]);
 
   useEffect(() => {
     // 监听 Agent 消息
-    window.electronAPI.agent.onMessage((data: any) => {
-      if (data.threadId === currentThreadId) {
-        // 处理消息更新
+    const handleMessage = (data: any) => {
+      // 如果收到消息但threadId不匹配且当前threadId为空，则自动同步
+      if (!threadRef.current && data.threadId) {
+        console.log('[renderer] auto-syncing threadId from message:', data.threadId);
+        setCurrentThreadId(data.threadId);
+      }
+      
+      if (data.threadId === threadRef.current) {
         const newMessages = data.messages.map((msg: any) => ({
           id: msg.id || `msg-${Date.now()}-${Math.random()}`,
           role: msg.role || 'assistant',
@@ -32,21 +45,59 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }));
         setMessages((prev) => [...prev, ...newMessages]);
       }
-    });
+    };
 
-    window.electronAPI.agent.onTodoUpdate((data: any) => {
-      if (data.threadId === currentThreadId) {
+    const handleTodo = (data: any) => {
+      console.log('[renderer] received todoUpdate:', data);
+      
+      // 如果收到todos但threadId不匹配且当前threadId为空，则自动同步
+      if (!threadRef.current && data.threadId) {
+        console.log('[renderer] auto-syncing threadId from todos:', data.threadId);
+        setCurrentThreadId(data.threadId);
+        // 立即更新todos，因为threadRef在下次渲染才会更新
+        console.log('[renderer] updating todos immediately:', data.todos);
         setTodos(data.todos || []);
+      } else if (data.threadId === threadRef.current) {
+        console.log('[renderer] updating todos to:', data.todos);
+        setTodos(data.todos || []);
+      } else {
+        console.log('[renderer] skipping todo update, wrong thread:', data.threadId, 'vs', threadRef.current);
       }
-    });
-  }, [currentThreadId]);
+    };
+
+    const handleConfirm = (data: any) => {
+      console.log('[renderer] received confirmRequest:', data);
+      setPendingAction(data);
+    };
+
+    window.electronAPI.agent.onMessage(handleMessage);
+    window.electronAPI.agent.onTodoUpdate(handleTodo);
+
+    if (typeof window.electronAPI.agent.onConfirmRequest === 'function') {
+      window.electronAPI.agent.onConfirmRequest(handleConfirm);
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn('[agent] onConfirmRequest not available in preload');
+    }
+
+    return () => {
+      // 无法移除监听，因为 preload 未暴露 off；依赖单次注册
+    };
+  }, []);
+
+  const respondConfirm = useCallback(async (ok: boolean) => {
+    console.log('[renderer] responding to confirm with:', ok);
+    if (typeof window.electronAPI.agent.confirmAction === 'function') {
+      await window.electronAPI.agent.confirmAction(ok);
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn('[agent] confirmAction not available in preload');
+    }
+    setPendingAction(null);
+  }, []);
 
   const sendMessage = useCallback(async (text: string, threadId?: string) => {
     const thread = threadId || currentThreadId || undefined;
-    if (!thread) {
-      const newThreadId = `thread-${Date.now()}`;
-      setCurrentThreadId(newThreadId);
-    }
 
     // 添加用户消息
     const userMessage: Message = {
@@ -60,9 +111,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     try {
       const newThreadId = await window.electronAPI.agent.sendMessage(text, thread);
-      if (!currentThreadId) {
-        setCurrentThreadId(newThreadId);
-      }
+      console.log('[renderer] backend returned threadId:', newThreadId, 'current:', currentThreadId);
+      // Always update to the backend's threadId to keep in sync
+      setCurrentThreadId(newThreadId);
     } catch (error) {
       console.error('Failed to send message:', error);
     } finally {
@@ -80,9 +131,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       value={{
         messages,
         todos,
+        pendingAction,
         isLoading,
         currentThreadId,
         sendMessage,
+        respondConfirm,
         stopStream,
         setCurrentThreadId,
       }}

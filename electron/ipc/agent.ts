@@ -25,21 +25,29 @@ export function handleAgentIPC() {
       // 发送消息并流式返回结果
       // deepagentsjs 返回的是 LangGraph graph，支持 stream 方法
       try {
-        const stream = await agent.stream(
+        // @ts-ignore - Type instantiation is too deep with deepagents
+        const stream = await (agent as any).stream(
           { messages: [{ role: 'user', content: message }] },
-          { signal: currentStreamController.signal }
+          { 
+            signal: currentStreamController.signal,
+            recursionLimit: 100  // Increase recursion limit to handle complex agent workflows
+          }
         );
 
         // 处理流式响应
-        // LangGraph stream 返回的是状态更新
+        // LangGraph stream chunks are keyed by node/middleware name
         for await (const chunk of stream) {
           if (currentStreamController.signal.aborted) {
             break;
           }
 
-          // LangGraph 的 stream 返回格式可能是 { messages: [...], ... }
-          // 需要根据实际返回格式调整
-          const state = chunk as any;
+          // Extract the actual state from the keyed chunk
+          // Chunks have structure: { "NodeName.step": { messages, todos, ... } }
+          const chunkKeys = Object.keys(chunk);
+          const nodeKey = chunkKeys[0];
+          const state = nodeKey ? (chunk as any)[nodeKey] : chunk;
+
+          console.log('[stream node]', nodeKey, 'has todos:', state.todos ? state.todos.length : 'no');
 
           // 发送消息块
           if (state.messages && Array.isArray(state.messages)) {
@@ -69,8 +77,9 @@ export function handleAgentIPC() {
             });
           }
 
-          // 发送 Todo 更新（deepagents 有内置的 todos）
-          if (state.todos && Array.isArray(state.todos)) {
+          // 发送 Todo 更新（deepagents 的 todoListMiddleware 会更新 state.todos）
+          if (state.todos && Array.isArray(state.todos) && state.todos.length > 0) {
+            console.log('[todos update]', JSON.stringify(state.todos, null, 2));
             mainWindow.webContents.send('agent:todoUpdate', {
               threadId: newThreadId,
               todos: state.todos,
@@ -87,8 +96,11 @@ export function handleAgentIPC() {
         
         // 尝试使用 invoke 方法
         try {
-          const result = await agent.invoke({ 
+          // @ts-ignore - Type instantiation is too deep with deepagents
+          const result = await (agent as any).invoke({ 
             messages: [{ role: 'user', content: message }] 
+          }, {
+            recursionLimit: 100  // Increase recursion limit for invoke as well
           });
           
           const state = result as any;
