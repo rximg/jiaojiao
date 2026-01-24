@@ -1,7 +1,8 @@
 import type { AppConfig } from '../../src/types/types';
 import Store from 'electron-store';
 
-const store = new Store({ name: 'config' });
+// Provide projectName to support Node (vitest) runtime without Electron
+const store = new Store({ name: 'config', projectName: 'agent-app' });
 
 export async function loadConfig(): Promise<AppConfig> {
   try {

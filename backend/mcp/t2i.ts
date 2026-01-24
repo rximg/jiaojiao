@@ -18,57 +18,141 @@ export async function generateImage(
   params: GenerateImageParams
 ): Promise<GenerateImageResult> {
   const config = await loadConfig();
-  const { prompt, size = '1024x1024', style, count = 1 } = params;
+  const { prompt, size = '1024*1024', style, count = 1 } = params;
 
-  // 调用阿里百炼文生图 API
-  // 这里需要根据实际的 API 实现
-  const response = await fetch(
-    'https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.apiKeys.dashscope}`,
+  const token = config.apiKeys.t2i || config.apiKeys.dashscope || '';
+  const endpoint = process.env.DASHSCOPE_T2I_ENDPOINT
+    || 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis';
+  const taskEndpoint = process.env.DASHSCOPE_T2I_TASK_ENDPOINT
+    || 'https://dashscope.aliyuncs.com/api/v1/tasks';
+  const model = process.env.DASHSCOPE_T2I_MODEL || 'wanx-v1';
+
+  // 1. 发起异步文生图请求（需要 X-DashScope-Async: enable 头）
+  const parameters: Record<string, any> = {
+    size,
+    n: count,
+  };
+  if (style) {
+    parameters.style = style;
+  }
+
+  const asyncResponse = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-DashScope-Async': 'enable',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      model,
+      input: {
+        prompt,
       },
-      body: JSON.stringify({
-        model: 'wanx-v1',
-        input: {
-          prompt,
-        },
-        parameters: {
-          size,
-          style,
-          n: count,
-        },
-      }),
+      parameters,
+    }),
+  });
+
+  if (!asyncResponse.ok) {
+    const body = await asyncResponse.text().catch(() => '');
+    throw new Error(`T2I async request failed: ${asyncResponse.status} ${asyncResponse.statusText} ${body}`);
+  }
+
+  const asyncData = await asyncResponse.json() as any;
+  const taskId = asyncData?.output?.task_id;
+
+  if (!taskId) {
+    throw new Error('T2I async request did not return task_id');
+  }
+
+  // 2. 轮询任务状态直到完成或失败
+  const maxAttempts = 60;
+  let taskStatus = '';
+  let taskResult: any = null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    // 等待后再轮询
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    const pollResponse = await fetch(`${taskEndpoint}/${taskId}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!pollResponse.ok) {
+      const body = await pollResponse.text().catch(() => '');
+      throw new Error(`T2I poll failed: ${pollResponse.status} ${pollResponse.statusText} ${body}`);
     }
-  );
 
-  if (!response.ok) {
-    throw new Error(`T2I API error: ${response.statusText}`);
+    const pollData = await pollResponse.json() as any;
+    taskStatus = pollData?.output?.task_status;
+
+    if (taskStatus === 'SUCCEEDED') {
+      taskResult = pollData?.output;
+      break;
+    } else if (taskStatus === 'FAILED') {
+      const msg = pollData?.output?.message || 'Task failed';
+      throw new Error(`T2I task failed: ${msg}`);
+    }
+
+    // eslint-disable-next-line no-console
+    console.log(`T2I task status (${attempt + 1}/${maxAttempts}): ${taskStatus}`);
   }
 
-  const data = await response.json();
-  const imageUrl = data.output?.results?.[0]?.url;
-
-  if (!imageUrl) {
-    throw new Error('Failed to generate image');
+  if (!taskResult) {
+    throw new Error('T2I task polling timeout');
   }
 
-  // 下载图片并保存到本地
-  const imageResponse = await fetch(imageUrl);
-  const imageBuffer = await imageResponse.arrayBuffer();
+  // 3. 提取图片URL
+  const results = taskResult.results || [];
+  if (!results.length) {
+    throw new Error('T2I task completed but returned no results');
+  }
 
+  const imageUrls = results
+    .map((r: any) => r.url)
+    .filter((url: string | undefined): url is string => !!url);
+
+  if (!imageUrls.length) {
+    throw new Error('T2I results contain no valid image URLs');
+  }
+
+  // 4. 下载并保存图片
   const outputDir = path.join(config.storage.outputPath, 'images');
   await fs.mkdir(outputDir, { recursive: true });
 
-  const imageFileName = `image_${Date.now()}.png`;
-  const imagePath = path.join(outputDir, imageFileName);
+  const savedPaths: string[] = [];
+  for (const imageUrl of imageUrls) {
+    try {
+      const imageResponse = await fetch(imageUrl);
+      if (!imageResponse.ok) {
+        const body = await imageResponse.text().catch(() => '');
+        throw new Error(`Image download failed: ${imageResponse.status} ${imageResponse.statusText} ${body}`);
+      }
+      const imageBuffer = await imageResponse.arrayBuffer();
 
-  await fs.writeFile(imagePath, Buffer.from(imageBuffer));
+      const imageFileName = `image_${Date.now()}_${Math.random().toString(36).slice(2, 9)}.png`;
+      const imagePath = path.resolve(path.join(outputDir, imageFileName));
+
+      await fs.writeFile(imagePath, Buffer.from(imageBuffer));
+      savedPaths.push(imagePath);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error(`Failed to download image ${imageUrl}`);
+      continue;
+    }
+  }
+
+  if (!savedPaths.length) {
+    throw new Error('Failed to download any images');
+  }
+
+  // 返回第一张图片路径（或可返回所有路径）
+  const imagePath = savedPaths[0];
 
   return {
     imagePath,
-    imageUrl,
+    imageUrl: imageUrls[0],
   };
 }

@@ -1,8 +1,6 @@
 import { createDeepAgent, type SubAgent } from 'deepagents';
 import { ChatOpenAI } from '@langchain/openai';
 import { tool } from '@langchain/core/tools';
-// 使用 deepagents 自带的 @langchain/core 版本，避免 AIMessage instanceof 不匹配
-import { AIMessage } from 'deepagents/node_modules/@langchain/core/messages';
 import { z } from 'zod';
 import { loadConfig } from './config.js';
 
@@ -22,14 +20,83 @@ export async function createMainAgent() {
     },
   });
 
-  // 强制将模型输出规范为 AIMessage（部分 DashScope 回包是对象，导致深度代理中间件报错）
-  const originalInvoke = llm.invoke.bind(llm);
-  // @ts-ignore 兼容运行时覆写
-  llm.invoke = async (input, options) => {
-    const res = await originalInvoke(input, options as any);
-    const content = typeof res.content === 'string' ? res.content : JSON.stringify(res.content);
+  const loadAgentAIMessage = async () => {
+    const { AIMessage } = await import('deepagents/node_modules/@langchain/core/messages');
+    return AIMessage;
+  };
+
+  const toAgentAIMessage = async (maybeMessage: any) => {
+    const AIMessage = await loadAgentAIMessage();
+    if (maybeMessage instanceof AIMessage) return maybeMessage;
+    const content = typeof maybeMessage?.content === 'string'
+      ? maybeMessage.content
+      : JSON.stringify(maybeMessage?.content ?? '');
     return new AIMessage(content);
   };
+
+  // 包装模型，确保所有输出路径都返回 deepagents 版本的 AIMessage
+  const wrapModel = (baseModel: ChatOpenAI): any => {
+    return {
+      lc_serializable: baseModel.lc_serializable,
+      lc_namespace: baseModel.lc_namespace,
+      lc_secrets: baseModel.lc_secrets,
+      lc_attributes: baseModel.lc_attributes,
+      modelName: (baseModel as any).modelName,
+      invocationParams: (baseModel as any).invocationParams,
+      _llmType: (baseModel as any)._llmType,
+      async invoke(input: any, options: any) {
+        const res = await baseModel.invoke(input, options);
+        return toAgentAIMessage(res);
+      },
+      async generate(messages: any, options: any, runManager?: any) {
+        const result = await (baseModel as any).generate(messages, options, runManager);
+        const AIMessage = await loadAgentAIMessage();
+        result.generations = result.generations.map((gens: any[]) =>
+          gens.map((g: any) => ({
+            ...g,
+            message: g.message instanceof AIMessage
+              ? g.message
+              : new AIMessage(
+                  typeof g.message?.content === 'string'
+                    ? g.message.content
+                    : JSON.stringify(g.message?.content ?? '')
+                ),
+          }))
+        );
+        return result;
+      },
+      async stream(input: any, options?: any) {
+        // stream 的块也包一层，避免混入其他 message 实例
+        const iterable = await (baseModel as any).stream(input, options);
+        const AIMessage = await loadAgentAIMessage();
+        async function* wrapped() {
+          for await (const chunk of iterable as any) {
+            if (chunk instanceof AIMessage) {
+              yield chunk;
+            } else if (chunk?.message) {
+              const msg = chunk.message instanceof AIMessage
+                ? chunk.message
+                : new AIMessage(
+                    typeof chunk.message?.content === 'string'
+                      ? chunk.message.content
+                      : JSON.stringify(chunk.message?.content ?? '')
+                  );
+              yield { ...chunk, message: msg };
+            } else {
+              yield chunk;
+            }
+          }
+        }
+        return wrapped();
+      },
+      bind(kwargs: any) {
+        const bound = baseModel.bind(kwargs);
+        return wrapModel(bound as ChatOpenAI);
+      },
+    };
+  };
+
+  const agentModel = wrapModel(llm);
 
   // 创建 parse_premise 工具
   const parsePremiseTool = tool(
@@ -121,7 +188,7 @@ export async function createMainAgent() {
   // 创建 Deep Agent
   // @ts-ignore - Type compatibility between different langchain versions
   const agent = createDeepAgent({
-    model: llm as any,
+    model: agentModel as any,
     tools,
     systemPrompt: mainAgentPrompt,
     subagents: subAgents,

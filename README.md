@@ -53,6 +53,17 @@ npm install --legacy-peer-deps
 
 ```env
 DASHSCOPE_API_KEY=你的阿里百炼API Key
+DASHSCOPE_MODEL=qwen-plus
+# 仅当你希望在测试中真实调用外部API时设为 true
+RUN_INTEGRATION_TESTS=false
+
+# 可选：为文生图/语音单独配置模型与端点（你的账户权限为准）
+# 文生图（T2I）
+DASHSCOPE_T2I_MODEL=wanx-v1
+DASHSCOPE_T2I_ENDPOINT=https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis
+# 语音合成（TTS）
+DASHSCOPE_TTS_MODEL=sambert-zhichu-v1
+DASHSCOPE_TTS_ENDPOINT=https://dashscope.aliyuncs.com/api/v1/services/audio/tts
 ```
 
 ### 3. 开发模式运行
@@ -68,6 +79,27 @@ npm run electron:dev
 ```bash
 npm run electron:build
 ```
+
+### 5. 运行测试（含集成测试开关）
+
+默认测试会从 `.env` 加载环境变量；为避免误触发外部 API，已默认跳过集成测试。若要启用：
+
+```bash
+# 在 .env 中设置并填写：
+# DASHSCOPE_API_KEY=你的Key
+# RUN_INTEGRATION_TESTS=true
+
+# 运行全部测试（将调用真实接口）
+npm run test:run
+
+# 仅本地快速检查（保持 RUN_INTEGRATION_TESTS=false 会跳过外部API测试）
+npm run test:run
+```
+
+测试覆盖：
+- LLM：调用 DashScope 兼容端点，校验返回内容非空（`tests/llm.test.ts`）
+- T2I：调用阿里百炼文生图生成图片，校验文件落盘（`tests/t2i.test.ts`）
+- TTS：调用阿里百炼语音合成生成音频，校验文件落盘（`tests/tts.test.ts`）
 
 ## 功能特性
 
