@@ -1,0 +1,276 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import * as yaml from 'js-yaml';
+
+export interface AgentConfig {
+  name: string;
+  version: string;
+  description: string;
+  agent: {
+    name: string;
+    version: string;
+    type: string;
+    system_prompt: {
+      path: string;
+    };
+    storage: {
+      type: string;
+      path: string;
+    };
+    llm: {
+      model: string;
+      temperature: number;
+      max_tokens: number;
+    };
+  };
+  mcp_services: {
+    [key: string]: {
+      enable: boolean;
+      type: string;
+      name: string;
+      description: string;
+      config_path: string;
+      config?: any;
+    };
+  };
+  sub_agents: {
+    [key: string]: {
+      enable: boolean;
+      name: string;
+      description: string;
+      config_path: string;
+      config?: any;
+    };
+  };
+  workflow?: {
+    steps: Array<{
+      id: number;
+      name: string;
+      tool?: string;
+      subagent?: string;
+      type?: string;
+      required: boolean;
+    }>;
+  };
+}
+
+export interface MCPConfig {
+  name: string;
+  version: string;
+  description: string;
+  service: {
+    type: string;
+    provider: string;
+    endpoint: string;
+    task_endpoint?: string;
+    model: string;
+    default_params: any;
+    timeout?: any;
+    batch?: any;
+    output: {
+      directory: string;
+      format: string;
+    };
+  };
+}
+
+export interface SubAgentConfig {
+  sub_agent: {
+    name: string;
+    version: string;
+    description: string;
+    system_prompt: {
+      path: string;
+    };
+    capabilities?: string[];
+    output?: any;
+  };
+}
+
+export class ConfigLoader {
+  private configDir: string;
+  private projectRoot: string;
+
+  constructor(configDir: string, projectRoot?: string) {
+    this.configDir = path.resolve(configDir);
+    
+    // 如果指定了projectRoot，直接使用；否则自动计算
+    if (projectRoot) {
+      this.projectRoot = path.resolve(projectRoot);
+    } else {
+      // 自动计算：从configDir (backend/config) 向上两级到app根目录
+      this.projectRoot = path.resolve(this.configDir, '..', '..');
+    }
+    
+    console.log(`[ConfigLoader] Config dir: ${this.configDir}`);
+    console.log(`[ConfigLoader] Project root: ${this.projectRoot}`);
+  }
+
+  /**
+   * 加载YAML文件
+   */
+  private loadYaml<T = any>(filePath: string): T {
+    let absolutePath: string;
+    
+    if (path.isAbsolute(filePath)) {
+      // 绝对路径直接使用
+      absolutePath = filePath;
+    } else if (filePath.startsWith('../')) {
+      // ../开头的路径基于configDir解析
+      absolutePath = path.resolve(this.configDir, filePath);
+    } else if (filePath.startsWith('./')) {
+      // ./开头的路径基于configDir解析（config目录内的相对路径）
+      absolutePath = path.resolve(this.configDir, filePath.substring(2));
+    } else {
+      // 其他相对路径基于configDir
+      absolutePath = path.resolve(this.configDir, filePath);
+    }
+
+    console.log(`[ConfigLoader] Loading YAML: ${filePath} -> ${absolutePath}`);
+
+    if (!fs.existsSync(absolutePath)) {
+      throw new Error(`配置文件不存在: ${absolutePath}`);
+    }
+
+    const content = fs.readFileSync(absolutePath, 'utf-8');
+    const parsed = yaml.load(content) as T;
+
+    if (!parsed || typeof parsed !== 'object') {
+      throw new Error(`配置文件格式错误: ${absolutePath}`);
+    }
+
+    return parsed;
+  }
+
+  /**
+   * 加载文本文件（提示词等）
+   */
+  loadTextFile(filePath: string): string {
+    // 如果是相对路径，基于项目根目录
+    const absolutePath = path.isAbsolute(filePath)
+      ? filePath
+      : path.resolve(this.projectRoot, filePath);
+
+    if (!fs.existsSync(absolutePath)) {
+      throw new Error(`文件不存在: ${absolutePath}`);
+    }
+
+    return fs.readFileSync(absolutePath, 'utf-8');
+  }
+
+  /**
+   * 从YAML文件加载提示词
+   */
+  loadPromptFromYaml(yamlPath: string): string {
+    const config = this.loadYaml<any>(yamlPath);
+    
+    if (!config.system_prompt) {
+      throw new Error(`YAML文件缺少system_prompt字段: ${yamlPath}`);
+    }
+
+    return config.system_prompt;
+  }
+
+  /**
+   * 加载MCP配置
+   */
+  loadMCPConfig(configPath: string): MCPConfig {
+    return this.loadYaml<MCPConfig>(configPath);
+  }
+
+  /**
+   * 加载SubAgent配置
+   */
+  loadSubAgentConfig(configPath: string): SubAgentConfig {
+    return this.loadYaml<SubAgentConfig>(configPath);
+  }
+
+  /**
+   * 加载主配置并递归加载所有子配置
+   */
+  loadMainConfig(configPath?: string): AgentConfig {
+    const mainConfigPath = configPath || path.join(this.configDir, 'main_agent_config.yaml');
+    const config = this.loadYaml<AgentConfig>(mainConfigPath);
+
+    // 加载所有MCP服务配置
+    if (config.mcp_services) {
+      for (const [key, mcpEntry] of Object.entries(config.mcp_services)) {
+        if (mcpEntry.enable && mcpEntry.config_path) {
+          try {
+            mcpEntry.config = this.loadMCPConfig(mcpEntry.config_path);
+          } catch (error) {
+            console.warn(`加载MCP配置失败 (${key}):`, error);
+          }
+        }
+      }
+    }
+
+    // 加载所有SubAgent配置
+    if (config.sub_agents) {
+      for (const [key, subAgentEntry] of Object.entries(config.sub_agents)) {
+        if (subAgentEntry.enable && subAgentEntry.config_path) {
+          try {
+            const subConfig = this.loadSubAgentConfig(subAgentEntry.config_path);
+            subAgentEntry.config = subConfig;
+
+            // 加载SubAgent的提示词
+            if (subConfig.sub_agent.system_prompt?.path) {
+              const promptPath = subConfig.sub_agent.system_prompt.path;
+              const promptYamlPath = path.resolve(this.projectRoot, promptPath);
+              subAgentEntry.config.system_prompt_text = this.loadPromptFromYaml(promptYamlPath);
+            }
+          } catch (error) {
+            console.warn(`加载SubAgent配置失败 (${key}):`, error);
+          }
+        }
+      }
+    }
+
+    return config;
+  }
+
+  /**
+   * 验证配置
+   */
+  validateConfig(config: AgentConfig): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+
+    // 验证基本字段
+    if (!config.name) errors.push('缺少配置名称');
+    if (!config.agent) errors.push('缺少agent配置');
+    
+    if (config.agent) {
+      if (!config.agent.system_prompt?.path) {
+        errors.push('缺少主agent提示词路径');
+      }
+      if (!config.agent.storage?.path) {
+        errors.push('缺少存储路径配置');
+      }
+    }
+
+    // 验证MCP服务
+    if (config.mcp_services) {
+      for (const [key, mcp] of Object.entries(config.mcp_services)) {
+        if (mcp.enable) {
+          if (!mcp.type) errors.push(`MCP服务 ${key} 缺少type字段`);
+          if (!mcp.config_path) errors.push(`MCP服务 ${key} 缺少config_path`);
+        }
+      }
+    }
+
+    // 验证SubAgent
+    if (config.sub_agents) {
+      for (const [key, sub] of Object.entries(config.sub_agents)) {
+        if (sub.enable) {
+          if (!sub.name) errors.push(`SubAgent ${key} 缺少name字段`);
+          if (!sub.config_path) errors.push(`SubAgent ${key} 缺少config_path`);
+        }
+      }
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors
+    };
+  }
+}

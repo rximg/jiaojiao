@@ -19,8 +19,8 @@ export const ConfirmDialog: React.FC = () => {
   console.log('[ConfirmDialog] pendingAction:', pendingAction, 'open:', open);
 
   const title = useMemo(() => {
-    if (!pendingAction) return 'Confirm action';
-    return pendingAction.action === 't2i' ? 'Generate image?' : 'Synthesize speech?';
+    if (!pendingAction) return '确认操作';
+    return pendingAction.action === 't2i' ? '生成图像？' : '合成语音？';
   }, [pendingAction]);
 
   const payloadText = useMemo(() => formatPayload(pendingAction?.payload), [pendingAction]);
@@ -31,15 +31,15 @@ export const ConfirmDialog: React.FC = () => {
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <div className="rounded bg-neutral-900 p-3 text-sm font-mono whitespace-pre-wrap max-h-64 overflow-auto border border-neutral-800">
-          {payloadText || 'No payload'}
+        <div className="rounded bg-card p-3 text-sm font-sans whitespace-pre-wrap max-h-64 overflow-auto border border-border text-foreground">
+          {payloadText || '无内容'}
         </div>
         <DialogFooter className="gap-2">
           <Button variant="secondary" onClick={() => respondConfirm(false)}>
-            Cancel
+            取消
           </Button>
           <Button variant="default" onClick={() => respondConfirm(true)}>
-            Confirm
+            确认
           </Button>
         </DialogFooter>
       </DialogContent>

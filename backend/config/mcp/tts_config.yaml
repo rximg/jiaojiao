@@ -1,0 +1,24 @@
+name: tts_mcp
+version: 1.0.0
+description: 语音合成MCP服务
+
+service:
+  type: tts
+  provider: dashscope
+  
+  endpoint: https://dashscope.aliyuncs.com/api/v1/services/audio/tts/synthesis
+  
+  model: qwen-tts
+  
+  default_params:
+    voice: chinese_female
+    format: mp3
+    sample_rate: 24000
+  
+  batch:
+    enabled: true
+    delay: 1500  # 批量生成时的延迟（毫秒）
+  
+  output:
+    directory: audio
+    format: mp3

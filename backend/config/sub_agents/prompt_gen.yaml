@@ -1,0 +1,18 @@
+sub_agent:
+  name: prompt_generator
+  version: 1.0.0
+  description: 根据前提变量生成文生图提示词
+  
+  system_prompt:
+    path: ./backend/prompts/zh/prompt_generator.yaml
+  
+  capabilities:
+    - 分析主题特征
+    - 提取视觉元素
+    - 适配年龄段
+    - 生成中文提示词
+  
+  output:
+    type: text
+    format: plain
+    max_length: 2000

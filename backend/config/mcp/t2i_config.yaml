@@ -1,0 +1,25 @@
+name: t2i_mcp
+version: 1.0.0
+description: 文生图MCP服务
+
+service:
+  type: t2i
+  provider: dashscope
+  
+  endpoint: https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis
+  task_endpoint: https://dashscope.aliyuncs.com/api/v1/tasks
+  
+  model: wanx-v1
+  
+  default_params:
+    size: "1024*1024"
+    count: 1
+  
+  timeout:
+    initial: 120000  # 2分钟
+    polling: 2000    # 轮询间隔2秒
+    max_attempts: 60
+  
+  output:
+    directory: images
+    format: png

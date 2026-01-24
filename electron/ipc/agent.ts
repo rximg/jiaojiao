@@ -30,7 +30,7 @@ export function handleAgentIPC() {
           { messages: [{ role: 'user', content: message }] },
           { 
             signal: currentStreamController.signal,
-            recursionLimit: 100  // Increase recursion limit to handle complex agent workflows
+            recursionLimit: 50  // Reduce to prevent infinite loops
           }
         );
 

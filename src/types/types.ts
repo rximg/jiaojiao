@@ -11,6 +11,11 @@ export interface TodoItem {
   content: string;
   status: "pending" | "in_progress" | "completed";
   updatedAt?: Date;
+  artifacts?: {
+    images?: Array<{ path: string; prompt?: string }>;
+    audio?: Array<{ path: string; text?: string }>;
+    llmOutput?: any;
+  };
 }
 
 export interface Thread {

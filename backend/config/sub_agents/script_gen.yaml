@@ -1,0 +1,26 @@
+sub_agent:
+  name: script_generator
+  version: 1.0.0
+  description: 根据图片提示词和前提变量生成适配年龄的台词
+  
+  system_prompt:
+    path: ./backend/prompts/zh/script_generator.yaml
+  
+  capabilities:
+    - 适配年龄段语言
+    - 生成生动台词
+    - 与图片关联
+    - 语音朗读优化
+  
+  output:
+    type: json
+    format: array
+    schema:
+      type: array
+      items:
+        type: object
+        properties:
+          text:
+            type: string
+          order:
+            type: integer
