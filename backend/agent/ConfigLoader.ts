@@ -22,6 +22,10 @@ export interface AgentConfig {
       temperature: number;
       max_tokens: number;
     };
+    debug?: {
+      log_llm_calls?: boolean;
+      save_llm_calls?: boolean;
+    };
   };
   mcp_services: {
     [key: string]: {

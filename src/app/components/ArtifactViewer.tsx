@@ -39,15 +39,15 @@ export default function ArtifactViewer({ artifacts }: ArtifactViewerProps) {
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground font-medium">生成的图像 ({artifacts.images.length})</div>
           <div className="grid grid-cols-3 gap-2">
-            {artifacts.images.map((img, idx) => (
+            {artifacts.images.map((img) => (
               <div
-                key={idx}
+                key={img.path}
                 className="relative group cursor-pointer rounded-md overflow-hidden border border-border bg-muted hover:border-primary transition-colors aspect-square"
                 onClick={() => setSelectedImage(img)}
               >
                 <img
                   src={`file://${img.path}`}
-                  alt={img.prompt || `图像 ${idx + 1}`}
+                  alt={img.prompt || '图像'}
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
@@ -64,47 +64,50 @@ export default function ArtifactViewer({ artifacts }: ArtifactViewerProps) {
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground font-medium">生成的音频 ({artifacts.audio.length})</div>
           <div className="space-y-1">
-            {artifacts.audio.map((audio, idx) => (
-              <div
-                key={idx}
-                className="flex items-center gap-2 p-2 rounded-md bg-card border border-border hover:border-primary transition-colors"
-              >
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 w-8 p-0"
-                  onClick={() => {
-                    if (playingAudio === audio.path) {
-                      handleAudioPause();
-                      const audioEl = document.getElementById(`audio-${idx}`) as HTMLAudioElement;
-                      audioEl?.pause();
-                    } else {
-                      handleAudioPlay(audio.path);
-                      const audioEl = document.getElementById(`audio-${idx}`) as HTMLAudioElement;
-                      audioEl?.play();
-                    }
-                  }}
+            {artifacts.audio.map((audio) => {
+              const audioId = `audio-${audio.path.replace(/[^a-zA-Z0-9]/g, '-')}`;
+              return (
+                <div
+                  key={audio.path}
+                  className="flex items-center gap-2 p-2 rounded-md bg-card border border-border hover:border-primary transition-colors"
                 >
-                  {playingAudio === audio.path ? (
-                    <Pause className="w-4 h-4" />
-                  ) : (
-                    <Play className="w-4 h-4" />
-                  )}
-                </Button>
-                <audio
-                  id={`audio-${idx}`}
-                  src={`file://${audio.path}`}
-                  className="flex-1 h-8"
-                  controls
-                  onEnded={() => handleAudioPause()}
-                />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0"
+                    onClick={() => {
+                      if (playingAudio === audio.path) {
+                        handleAudioPause();
+                        const audioEl = document.getElementById(audioId) as HTMLAudioElement;
+                        audioEl?.pause();
+                      } else {
+                        handleAudioPlay(audio.path);
+                        const audioEl = document.getElementById(audioId) as HTMLAudioElement;
+                        audioEl?.play();
+                      }
+                    }}
+                  >
+                    {playingAudio === audio.path ? (
+                      <Pause className="w-4 h-4" />
+                    ) : (
+                      <Play className="w-4 h-4" />
+                    )}
+                  </Button>
+                  <audio
+                    id={audioId}
+                    src={`file://${audio.path}`}
+                    className="flex-1 h-8"
+                    controls
+                    onEnded={() => handleAudioPause()}
+                  />
                 {audio.text && (
                   <div className="text-xs text-muted-foreground truncate max-w-[150px]">
                     {audio.text}
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

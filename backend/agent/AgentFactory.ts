@@ -6,6 +6,7 @@ import { ConfigLoader, type AgentConfig } from './ConfigLoader.js';
 import { loadConfig } from './config.js';
 import type { BrowserWindow as BWType, IpcMain as IpcMainType } from 'electron';
 import * as path from 'path';
+import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -61,6 +62,8 @@ export class AgentFactory {
     this.appConfig = await loadConfig();
 
     const llmConfig = this.agentConfig.agent.llm;
+    const debugConfig = this.agentConfig.agent.debug || { log_llm_calls: true, save_llm_calls: true };
+    const projectRoot = this.projectRoot; // 捕获到闭包中
 
     return new ChatOpenAI({
       apiKey: this.appConfig.apiKeys.dashscope,
@@ -73,10 +76,40 @@ export class AgentFactory {
       callbacks: [
         {
           handleLLMStart({ name }, prompts) {
-            console.log('[LLM start]', name ?? 'llm', 'prompt length:', prompts[0]?.length || 0);
+            const modelName = name ?? 'llm';
+            const promptContent = prompts[0] || '';
+            const promptLength = promptContent.length || 0;
+            
+            // 根据配置决定是否打印
+            if (debugConfig.log_llm_calls) {
+              console.log('[LLM start]', modelName, 'prompt length:', promptLength);
+              console.log('[LLM prompt]', promptContent);
+            }
+            
+            // 根据配置决定是否保存到文件
+            if (debugConfig.save_llm_calls) {
+              try {
+                const debugDir = path.resolve(projectRoot, 'outputs', 'debug');
+                if (!fs.existsSync(debugDir)) {
+                  fs.mkdirSync(debugDir, { recursive: true });
+                }
+                const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
+                const filename = `llm_call_${modelName}_${timestamp}.txt`;
+                const filePath = path.join(debugDir, filename);
+                const content = `Model: ${modelName}\nTimestamp: ${new Date().toISOString()}\nPrompt Length: ${promptLength}\n\n=== Prompt ===\n${promptContent}`;
+                fs.writeFileSync(filePath, content, 'utf-8');
+                if (debugConfig.log_llm_calls) {
+                  console.log(`[LLM] 调用已缓存: ${filePath}`);
+                }
+              } catch (error) {
+                console.error('[LLM] 缓存调用失败:', error);
+              }
+            }
           },
           handleLLMEnd(output) {
-            console.log('[LLM end]', JSON.stringify(output, null, 2));
+            if (debugConfig.log_llm_calls) {
+              console.log('[LLM end]', JSON.stringify(output, null, 2));
+            }
           },
           handleLLMError(err) {
             console.error('[LLM error]', err);
@@ -184,12 +217,32 @@ export class AgentFactory {
   }
 
   /**
+   * 将提示词缓存到文件
+   */
+  private cachePromptToFile(filename: string, content: string): void {
+    try {
+      const debugDir = path.resolve(this.projectRoot, 'outputs', 'debug');
+      if (!fs.existsSync(debugDir)) {
+        fs.mkdirSync(debugDir, { recursive: true });
+      }
+      const filePath = path.join(debugDir, filename);
+      fs.writeFileSync(filePath, content, 'utf-8');
+      console.log(`[AgentFactory] 提示词已缓存: ${filePath}`);
+    } catch (error) {
+      console.error(`[AgentFactory] 缓存提示词失败:`, error);
+    }
+  }
+
+  /**
    * 创建parse_premise工具（内置工具）
    */
   private async createParsePremiseTool(llm: ChatOpenAI): Promise<any> {
     // 加载parse_premise提示词
     const promptPath = path.join(__dirname, '..', 'prompts', 'zh', 'parse_premise.yaml');
     const promptText = this.configLoader.loadPromptFromYaml(promptPath);
+
+    // 缓存提示词到文件
+    this.cachePromptToFile('parse_premise_prompt.txt', promptText);
 
     return tool(
       async (input: { text: string }) => {
@@ -234,6 +287,9 @@ export class AgentFactory {
         systemPrompt: systemPrompt,
       });
 
+      // 缓存子Agent提示词
+      this.cachePromptToFile(`subagent_${subEntry.name}_prompt.txt`, systemPrompt);
+
       console.log(`[AgentFactory] 注册SubAgent: ${subEntry.name}`);
     }
 
@@ -271,6 +327,9 @@ export class AgentFactory {
       this.agentConfig.agent.system_prompt.path.replace('../', '')
     );
     const mainSystemPrompt = this.configLoader.loadPromptFromYaml(mainPromptPath);
+
+    // 缓存系统提示词到文件
+    this.cachePromptToFile('main_agent_system_prompt.txt', mainSystemPrompt);
 
     // 创建SubAgents
     const subAgents = this.createSubAgents();

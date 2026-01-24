@@ -18,6 +18,11 @@ agent:
     model: qwen-plus
     temperature: 0.7
     max_tokens: 2048
+  
+  # 调试配置
+  debug:
+    log_llm_calls: true      # 是否在控制台打印LLM调用
+    save_llm_calls: true     # 是否保存LLM调用到文件
 
 # MCP服务配置
 mcp_services:
