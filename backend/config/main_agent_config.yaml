@@ -86,3 +86,43 @@ workflow:
       name: 整合结果并返回
       type: final
       required: true
+
+# UI配置
+ui:
+  welcome:
+    title: 欢迎使用儿童科普绘本生成助手
+    subtitle: 我可以帮您为不同年龄段的儿童生成包含图片和语音的百科类科普绘本
+    
+    instructions:
+      title: 请告诉我
+      items:
+        - 对象：想要了解的事物（如：老虎、挖掘机、向日葵）
+        - 年龄：目标儿童的年龄段（如：2岁、5岁、8岁）
+        - 风格：绘画风格（可选，如：卡通、手绘、写实）
+    
+    footer: 或者直接点击下方的快捷选项开始！
+    
+  quick_options:
+    - label: 2岁宝宝看的老虎
+      description: 适合低幼儿童的卡通风格
+      prompt: 给2岁宝宝生成老虎的绘本
+    
+    - label: 5岁孩子的挖掘机
+      description: 工程机械科普
+      prompt: 给5岁孩子生成挖掘机的科普图
+    
+    - label: 3岁宝宝的恐龙
+      description: 史前生物探索
+      prompt: 3岁宝宝看的霸王龙
+    
+    - label: 7岁孩子的太阳系
+      description: 天文知识启蒙
+      prompt: 给7岁孩子生成太阳系的科普图
+    
+    - label: 4岁孩子的向日葵
+      description: 植物生长过程
+      prompt: 4岁孩子看的向日葵
+    
+    - label: 6岁孩子的消防车
+      description: 特种车辆认知
+      prompt: 给6岁孩子生成消防车的绘本

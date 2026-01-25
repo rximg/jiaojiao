@@ -72,5 +72,23 @@ export interface AppConfig {
   ui: {
     theme: "light" | "dark";
     language: "zh" | "en";
+    welcome?: WelcomeConfig;
+    quickOptions?: QuickOption[];
   };
+}
+
+export interface WelcomeConfig {
+  title: string;
+  subtitle: string;
+  instructions: {
+    title: string;
+    items: string[];
+  };
+  footer: string;
+}
+
+export interface QuickOption {
+  label: string;
+  description: string;
+  prompt: string;
 }

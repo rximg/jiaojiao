@@ -18,9 +18,11 @@ system_prompt: |
     "order": 序号
   }
 
-  **不要使用 write_todos 工具**，直接生成台词并返回。
-
-  完成后，只返回JSON格式的台词数组，然后停止。
+  **重要限制**：
+  - ❌ 不要使用任何工具（包括 write_todos、parse_premise 等）
+  - ❌ 不要进行任务规划或分步骤说明
+  - ❌ 不要添加额外的解释或说明文字
+  - ✅ 直接输出 JSON 格式的台词数组，一次性返回结果
 
 variables:
   - name: image_prompt

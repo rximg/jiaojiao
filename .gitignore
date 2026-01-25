@@ -32,3 +32,4 @@ outputs/
 *.mp3
 *.wav
 release/*
+*.code-workspace
