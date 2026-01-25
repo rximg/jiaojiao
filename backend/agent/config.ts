@@ -32,9 +32,9 @@ export async function loadConfig(): Promise<AppConfig> {
         tts: storedConfig?.apiKeys?.tts ?? process.env.TTS_API_KEY,
       },
       agent: {
-        model: storedConfig?.agent?.model || process.env.DASHSCOPE_MODEL || 'qwen-plus',
+        model: storedConfig?.agent?.model || process.env.DASHSCOPE_MODEL || 'qwen-plus-2025-12-01',
         temperature: storedConfig?.agent?.temperature ?? 0.7,
-        maxTokens: storedConfig?.agent?.maxTokens ?? 2048,
+        maxTokens: storedConfig?.agent?.maxTokens ?? 4096,
       },
       storage: {
         outputPath: storedConfig?.storage?.outputPath || './outputs',

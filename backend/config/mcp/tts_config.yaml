@@ -20,5 +20,5 @@ service:
     delay: 1500  # 批量生成时的延迟（毫秒）
   
   output:
-    directory: audio
+    directory: ./outputs/audio
     format: mp3

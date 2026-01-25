@@ -40,7 +40,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
       }
       const baseConfig: AppConfig = config || {
         apiKeys: { dashscope: '', t2i: '', tts: '' },
-        agent: { model: 'qwen-plus', temperature: 0.7, maxTokens: 2048 },
+        agent: { model: 'qwen-plus-2025-12-01', temperature: 0.7, maxTokens: 4096 },
         storage: { outputPath: './outputs' },
         ui: { theme: 'light', language: 'zh' },
       };

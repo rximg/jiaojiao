@@ -102,7 +102,16 @@ export class WorkspaceFilesystem {
     relativePath: string,
     encoding?: BufferEncoding
   ): Promise<string | Buffer> {
+    await this.ensureRoot();
     const targetPath = this.sessionPath(sessionId, relativePath);
+    
+    // Check if file exists before trying to read
+    try {
+      await fs.access(targetPath);
+    } catch (error) {
+      throw new Error(`File not found: ${relativePath} in session ${sessionId}. Full path: ${targetPath}`);
+    }
+    
     return fs.readFile(targetPath, encoding);
   }
 

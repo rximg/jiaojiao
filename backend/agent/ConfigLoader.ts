@@ -10,7 +10,7 @@ export interface AgentConfig {
     name: string;
     version: string;
     type: string;
-    system_prompt: {
+    system_prompt: string | {
       path: string;
     };
     storage: {
@@ -201,7 +201,7 @@ export class ConfigLoader {
       for (const [key, mcpEntry] of Object.entries(config.mcp_services)) {
         if (mcpEntry.enable && mcpEntry.config_path) {
           try {
-            mcpEntry.config = this.loadMCPConfig(mcpEntry.config_path);
+            mcpEntry.config = this.loadYaml<any>(mcpEntry.config_path);
           } catch (error) {
             console.warn(`加载MCP配置失败 (${key}):`, error);
           }
@@ -214,11 +214,15 @@ export class ConfigLoader {
       for (const [key, subAgentEntry] of Object.entries(config.sub_agents)) {
         if (subAgentEntry.enable && subAgentEntry.config_path) {
           try {
-            const subConfig = this.loadSubAgentConfig(subAgentEntry.config_path);
+            const subConfig = this.loadYaml<any>(subAgentEntry.config_path);
             subAgentEntry.config = subConfig;
 
-            // 加载SubAgent的提示词
-            if (subConfig.sub_agent.system_prompt?.path) {
+            // 加载SubAgent的提示词（支持直接嵌入或外部文件）
+            if (typeof subConfig.sub_agent.system_prompt === 'string') {
+              // 直接嵌入的提示词
+              subAgentEntry.config.system_prompt_text = subConfig.sub_agent.system_prompt;
+            } else if (subConfig.sub_agent.system_prompt?.path) {
+              // 外部文件引用（向后兼容）
               const promptPath = subConfig.sub_agent.system_prompt.path;
               const promptYamlPath = path.resolve(this.projectRoot, promptPath);
               subAgentEntry.config.system_prompt_text = this.loadPromptFromYaml(promptYamlPath);
@@ -244,8 +248,11 @@ export class ConfigLoader {
     if (!config.agent) errors.push('缺少agent配置');
     
     if (config.agent) {
-      if (!config.agent.system_prompt?.path) {
-        errors.push('缺少主agent提示词路径');
+      // 支持直接嵌入或path引用
+      const hasSystemPrompt = typeof config.agent.system_prompt === 'string' || 
+                               (typeof config.agent.system_prompt === 'object' && config.agent.system_prompt?.path);
+      if (!hasSystemPrompt) {
+        errors.push('缺少主agent提示词');
       }
       if (!config.agent.storage?.path) {
         errors.push('缺少存储路径配置');

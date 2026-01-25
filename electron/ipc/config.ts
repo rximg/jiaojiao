@@ -11,9 +11,24 @@ const __dirname = path.dirname(__filename);
 // 加载 main_agent_config.yaml 中的 UI 配置
 function loadUIConfigFromYaml() {
   try {
-    const configPath = path.resolve(__dirname, '../../backend/config/main_agent_config.yaml');
+    // 开发环境: electron/ipc -> backend/config
+    // 生产环境: dist-electron -> backend/config
+    let configPath: string;
+    
+    if (__dirname.includes('dist-electron')) {
+      // 生产环境：dist-electron -> app根目录 -> backend/config
+      configPath = path.resolve(__dirname, '..', 'backend', 'config', 'main_agent_config.yaml');
+    } else {
+      // 开发环境：electron/ipc -> app根目录 -> backend/config
+      configPath = path.resolve(__dirname, '..', '..', 'backend', 'config', 'main_agent_config.yaml');
+    }
+    
+    console.log(`[loadUIConfigFromYaml] Trying to load: ${configPath}`);
+    
     if (!fs.existsSync(configPath)) {
       console.warn('main_agent_config.yaml not found, using defaults');
+      console.warn(`  __dirname: ${__dirname}`);
+      console.warn(`  Attempted path: ${configPath}`);
       return {};
     }
     const fileContent = fs.readFileSync(configPath, 'utf-8');
@@ -36,9 +51,9 @@ const store = new Store({
       tts: '',
     },
     agent: {
-      model: 'qwen-plus',
+      model: 'qwen-plus-2025-12-01',
       temperature: 0.7,
-      maxTokens: 2048,
+      maxTokens: 4096,
     },
     storage: {
       outputPath: './outputs',

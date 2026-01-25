@@ -62,15 +62,23 @@ export class AgentFactory {
   private async createLLM(): Promise<ChatOpenAI> {
     this.appConfig = await loadConfig();
 
-    const llmConfig = this.agentConfig.agent.llm;
+    const yamlLlmConfig = this.agentConfig.agent.llm;
     const debugConfig = this.agentConfig.agent.debug || { log_llm_calls: true, save_llm_calls: true };
     const projectRoot = this.projectRoot; // 捕获到闭包中
 
+    // 优先使用界面配置（electron-store），YAML配置作为后备
+    const model = this.appConfig.agent.model || yamlLlmConfig.model;
+    const temperature = this.appConfig.agent.temperature ?? yamlLlmConfig.temperature;
+    const maxTokens = this.appConfig.agent.maxTokens ?? yamlLlmConfig.max_tokens;
+
+    console.log(`[AgentFactory] LLM配置 - model: ${model}, temperature: ${temperature}, maxTokens: ${maxTokens}`);
+    console.log(`[AgentFactory] 配置来源 - 界面: ${!!this.appConfig.agent.model}, YAML: ${!!yamlLlmConfig.model}`);
+
     return new ChatOpenAI({
       apiKey: this.appConfig.apiKeys.dashscope,
-      modelName: llmConfig.model,
-      temperature: llmConfig.temperature,
-      maxTokens: llmConfig.max_tokens,
+      modelName: model,
+      temperature: temperature,
+      maxTokens: maxTokens,
       configuration: {
         baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
       },
@@ -178,7 +186,7 @@ export class AgentFactory {
     // 根据服务类型创建工具
     if (serviceType === 't2i') {
           return tool(
-        async (params: { prompt: string; size?: string; style?: string; count?: number; sessionId?: string }) => {
+        async (params: { prompt?: string; promptFile?: string; size?: string; style?: string; count?: number; sessionId?: string }) => {
           await this.requestHumanConfirm('t2i', params);
           const { generateImage } = await import('../mcp/t2i.js');
           // 动态从环境变量获取sessionId，优先使用参数传入的sessionId
@@ -190,7 +198,8 @@ export class AgentFactory {
           name: toolName,
           description: mcpEntry.description,
           schema: z.object({
-            prompt: z.string().describe('文生图提示词'),
+            prompt: z.string().optional().describe('文生图提示词（与promptFile二选一）'),
+            promptFile: z.string().optional().describe('提示词文件路径（workspace相对路径，与prompt二选一）'),
             size: z.string().optional().default(mcpConfig.service.default_params.size).describe('图片尺寸'),
             style: z.string().optional().describe('图片风格'),
             count: z.number().optional().default(mcpConfig.service.default_params.count).describe('生成数量'),
@@ -243,12 +252,149 @@ export class AgentFactory {
   }
 
   /**
+   * 创建finalize_workflow工具（检查文件并完成工作流）
+   */
+  private createFinalizeWorkflowTool(): any {
+    return tool(
+      async (input: { imagePath?: string; audioPath?: string; scriptText?: string; sessionId?: string }) => {
+        const { imagePath, audioPath, scriptText, sessionId = process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID } = input;
+        const { getWorkspaceFilesystem } = await import('../services/fs.js');
+        const config = await loadConfig();
+        const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
+        
+        // 检查文件是否存在
+        const checks = {
+          hasImage: false,
+          hasAudio: false,
+          hasScript: !!scriptText
+        };
+        
+        if (imagePath) {
+          try {
+            // 提取相对路径（去掉workspace路径前缀）
+            const imageRelPath = imagePath.includes('workspaces') 
+              ? imagePath.split('workspaces/')[1]?.split('/').slice(1).join('/') || imagePath
+              : imagePath;
+            await workspaceFs.readFile(sessionId, imageRelPath);
+            checks.hasImage = true;
+          } catch (error) {
+            console.warn(`[finalize_workflow] Image not found: ${imagePath}`);
+          }
+        }
+        
+        if (audioPath) {
+          try {
+            const audioRelPath = audioPath.includes('workspaces')
+              ? audioPath.split('workspaces/')[1]?.split('/').slice(1).join('/') || audioPath
+              : audioPath;
+            await workspaceFs.readFile(sessionId, audioRelPath);
+            checks.hasAudio = true;
+          } catch (error) {
+            console.warn(`[finalize_workflow] Audio not found: ${audioPath}`);
+          }
+        }
+        
+        const allComplete = checks.hasImage && checks.hasAudio && checks.hasScript;
+        
+        if (allComplete) {
+          console.log(`[finalize_workflow] All files verified, workflow complete`);
+          return {
+            success: true,
+            completed: true,
+            message: `✅ 绘本制作完成！\n- 图片：${imagePath}\n- 音频：${audioPath}\n- 台词：${scriptText}`,
+            checks: checks
+          };
+        } else {
+          return {
+            success: false,
+            completed: false,
+            message: `⚠️ 部分文件缺失，请检查`,
+            checks: checks
+          };
+        }
+      },
+      {
+        name: 'finalize_workflow',
+        description: '检查图片、音频文件是否生成，如果都存在则完成工作流并返回结果汇总',
+        schema: z.object({
+          imagePath: z.string().optional().describe('生成的图片文件路径'),
+          audioPath: z.string().optional().describe('生成的音频文件路径'),
+          scriptText: z.string().optional().describe('生成的台词文本'),
+          sessionId: z.string().optional().describe('会话ID（留空使用当前会话）'),
+        }),
+      }
+    );
+  }
+
+  /**
+   * 创建write_prompt_file工具（保存提示词到文件）
+   */
+  private createWritePromptFileTool(): any {
+    return tool(
+      async (input: { content: string; filename?: string; sessionId?: string }) => {
+        // Capture sessionId at execution time
+        const capturedSessionId = input.sessionId || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
+        const { content, filename = 'image_prompt.txt' } = input;
+        
+        console.log(`[write_prompt_file] Tool invoked with:`);
+        console.log(`  - input.sessionId: ${input.sessionId}`);
+        console.log(`  - process.env.AGENT_SESSION_ID: ${process.env.AGENT_SESSION_ID}`);
+        console.log(`  - Using sessionId: ${capturedSessionId}`);
+        console.log(`  - filename: ${filename}`);
+        
+        const { getWorkspaceFilesystem } = await import('../services/fs.js');
+        const config = await loadConfig();
+        const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
+        
+        try {
+          const filePath = await workspaceFs.writeFile(capturedSessionId, filename, content, 'utf-8');
+          console.log(`[write_prompt_file] Successfully saved prompt to: ${filePath}`);
+          console.log(`[write_prompt_file] Content length: ${content.length} bytes`);
+          
+          // Verify the file was written
+          const verifyContent = await workspaceFs.readFile(capturedSessionId, filename, 'utf-8');
+          if (typeof verifyContent === 'string' && verifyContent === content) {
+            console.log(`[write_prompt_file] Verification successful`);
+          } else {
+            console.warn(`[write_prompt_file] Warning: File content verification failed`);
+          }
+          
+          return {
+            success: true,
+            filename: filename,
+            path: filePath,
+            sessionId: capturedSessionId,
+            message: `提示词已保存到文件: ${filename} (session: ${capturedSessionId})`
+          };
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          console.error(`[write_prompt_file] Failed to save file:`, errorMsg);
+          throw new Error(`Failed to save prompt file: ${errorMsg}`);
+        }
+      },
+      {
+        name: 'write_prompt_file',
+        description: '将生成的提示词保存到workspace文件中，避免长文本占用上下文',
+        schema: z.object({
+          content: z.string().describe('要保存的提示词内容'),
+          filename: z.string().optional().default('image_prompt.txt').describe('文件名（默认: image_prompt.txt）'),
+          sessionId: z.string().optional().describe('会话ID（留空使用当前会话）'),
+        }),
+      }
+    );
+  }
+
+  /**
    * 创建parse_premise工具（内置工具）
    */
   private async createParsePremiseTool(llm: ChatOpenAI): Promise<any> {
-    // 加载parse_premise提示词
-    const promptPath = path.join(__dirname, '..', 'prompts', 'zh', 'parse_premise.yaml');
-    const promptText = this.configLoader.loadPromptFromYaml(promptPath);
+    // 从主配置加载parse_premise提示词
+    const toolConfig = (this.agentConfig as any).tools?.parse_premise;
+    if (!toolConfig?.system_prompt) {
+      throw new Error('parse_premise 工具配置缺失');
+    }
+    
+    const promptText = toolConfig.system_prompt;
 
     // 缓存提示词到文件
     this.cachePromptToFile('parse_premise_prompt.txt', promptText);
@@ -290,16 +436,31 @@ export class AgentFactory {
         continue;
       }
 
+      // 为SubAgent准备工具
+      const subAgentTools: any[] = [];
+      
+      // 根据配置中的tools字段添加工具
+      if (subConfig.sub_agent && subConfig.sub_agent.tools) {
+        for (const toolName of subConfig.sub_agent.tools) {
+          if (toolName === 'write_prompt_file') {
+            subAgentTools.push(this.createWritePromptFileTool());
+            console.log(`[AgentFactory] SubAgent ${subEntry.name} 添加工具: write_prompt_file`);
+          }
+          // 可以在这里添加更多工具的映射
+        }
+      }
+
       subAgents.push({
         name: subEntry.name,
         description: subEntry.description,
         systemPrompt: systemPrompt,
+        tools: subAgentTools.length > 0 ? subAgentTools : undefined,
       });
 
       // 缓存子Agent提示词
       this.cachePromptToFile(`subagent_${subEntry.name}_prompt.txt`, systemPrompt);
 
-      console.log(`[AgentFactory] 注册SubAgent: ${subEntry.name}`);
+      console.log(`[AgentFactory] 注册SubAgent: ${subEntry.name} (${subAgentTools.length} tools)`);
     }
 
     return subAgents;
@@ -319,6 +480,14 @@ export class AgentFactory {
     const parseTool = await this.createParsePremiseTool(llm);
     tools.push(parseTool);
 
+    // 添加write_prompt_file工具（用于SubAgent保存生成的提示词）
+    const writePromptTool = this.createWritePromptFileTool();
+    tools.push(writePromptTool);
+
+    // 添加finalize_workflow工具（检查文件并完成流程）
+    const finalizeTool = this.createFinalizeWorkflowTool();
+    tools.push(finalizeTool);
+
     // 添加MCP工具
     for (const [mcpKey, mcpEntry] of Object.entries(this.agentConfig.mcp_services)) {
       const tool = await this.createMCPTool(mcpKey, mcpEntry);
@@ -329,13 +498,18 @@ export class AgentFactory {
 
     console.log(`[AgentFactory] 已加载 ${tools.length} 个工具`);
 
-    // 加载主Agent提示词
-    const mainPromptPath = path.resolve(
-      this.projectRoot,
-      'backend',
-      this.agentConfig.agent.system_prompt.path.replace('../', '')
-    );
-    const mainSystemPrompt = this.configLoader.loadPromptFromYaml(mainPromptPath);
+    // 加载主Agent提示词（已嵌入配置）
+    const mainSystemPrompt = typeof this.agentConfig.agent.system_prompt === 'string'
+      ? this.agentConfig.agent.system_prompt
+      : this.agentConfig.agent.system_prompt.path 
+        ? this.configLoader.loadPromptFromYaml(
+            path.resolve(this.projectRoot, this.agentConfig.agent.system_prompt.path.replace('../', ''))
+          )
+        : '';
+
+    if (!mainSystemPrompt) {
+      throw new Error('主Agent系统提示词未配置');
+    }
 
     // 缓存系统提示词到文件
     this.cachePromptToFile('main_agent_system_prompt.txt', mainSystemPrompt);

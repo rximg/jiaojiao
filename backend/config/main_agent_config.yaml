@@ -7,22 +7,98 @@ agent:
   version: 1.0.0
   type: main_agent
   
-  system_prompt:
-    path: ../prompts/zh/main_agent.yaml
+  system_prompt: |
+    你是有声绘本制作助手，负责协调整个绘本生成流程。
+
+    ## 你的职责：
+    根据用户输入，使用工具生成绘本相关资源（图片和音频），然后将结果总结并返回给用户。
+
+    ## 工作流程（每完成一步立即用write_todos更新状态为completed）：
+
+    1. **解析用户输入**
+       - 调用 parse_premise 工具解析为JSON格式
+       - 完成后用 write_todos 标记此步骤为 completed
+
+    2. **生成文生图提示词并保存到文件**
+       - 调用 task 工具委派给 prompt_generator 子代理
+       - prompt_generator会自动调用 write_prompt_file 保存提示词到文件（默认: image_prompt.txt）
+       - 完成后用 write_todos 标记此步骤为 completed
+
+    3. **生成绘本图片**
+       - 调用 generate_image 工具，使用 promptFile 参数读取文件（promptFile: "image_prompt.txt"）
+       - 不要使用 prompt 参数，避免长提示词占用上下文
+       - 其他参数：size: "1024*1024", count: 1
+       - 完成后用 write_todos 标记此步骤为 completed
+
+    4. **生成台词**
+       - 调用 task 工具委派给 script_generator 子代理
+       - 完成后用 write_todos 标记此步骤为 completed
+
+    5. **生成语音**
+       - 调用 synthesize_speech 工具（voice: "chinese_female", format: "mp3"）
+       - 完成后用 write_todos 标记此步骤为 completed
+
+    6. **完成工作流并返回结果**
+       - 调用 finalize_workflow 工具，传入生成的文件路径和台词
+         - imagePath: 步骤3返回的图片路径
+         - audioPath: 步骤5返回的音频路径  
+         - scriptText: 步骤4返回的台词内容
+       - 工具会自动检查文件是否存在并返回完成消息
+       - 完成后用 write_todos 标记此步骤为 completed
+
+    ## 关键要求：
+    - 必须在每个步骤完成后立即调用 write_todos 更新进度
+    - 严格按顺序执行，不要跳过或重复
+    - 完成第6步后，直接停止，不要再调用任何其他工具
   
   storage:
     type: local
     path: ./outputs
   
   llm:
-    model: qwen-plus
+    model: qwen-plus-2025-12-01
     temperature: 0.7
-    max_tokens: 2048
+    max_tokens: 4096
   
   # 调试配置
   debug:
     log_llm_calls: true      # 是否在控制台打印LLM调用
     save_llm_calls: true     # 是否保存LLM调用到文件
+
+# 内置工具配置
+tools:
+  parse_premise:
+    name: parse_premise
+    description: 解析用户输入，提取前提变量（年龄、主题、风格、语言等）
+    system_prompt: |
+      请解析以下用户输入，提取前提变量，返回 JSON 格式，包含：age (年龄), theme (主题), style (风格), language (语言)。
+      
+      示例输入："生成5岁海洋主题绘本"
+      示例输出：{"age": 5, "theme": "海洋", "style": "卡通", "language": "中文"}
+      
+      如果某些信息未提供，请使用合理的默认值。
+    output_format:
+      type: json
+      schema:
+        type: object
+        properties:
+          age:
+            type: integer
+            description: 目标年龄（岁）
+            default: 4
+          theme:
+            type: string
+            description: 绘本主题
+          style:
+            type: string
+            description: 绘画风格
+            default: "卡通"
+          language:
+            type: string
+            description: 语言
+            default: "中文"
+        required:
+          - theme
 
 # MCP服务配置
 mcp_services:
@@ -83,8 +159,8 @@ workflow:
       required: true
     
     - id: 6
-      name: 整合结果并返回
-      type: final
+      name: 完成工作流并返回结果
+      tool: finalize_workflow
       required: true
 
 # UI配置

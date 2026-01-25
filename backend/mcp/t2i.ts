@@ -3,7 +3,8 @@ import { loadConfig } from '../agent/config';
 import { DEFAULT_SESSION_ID, getWorkspaceFilesystem } from '../services/fs';
 
 export interface GenerateImageParams {
-  prompt: string;
+  prompt?: string;
+  promptFile?: string;
   size?: string;
   style?: string;
   count?: number;
@@ -21,8 +22,27 @@ export async function generateImage(
   params: GenerateImageParams
 ): Promise<GenerateImageResult> {
   const config = await loadConfig();
-  const { prompt, size = '1024*1024', style, count = 1, sessionId = DEFAULT_SESSION_ID } = params;
+  const { size = '1024*1024', style, count = 1, sessionId = DEFAULT_SESSION_ID } = params;
   const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
+
+  // 支持从文件读取提示词或直接使用参数
+  let prompt: string;
+  if (params.promptFile) {
+    console.log(`[T2I] Reading prompt from file: ${params.promptFile} (session: ${sessionId})`);
+    try {
+      const promptContent = await workspaceFs.readFile(sessionId, params.promptFile, 'utf-8');
+      prompt = typeof promptContent === 'string' ? promptContent : promptContent.toString();
+      console.log(`[T2I] Successfully read prompt file, length: ${prompt.length}`);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error(`[T2I] Failed to read prompt file:`, errorMsg);
+      throw new Error(`Failed to read prompt file '${params.promptFile}': ${errorMsg}. Make sure the file was created successfully by the prompt generator.`);
+    }
+  } else if (params.prompt) {
+    prompt = params.prompt;
+  } else {
+    throw new Error('Either prompt or promptFile must be provided');
+  }
 
   const token = config.apiKeys.t2i || config.apiKeys.dashscope || '';
   const endpoint = process.env.DASHSCOPE_T2I_ENDPOINT
