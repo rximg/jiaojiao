@@ -10,6 +10,8 @@ const runIntegration = process.env.RUN_INTEGRATION_TESTS === 'true';
 const createdFiles: string[] = [];
 
 describe('T2I generateImage()', () => {
+  const sessionId = 'integration-session';
+
   beforeAll(() => {
     if (!hasKey) {
       // eslint-disable-next-line no-console
@@ -36,7 +38,7 @@ describe('T2I generateImage()', () => {
   });
 
   it.skipIf(!hasKey || !runIntegration)('should generate an image file', async () => {
-    const result = await generateImage({ prompt: 'A cute cartoon cat', size: '1024*1024' });
+    const result = await generateImage({ prompt: 'A cute cartoon cat', size: '1024*1024', sessionId });
 
     // record for cleanup
     createdFiles.push(result.imagePath);
@@ -49,7 +51,7 @@ describe('T2I generateImage()', () => {
     expect(exists).toBe(true);
 
     const cfg = await loadConfig();
-    const expectedDir = path.join(cfg.storage.outputPath, 'images');
+    const expectedDir = path.join(cfg.storage.outputPath, 'workspaces', sessionId, 'images');
     expect(result.imagePath.startsWith(path.resolve(expectedDir))).toBe(true);
   }, 120_000);
 });

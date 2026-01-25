@@ -12,22 +12,24 @@ type View = 'welcome' | 'chat';
 function AppContent() {
   const { config, updateConfig } = useConfig();
   const [view, setView] = useState<View>('welcome');
-  const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
+  const [loadSessionId, setLoadSessionId] = useState<string | null>(null);
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
 
   const handleCaseClick = () => {
-    setCurrentThreadId(null);
+    // 点击案例：清空loadSessionId，ChatInterface会创建新session
+    setLoadSessionId(null);
     setView('chat');
   };
 
-  const handleHistoryClick = (threadId: string) => {
-    setCurrentThreadId(threadId);
+  const handleHistoryClick = (sessionId: string) => {
+    // 点击历史记录：设置loadSessionId，ChatInterface会加载该session
+    setLoadSessionId(sessionId);
     setView('chat');
   };
 
   const handleBackToWelcome = () => {
     setView('welcome');
-    setCurrentThreadId(null);
+    setLoadSessionId(null);
   };
 
   const handleConfigSave = async (newConfig: Partial<AppConfig>) => {
@@ -71,7 +73,7 @@ function AppContent() {
             />
           ) : (
             <ChatInterface
-              threadId={currentThreadId}
+              loadSessionId={loadSessionId}
               onBack={handleBackToWelcome}
               onConfigClick={() => setConfigDialogOpen(true)}
             />

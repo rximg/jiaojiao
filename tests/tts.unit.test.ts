@@ -7,6 +7,8 @@ import { loadConfig } from '../backend/agent/config';
 const realFetch = globalThis.fetch;
 
 describe('TTS synthesizeSpeech() [unit]', () => {
+  const sessionId = 'unit-session';
+
   beforeEach(() => {
     // mock TTS API calls:
     // Odd calls (1, 3, 5...): POST request to synthesize text -> returns audio URL
@@ -44,11 +46,14 @@ describe('TTS synthesizeSpeech() [unit]', () => {
     globalThis.fetch = realFetch;
   });
 
-  it('writes audio files to outputs/audios', async () => {
+  it('writes audio files to workspace session directory', async () => {
     const texts = ['a', 'b'];
-    const result = await synthesizeSpeech({ texts, format: 'mp3' });
+    const result = await synthesizeSpeech({ texts, format: 'mp3', sessionId });
 
     expect(result.audioPaths.length).toBe(2);
+    expect(result.audioUris.length).toBe(2);
+    expect(result.sessionId).toBe(sessionId);
+    result.audioUris.forEach((uri) => expect(uri.startsWith('file://')).toBe(true));
 
     for (const p of result.audioPaths) {
       const exists = await fs
@@ -60,7 +65,7 @@ describe('TTS synthesizeSpeech() [unit]', () => {
     }
 
     const cfg = await loadConfig();
-    const expectedDir = path.join(cfg.storage.outputPath, 'audios');
+    const expectedDir = path.join(cfg.storage.outputPath, 'workspaces', sessionId, 'audio');
     for (const p of result.audioPaths) {
       expect(path.resolve(p).startsWith(path.resolve(expectedDir))).toBe(true);
     }

@@ -7,10 +7,14 @@ interface ChatContextType {
   pendingAction: { action: 't2i' | 'tts'; payload: any } | null;
   isLoading: boolean;
   currentThreadId: string | null;
+  currentSessionId: string | null;
+  lastArtifactTime: number; // 最后一次生成产物的时间戳，用于触发刷新
   sendMessage: (text: string, threadId?: string) => Promise<void>;
   respondConfirm: (ok: boolean) => Promise<void>;
   stopStream: () => Promise<void>;
   setCurrentThreadId: (id: string | null) => void;
+  createNewSession: (title?: string) => Promise<string>;
+  loadSession: (sessionId: string) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -21,12 +25,35 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [pendingAction, setPendingAction] = useState<{ action: 't2i' | 'tts'; payload: any } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [lastArtifactTime, setLastArtifactTime] = useState<number>(0);
   const threadRef = useRef<string | null>(null);
   const allMessagesRef = useRef<Message[]>([]);
 
   useEffect(() => {
     threadRef.current = currentThreadId;
   }, [currentThreadId]);
+
+  // 自动保存消息和todos到session
+  useEffect(() => {
+    if (!currentSessionId || messages.length === 0) return;
+    
+    const saveSession = async () => {
+      try {
+        await window.electronAPI.session.update(currentSessionId, {
+          messages,
+          todos,
+        });
+        console.log('[ChatProvider] Auto-saved session');
+      } catch (error) {
+        console.error('[ChatProvider] Failed to save session:', error);
+      }
+    };
+    
+    // 延迟保存，避免频繁写入
+    const timer = setTimeout(saveSession, 1000);
+    return () => clearTimeout(timer);
+  }, [currentSessionId, messages, todos]);
 
   // 从消息内容中提取artifacts
   const extractArtifacts = useCallback((content: string): TodoItem['artifacts'] | undefined => {
@@ -153,8 +180,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setPendingAction(data);
     };
 
+    const handleToolCall = (data: any) => {
+      // 监听工具调用，当检测到generate_image或synthesize_speech时更新时间戳
+      if (data.toolCalls && Array.isArray(data.toolCalls)) {
+        const hasArtifactTool = data.toolCalls.some((call: any) => 
+          call.name === 'generate_image' || call.name === 'synthesize_speech'
+        );
+        if (hasArtifactTool) {
+          console.log('[renderer] Artifact generation detected, updating timestamp');
+          setLastArtifactTime(Date.now());
+        }
+      }
+    };
+
     window.electronAPI.agent.onMessage(handleMessage);
     window.electronAPI.agent.onTodoUpdate(handleTodo);
+    window.electronAPI.agent.onToolCall(handleToolCall);
 
     if (typeof window.electronAPI.agent.onConfirmRequest === 'function') {
       window.electronAPI.agent.onConfirmRequest(handleConfirm);
@@ -182,6 +223,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const sendMessage = useCallback(async (text: string, threadId?: string) => {
     const thread = threadId || currentThreadId || undefined;
 
+    console.log('[ChatProvider] sendMessage called with:', {
+      text,
+      threadId: thread,
+      currentSessionId,
+    });
+
     // 添加用户消息
     const userMessage: Message = {
       id: `msg-${Date.now()}`,
@@ -193,7 +240,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     setIsLoading(true);
     try {
-      const newThreadId = await window.electronAPI.agent.sendMessage(text, thread);
+      const newThreadId = await window.electronAPI.agent.sendMessage(text, thread, currentSessionId || undefined);
       console.log('[renderer] backend returned threadId:', newThreadId, 'current:', currentThreadId);
       // Always update to the backend's threadId to keep in sync
       setCurrentThreadId(newThreadId);
@@ -202,11 +249,57 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [currentThreadId]);
+  }, [currentThreadId, currentSessionId]);
 
   const stopStream = useCallback(async () => {
     await window.electronAPI.agent.stopStream();
     setIsLoading(false);
+  }, []);
+const createNewSession = useCallback(async (title?: string) => {
+    try {
+      const { sessionId } = await window.electronAPI.session.create(title);
+      setCurrentSessionId(sessionId);
+      // 清空消息和todos
+      setMessages([]);
+      setTodos([]);
+      setCurrentThreadId(null);
+      return sessionId;
+    } catch (error) {
+      console.error('Failed to create session:', error);
+      throw error;
+    }
+  }, []);
+
+  const loadSession = useCallback(async (sessionId: string) => {
+    try {
+      console.log('[ChatProvider] Loading session:', sessionId);
+      setCurrentSessionId(sessionId);
+      
+      // 从session加载历史数据
+      const sessionData = await window.electronAPI.session.get(sessionId);
+      console.log('[ChatProvider] Loaded session data:', sessionData);
+      
+      // 加载消息
+      if (sessionData.messages && Array.isArray(sessionData.messages)) {
+        setMessages(sessionData.messages);
+        allMessagesRef.current = sessionData.messages;
+      } else {
+        setMessages([]);
+        allMessagesRef.current = [];
+      }
+      
+      // 加载todos
+      if (sessionData.todos && Array.isArray(sessionData.todos)) {
+        setTodos(sessionData.todos);
+      } else {
+        setTodos([]);
+      }
+      
+      setCurrentThreadId(null);
+    } catch (error) {
+      console.error('Failed to load session:', error);
+      throw error;
+    }
   }, []);
 
   return (
@@ -217,10 +310,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         pendingAction,
         isLoading,
         currentThreadId,
+        currentSessionId,
+        lastArtifactTime,
         sendMessage,
         respondConfirm,
         stopStream,
         setCurrentThreadId,
+        createNewSession,
+        loadSession,
       }}
     >
       {children}

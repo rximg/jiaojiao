@@ -10,6 +10,8 @@ const runIntegration = process.env.RUN_INTEGRATION_TESTS === 'true';
 const createdFiles: string[] = [];
 
 describe('TTS synthesizeSpeech()', () => {
+  const sessionId = 'integration-session';
+
   beforeAll(() => {
     if (!hasKey) {
       // eslint-disable-next-line no-console
@@ -37,10 +39,12 @@ describe('TTS synthesizeSpeech()', () => {
 
   it.skipIf(!hasKey || !runIntegration)('should generate audio files', async () => {
     const texts = ['你好，世界！', '这是一次 TTS 测试。'];
-    const result = await synthesizeSpeech({ texts, format: 'mp3' });
+    const result = await synthesizeSpeech({ texts, format: 'mp3', sessionId });
 
     expect(Array.isArray(result.audioPaths)).toBe(true);
     expect(result.audioPaths.length).toBe(texts.length);
+    expect(result.sessionId).toBe(sessionId);
+    expect(result.audioUris.length).toBe(texts.length);
 
     for (const p of result.audioPaths) {
       createdFiles.push(p);
@@ -52,7 +56,7 @@ describe('TTS synthesizeSpeech()', () => {
     }
 
     const cfg = await loadConfig();
-    const expectedDir = path.join(cfg.storage.outputPath, 'audios');
+    const expectedDir = path.join(cfg.storage.outputPath, 'workspaces', sessionId, 'audio');
     for (const p of result.audioPaths) {
       expect(p.startsWith(path.resolve(expectedDir))).toBe(true);
     }

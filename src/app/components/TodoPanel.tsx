@@ -61,18 +61,19 @@ export default function TodoPanel({ todos }: TodoPanelProps) {
         <div className="text-sm text-muted-foreground">暂无待办，输入消息后查看进度。</div>
       ) : (
         <div className="flex flex-col gap-2 max-h-[480px] overflow-auto pr-1">
-          {todos.map((todo) => {
-            const isExpanded = expandedIds.has(todo.id);
+          {todos.map((todo, index) => {
+            const todoId = todo.id || `todo-${index}`;
+            const isExpanded = expandedIds.has(todoId);
             const showArtifacts = hasArtifacts(todo);
 
             return (
               <div
-                key={todo.id}
+                key={todoId}
                 className="rounded-md bg-card border border-border shadow-sm overflow-hidden"
               >
                 <div
                   className={`flex items-start gap-2 px-3 py-2 ${showArtifacts ? 'cursor-pointer hover:bg-muted/50' : ''}`}
-                  onClick={() => showArtifacts && toggleExpanded(todo.id)}
+                  onClick={() => showArtifacts && toggleExpanded(todoId)}
                 >
                   <div className="mt-0.5">{statusIcon(todo.status)}</div>
                   <div className="flex-1 text-sm leading-tight text-foreground">

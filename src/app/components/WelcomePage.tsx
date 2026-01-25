@@ -8,7 +8,7 @@ import { useConfig } from '@/providers/ConfigProvider';
 
 interface WelcomePageProps {
   onCaseClick: (caseId: string) => void;
-  onHistoryClick: (threadId: string) => void;
+  onHistoryClick: (sessionId: string) => void;
   onConfigClick: () => void;
 }
 
@@ -39,7 +39,7 @@ export default function WelcomePage({
         <div className="flex flex-1 overflow-hidden">
           {/* 历史记录面板 */}
           <div className="w-64 border-r border-border">
-            <HistoryPanel onThreadClick={onHistoryClick} />
+            <HistoryPanel onSessionClick={onHistoryClick} />
           </div>
 
           {/* 案例列表 */}

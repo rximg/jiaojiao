@@ -16,8 +16,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   // Agent 相关
   agent: {
-    sendMessage: (message, threadId) =>
-      ipcRenderer.invoke('agent:sendMessage', message, threadId),
+    sendMessage: (message, threadId, sessionId) =>
+      ipcRenderer.invoke('agent:sendMessage', message, threadId, sessionId),
     onMessage: (callback) => {
       ipcRenderer.on('agent:message', (_event, data) => callback(data));
     },
@@ -32,5 +32,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     confirmAction: (ok) => ipcRenderer.send('agent:confirmAction', { ok }),
     stopStream: () => ipcRenderer.invoke('agent:stopStream'),
+  },
+  // 文件系统相关
+  fs: {
+    ls: (sessionId, relativePath) =>
+      ipcRenderer.invoke('fs:ls', sessionId, relativePath),
+    readFile: (sessionId, relativePath) =>
+      ipcRenderer.invoke('fs:readFile', sessionId, relativePath),
+    getFilePath: (sessionId, relativePath) =>
+      ipcRenderer.invoke('fs:getFilePath', sessionId, relativePath),
+    glob: (sessionId, pattern) =>
+      ipcRenderer.invoke('fs:glob', sessionId, pattern),
+    grep: (sessionId, pattern, globPattern) =>
+      ipcRenderer.invoke('fs:grep', sessionId, pattern, globPattern),
+  },
+  // 会话管理相关
+  session: {
+    create: (title, prompt) =>
+      ipcRenderer.invoke('session:create', title, prompt),
+    list: () => ipcRenderer.invoke('session:list'),
+    get: (sessionId) => ipcRenderer.invoke('session:get', sessionId),
+    update: (sessionId, updates) =>
+      ipcRenderer.invoke('session:update', sessionId, updates),
+    delete: (sessionId) => ipcRenderer.invoke('session:delete', sessionId),
   },
 });

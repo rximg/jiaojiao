@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, FormEvent } from 'react';
+import { useState, useRef, useCallback, FormEvent, useEffect } from 'react';
 import { ArrowUp, Square, Settings, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -6,24 +6,40 @@ import ChatMessage from './ChatMessage';
 import WelcomeMessage from './WelcomeMessage';
 import QuickOptions from './QuickOptions';
 import TodoPanel from './TodoPanel';
+import WorkspacePanel from './WorkspacePanel';
 import { useChat } from '../../providers/ChatProvider';
 
 interface ChatInterfaceProps {
-  threadId: string | null;
+  loadSessionId: string | null;
   onBack: () => void;
   onConfigClick: () => void;
 }
 
 export default function ChatInterface({
-  threadId,
+  loadSessionId,
   onBack,
   onConfigClick,
 }: ChatInterfaceProps) {
   const [input, setInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { messages, todos, isLoading, sendMessage, stopStream } = useChat();
+  const { messages, todos, isLoading, sendMessage, stopStream, currentSessionId, createNewSession, loadSession, lastArtifactTime } = useChat();
   const [showWelcome, setShowWelcome] = useState(true);
+  const [showWorkspace, setShowWorkspace] = useState(true);
+
+  // 加载或创建会话
+  useEffect(() => {
+    if (loadSessionId) {
+      // 点击历史记录：加载指定的session
+      console.log('[ChatInterface] Loading session:', loadSessionId);
+      loadSession(loadSessionId).catch(console.error);
+      setShowWelcome(false);
+    } else if (!currentSessionId) {
+      // 点击案例：创建新session
+      console.log('[ChatInterface] Creating new session');
+      createNewSession('新对话').catch(console.error);
+    }
+  }, [loadSessionId, currentSessionId, createNewSession, loadSession]);
 
   const handleSubmit = useCallback(
     async (e?: FormEvent) => {
@@ -34,13 +50,13 @@ export default function ChatInterface({
       if (!messageText || isLoading) return;
 
       setShowWelcome(false);
-      await sendMessage(messageText, threadId || undefined);
+      await sendMessage(messageText);
       setInput('');
       if (textareaRef.current) {
         textareaRef.current.focus();
       }
     },
-    [input, isLoading, sendMessage, threadId]
+    [input, isLoading, sendMessage]
   );
 
   const handleKeyDown = useCallback(
@@ -147,6 +163,8 @@ export default function ChatInterface({
                   </>
                 ) : (
                   <>
+
+
                     <ArrowUp className="h-4 w-4" />
                     发送
                   </>
@@ -154,7 +172,10 @@ export default function ChatInterface({
               </Button>
             </form>
           </div>
+
         </div>
+                          {/* 工作区面板 */}
+        {showWorkspace && <WorkspacePanel sessionId={currentSessionId} lastArtifactTime={lastArtifactTime} />}
       </div>
     </div>
   );

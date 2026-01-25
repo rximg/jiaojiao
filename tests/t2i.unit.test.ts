@@ -7,6 +7,8 @@ import { loadConfig } from '../backend/agent/config';
 const realFetch = globalThis.fetch;
 
 describe('T2I generateImage() [unit]', () => {
+  const sessionId = 'unit-session';
+
   beforeEach(() => {
     // mock fetch calls for T2I:
     // 1. POST request to initiate async task -> returns task_id
@@ -52,16 +54,18 @@ describe('T2I generateImage() [unit]', () => {
     globalThis.fetch = realFetch;
   });
 
-  it('writes image file to outputs/images', async () => {
-    const result = await generateImage({ prompt: 'any', size: '1024*1024' });
+  it('writes image file to workspace session directory', async () => {
+    const result = await generateImage({ prompt: 'any', size: '1024*1024', sessionId });
     const exists = await fs
       .access(result.imagePath)
       .then(() => true)
       .catch(() => false);
     expect(exists).toBe(true);
+    expect(result.sessionId).toBe(sessionId);
+    expect(result.imageUri.startsWith('file://')).toBe(true);
 
     const cfg = await loadConfig();
-    const expectedDir = path.join(cfg.storage.outputPath, 'images');
+    const expectedDir = path.join(cfg.storage.outputPath, 'workspaces', sessionId, 'images');
     expect(path.resolve(result.imagePath).startsWith(path.resolve(expectedDir))).toBe(true);
 
     // cleanup

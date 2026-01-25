@@ -1,15 +1,18 @@
-import { promises as fs } from 'fs';
 import path from 'path';
 import { loadConfig } from '../agent/config';
+import { DEFAULT_SESSION_ID, getWorkspaceFilesystem } from '../services/fs';
 
 export interface SynthesizeSpeechParams {
   texts: string[];
   voice?: string;
   format?: string;
+  sessionId?: string;
 }
 
 export interface SynthesizeSpeechResult {
   audioPaths: string[];
+  audioUris: string[];
+  sessionId: string;
 }
 
 const voiceMap: Record<string, string> = {
@@ -27,7 +30,8 @@ export async function synthesizeSpeech(
   params: SynthesizeSpeechParams
 ): Promise<SynthesizeSpeechResult> {
   const config = await loadConfig();
-  const { texts, voice = 'chinese_female', format = 'mp3' } = params;
+  const { texts, voice = 'chinese_female', format = 'mp3', sessionId = DEFAULT_SESSION_ID } = params;
+  const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
 
   const token = config.apiKeys.tts || config.apiKeys.dashscope || '';
   const endpoint = process.env.DASHSCOPE_TTS_ENDPOINT 
@@ -35,8 +39,7 @@ export async function synthesizeSpeech(
   const model = process.env.DASHSCOPE_TTS_MODEL || 'qwen-tts';
 
   const audioPaths: string[] = [];
-  const outputDir = path.join(config.storage.outputPath, 'audios');
-  await fs.mkdir(outputDir, { recursive: true });
+  const audioUris: string[] = [];
 
   // 批量生成语音
   for (let i = 0; i < texts.length; i++) {
@@ -93,11 +96,12 @@ export async function synthesizeSpeech(
       }
       const audioBuffer = await audioResponse.arrayBuffer();
 
-      const audioFileName = `script_${i + 1}_${Date.now()}.${format}`;
-      const audioPath = path.resolve(path.join(outputDir, audioFileName));
-
-      await fs.writeFile(audioPath, Buffer.from(audioBuffer));
+      const audioFileName = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${format}`;
+      const relativePath = path.posix.join('audio', audioFileName);
+      const audioPath = await workspaceFs.writeFile(sessionId, relativePath, Buffer.from(audioBuffer));
+      const audioUri = workspaceFs.toFileUri(audioPath);
       audioPaths.push(audioPath);
+      audioUris.push(audioUri);
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error(`TTS synthesis failed for text ${i + 1}:`, error);
@@ -105,5 +109,5 @@ export async function synthesizeSpeech(
     }
   }
 
-  return { audioPaths };
+  return { audioPaths, audioUris, sessionId };
 }

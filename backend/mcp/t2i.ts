@@ -1,24 +1,28 @@
-import { promises as fs } from 'fs';
 import path from 'path';
 import { loadConfig } from '../agent/config';
+import { DEFAULT_SESSION_ID, getWorkspaceFilesystem } from '../services/fs';
 
 export interface GenerateImageParams {
   prompt: string;
   size?: string;
   style?: string;
   count?: number;
+  sessionId?: string;
 }
 
 export interface GenerateImageResult {
   imagePath: string;
+  imageUri: string;
   imageUrl?: string;
+  sessionId: string;
 }
 
 export async function generateImage(
   params: GenerateImageParams
 ): Promise<GenerateImageResult> {
   const config = await loadConfig();
-  const { prompt, size = '1024*1024', style, count = 1 } = params;
+  const { prompt, size = '1024*1024', style, count = 1, sessionId = DEFAULT_SESSION_ID } = params;
+  const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
 
   const token = config.apiKeys.t2i || config.apiKeys.dashscope || '';
   const endpoint = process.env.DASHSCOPE_T2I_ENDPOINT
@@ -119,10 +123,7 @@ export async function generateImage(
   }
 
   // 4. 下载并保存图片
-  const outputDir = path.join(config.storage.outputPath, 'images');
-  await fs.mkdir(outputDir, { recursive: true });
-
-  const savedPaths: string[] = [];
+  const savedArtifacts: Array<{ path: string; uri: string }> = [];
   for (const imageUrl of imageUrls) {
     try {
       const imageResponse = await fetch(imageUrl);
@@ -133,10 +134,10 @@ export async function generateImage(
       const imageBuffer = await imageResponse.arrayBuffer();
 
       const imageFileName = `image_${Date.now()}_${Math.random().toString(36).slice(2, 9)}.png`;
-      const imagePath = path.resolve(path.join(outputDir, imageFileName));
-
-      await fs.writeFile(imagePath, Buffer.from(imageBuffer));
-      savedPaths.push(imagePath);
+      const relativePath = path.posix.join('images', imageFileName);
+      const imagePath = await workspaceFs.writeFile(sessionId, relativePath, Buffer.from(imageBuffer));
+      const imageUri = workspaceFs.toFileUri(imagePath);
+      savedArtifacts.push({ path: imagePath, uri: imageUri });
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error(`Failed to download image ${imageUrl}`);
@@ -144,15 +145,17 @@ export async function generateImage(
     }
   }
 
-  if (!savedPaths.length) {
+  if (!savedArtifacts.length) {
     throw new Error('Failed to download any images');
   }
 
   // 返回第一张图片路径（或可返回所有路径）
-  const imagePath = savedPaths[0];
+  const [first] = savedArtifacts;
 
   return {
-    imagePath,
+    imagePath: first.path,
+    imageUri: first.uri,
+    sessionId,
     imageUrl: imageUrls[0],
   };
 }

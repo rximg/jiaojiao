@@ -8,6 +8,7 @@ import type { BrowserWindow as BWType, IpcMain as IpcMainType } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
+import { DEFAULT_SESSION_ID } from '../services/fs.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -176,11 +177,14 @@ export class AgentFactory {
 
     // 根据服务类型创建工具
     if (serviceType === 't2i') {
-      return tool(
-        async (params: { prompt: string; size?: string; style?: string; count?: number }) => {
+          return tool(
+        async (params: { prompt: string; size?: string; style?: string; count?: number; sessionId?: string }) => {
           await this.requestHumanConfirm('t2i', params);
           const { generateImage } = await import('../mcp/t2i.js');
-          return await generateImage(params);
+          // 动态从环境变量获取sessionId，优先使用参数传入的sessionId
+          const sessionId = params.sessionId || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
+          console.log(`[t2i tool] Using sessionId: ${sessionId} (from params: ${params.sessionId}, env: ${process.env.AGENT_SESSION_ID})`);
+          return await generateImage({ ...params, sessionId });
         },
         {
           name: toolName,
@@ -190,15 +194,19 @@ export class AgentFactory {
             size: z.string().optional().default(mcpConfig.service.default_params.size).describe('图片尺寸'),
             style: z.string().optional().describe('图片风格'),
             count: z.number().optional().default(mcpConfig.service.default_params.count).describe('生成数量'),
+            sessionId: z.string().optional().describe('文件写入使用的会话ID（留空则使用当前会话）'),
           }),
         }
       );
     } else if (serviceType === 'tts') {
       return tool(
-        async (params: { texts: string[]; voice?: string; format?: string }) => {
+        async (params: { texts: string[]; voice?: string; format?: string; sessionId?: string }) => {
           await this.requestHumanConfirm('tts', params);
           const { synthesizeSpeech } = await import('../mcp/tts.js');
-          return await synthesizeSpeech(params);
+          // 动态从环境变量获取sessionId，优先使用参数传入的sessionId
+          const sessionId = params.sessionId || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
+          console.log(`[tts tool] Using sessionId: ${sessionId} (from params: ${params.sessionId}, env: ${process.env.AGENT_SESSION_ID})`);
+          return await synthesizeSpeech({ ...params, sessionId });
         },
         {
           name: toolName,
@@ -207,6 +215,7 @@ export class AgentFactory {
             texts: z.array(z.string()).describe('台词文本数组'),
             voice: z.string().optional().default(mcpConfig.service.default_params.voice).describe('语音类型'),
             format: z.string().optional().default(mcpConfig.service.default_params.format).describe('音频格式'),
+            sessionId: z.string().optional().describe('文件写入使用的会话ID（留空则使用当前会话）'),
           }),
         }
       );

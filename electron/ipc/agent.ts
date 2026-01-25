@@ -3,7 +3,10 @@ import { ipcMain, BrowserWindow } from 'electron';
 let currentStreamController: AbortController | null = null;
 
 export function handleAgentIPC() {
-  ipcMain.handle('agent:sendMessage', async (_event, message: string, threadId?: string) => {
+  ipcMain.handle('agent:sendMessage', async (_event, message: string, threadId?: string, sessionId?: string) => {
+    // 如果提供了sessionId，将其注入到环境变量，供工具使用
+    const previousSessionId = process.env.AGENT_SESSION_ID;
+    
     try {
       // 获取主窗口用于发送事件
       const mainWindow = BrowserWindow.getAllWindows()[0];
@@ -13,6 +16,11 @@ export function handleAgentIPC() {
 
       // 创建新的流控制器
       currentStreamController = new AbortController();
+
+      if (sessionId) {
+        process.env.AGENT_SESSION_ID = sessionId;
+        console.log(`[agent] Set AGENT_SESSION_ID to: ${sessionId}`);
+      }
 
       // 动态导入 Agent 工厂（避免在模块加载时执行）
       const { createMainAgent } = await import('../../backend/agent/factory.js');
@@ -47,7 +55,14 @@ export function handleAgentIPC() {
           const nodeKey = chunkKeys[0];
           const state = nodeKey ? (chunk as any)[nodeKey] : chunk;
 
-          console.log('[stream node]', nodeKey, 'has todos:', state.todos ? state.todos.length : 'no');
+          console.log('[stream chunk] Full chunk keys:', chunkKeys);
+          console.log('[stream node]', nodeKey);
+          console.log('[stream state keys]', Object.keys(state || {}));
+          console.log('[stream state]', {
+            hasTodos: !!state.todos,
+            todosLength: state.todos?.length || 0,
+            todosData: state.todos ? JSON.stringify(state.todos, null, 2) : 'none'
+          });
 
           // 发送消息块
           if (state.messages && Array.isArray(state.messages)) {
@@ -133,6 +148,13 @@ export function handleAgentIPC() {
       }
       console.error('Agent error:', error);
       throw error;
+    } finally {
+      // 无论成功还是失败，都要恢复环境变量
+      if (previousSessionId !== undefined) {
+        process.env.AGENT_SESSION_ID = previousSessionId;
+      } else {
+        delete process.env.AGENT_SESSION_ID;
+      }
     }
   });
 

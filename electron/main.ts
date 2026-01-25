@@ -1,10 +1,13 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, protocol } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { promises as fs } from 'fs';
 import { handleConfigIPC } from './ipc/config.js';
 import { handleStorageIPC } from './ipc/storage.js';
 import { handleAgentIPC } from './ipc/agent.js';
+import { handleFilesystemIPC } from './ipc/filesystem.js';
+import { handleSessionIPC } from './ipc/session.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -42,12 +45,25 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // 注册自定义协议来服务本地文件
+  protocol.registerFileProtocol('local-file', (request, callback) => {
+    const url = request.url.replace('local-file://', '');
+    try {
+      return callback(decodeURIComponent(url));
+    } catch (error) {
+      console.error('Failed to load local file:', error);
+      return callback({ error: -2 }); // FILE_NOT_FOUND
+    }
+  });
+
   createWindow();
 
   // 注册 IPC 处理器
   handleConfigIPC();
   handleStorageIPC();
   handleAgentIPC();
+  handleFilesystemIPC();
+  handleSessionIPC();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
