@@ -1,9 +1,11 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { createDeepAgent, type SubAgent } from 'deepagents';
+import { createAgent } from 'langchain';
+import { createDeepAgent, createFilesystemMiddleware, FilesystemBackend, type SubAgent, type CompiledSubAgent } from 'deepagents';
 import { ConfigLoader, type AgentConfig } from './ConfigLoader.js';
 import { loadConfig } from './config.js';
+import { createLLMCallbacks } from './LLMCallbacks.js';
 import type { BrowserWindow as BWType, IpcMain as IpcMainType } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -64,7 +66,6 @@ export class AgentFactory {
 
     const yamlLlmConfig = this.agentConfig.agent.llm;
     const debugConfig = this.agentConfig.agent.debug || { log_llm_calls: true, save_llm_calls: true };
-    const projectRoot = this.projectRoot; // 捕获到闭包中
 
     // 优先使用界面配置（electron-store），YAML配置作为后备
     const model = this.appConfig.agent.model || yamlLlmConfig.model;
@@ -82,49 +83,7 @@ export class AgentFactory {
       configuration: {
         baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
       },
-      callbacks: [
-        {
-          handleLLMStart({ name }, prompts) {
-            const modelName = name ?? 'llm';
-            const promptContent = prompts[0] || '';
-            const promptLength = promptContent.length || 0;
-            
-            // 根据配置决定是否打印
-            if (debugConfig.log_llm_calls) {
-              console.log('[LLM start]', modelName, 'prompt length:', promptLength);
-              console.log('[LLM prompt]', promptContent);
-            }
-            
-            // 根据配置决定是否保存到文件
-            if (debugConfig.save_llm_calls) {
-              try {
-                const debugDir = path.resolve(projectRoot, 'outputs', 'debug');
-                if (!fs.existsSync(debugDir)) {
-                  fs.mkdirSync(debugDir, { recursive: true });
-                }
-                const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
-                const filename = `llm_call_${modelName}_${timestamp}.txt`;
-                const filePath = path.join(debugDir, filename);
-                const content = `Model: ${modelName}\nTimestamp: ${new Date().toISOString()}\nPrompt Length: ${promptLength}\n\n=== Prompt ===\n${promptContent}`;
-                fs.writeFileSync(filePath, content, 'utf-8');
-                if (debugConfig.log_llm_calls) {
-                  console.log(`[LLM] 调用已缓存: ${filePath}`);
-                }
-              } catch (error) {
-                console.error('[LLM] 缓存调用失败:', error);
-              }
-            }
-          },
-          handleLLMEnd(output) {
-            if (debugConfig.log_llm_calls) {
-              console.log('[LLM end]', JSON.stringify(output, null, 2));
-            }
-          },
-          handleLLMError(err) {
-            console.error('[LLM error]', err);
-          },
-        },
-      ],
+      callbacks: [createLLMCallbacks(debugConfig, this.projectRoot)],
     });
   }
 
@@ -299,13 +258,21 @@ export class AgentFactory {
         if (allComplete) {
           console.log(`[finalize_workflow] All files verified, workflow complete`);
           return {
+            status: 'WORKFLOW_COMPLETE',
             success: true,
             completed: true,
-            message: `✅ 绘本制作完成！\n- 图片：${imagePath}\n- 音频：${audioPath}\n- 台词：${scriptText}`,
+            message: `✅ 绘本生成完成！文件已全部验证通过。`,
+            summary: {
+              imagePath: imagePath,
+              audioPath: audioPath,
+              scriptText: scriptText,
+              sessionId: sessionId
+            },
             checks: checks
           };
         } else {
           return {
+            status: 'WORKFLOW_INCOMPLETE',
             success: false,
             completed: false,
             message: `⚠️ 部分文件缺失，请检查`,
@@ -315,7 +282,13 @@ export class AgentFactory {
       },
       {
         name: 'finalize_workflow',
-        description: '检查图片、音频文件是否生成，如果都存在则完成工作流并返回结果汇总',
+        description: `检查图片、音频文件是否生成，如果都存在则完成工作流。
+
+**重要：这是工作流的最后一步。调用此工具后：**
+1. 工作流自动结束
+2. 不要再调用任何其他工具（包括 write_todos）
+3. 直接向用户展示结果摘要
+4. 立即停止所有操作`,
         schema: z.object({
           imagePath: z.string().optional().describe('生成的图片文件路径'),
           audioPath: z.string().optional().describe('生成的音频文件路径'),
@@ -420,8 +393,8 @@ export class AgentFactory {
   /**
    * 创建SubAgents
    */
-  private createSubAgents(): SubAgent[] {
-    const subAgents: SubAgent[] = [];
+  private async createSubAgents(): Promise<Array<SubAgent | CompiledSubAgent>> {
+    const subAgents: Array<SubAgent | CompiledSubAgent> = [];
 
     for (const [key, subEntry] of Object.entries(this.agentConfig.sub_agents)) {
       if (!subEntry.enable || !subEntry.config) {
@@ -436,34 +409,120 @@ export class AgentFactory {
         continue;
       }
 
-      // 为SubAgent准备工具
-      const subAgentTools: any[] = [];
-      
-      // 根据配置中的tools字段添加工具
-      if (subConfig.sub_agent && subConfig.sub_agent.tools) {
-        for (const toolName of subConfig.sub_agent.tools) {
-          if (toolName === 'write_prompt_file') {
-            subAgentTools.push(this.createWritePromptFileTool());
-            console.log(`[AgentFactory] SubAgent ${subEntry.name} 添加工具: write_prompt_file`);
-          }
-          // 可以在这里添加更多工具的映射
-        }
+      try {
+        // 使用 createSubAgent 统一创建子代理
+        const subAgent = await this.createSubAgent(subEntry.name, false);
+        subAgents.push(subAgent);
+      } catch (error) {
+        console.error(`[AgentFactory] 创建 SubAgent ${subEntry.name} 失败:`, error);
       }
-
-      subAgents.push({
-        name: subEntry.name,
-        description: subEntry.description,
-        systemPrompt: systemPrompt,
-        tools: subAgentTools.length > 0 ? subAgentTools : undefined,
-      });
-
-      // 缓存子Agent提示词
-      this.cachePromptToFile(`subagent_${subEntry.name}_prompt.txt`, systemPrompt);
-
-      console.log(`[AgentFactory] 注册SubAgent: ${subEntry.name} (${subAgentTools.length} tools)`);
     }
 
     return subAgents;
+  }
+
+  /**
+   * 创建单个子代理
+   * @param subAgentName 子代理名称
+   * @param returnRawRunnable 是否返回原始 runnable（用于测试），默认 false 返回包装后的 SubAgent/CompiledSubAgent
+   */
+  async createSubAgent(subAgentName: string, returnRawRunnable: boolean = false): Promise<SubAgent | CompiledSubAgent | any> {
+    const subEntry = Object.values(this.agentConfig.sub_agents).find(
+      (entry) => entry.name === subAgentName && entry.enable
+    );
+
+    if (!subEntry || !subEntry.config) {
+      throw new Error(`SubAgent ${subAgentName} 未找到或未启用`);
+    }
+
+    const subConfig = subEntry.config;
+    const systemPrompt = subConfig.system_prompt_text;
+
+    if (!systemPrompt) {
+      throw new Error(`SubAgent ${subAgentName} 缺少系统提示词`);
+    }
+
+    // 缓存子Agent提示词
+    this.cachePromptToFile(`subagent_${subEntry.name}_prompt.txt`, systemPrompt);
+
+    // 从配置中读取 agent_type 和 use_filesystem_middleware
+    const agentType = subConfig.sub_agent?.agent_type || 'createDeepAgent';
+    const useFilesystemMiddleware = subConfig.sub_agent?.use_filesystem_middleware || false;
+
+    // 如果配置为 createAgent，使用 createAgent 创建独立代理
+    if (agentType === 'createAgent') {
+      console.log(`[AgentFactory] 为 ${subAgentName} 创建独立 agent（使用 createAgent）`);
+      
+      const subLlm = await this.createLLM();
+      
+      // 如果需要 FilesystemMiddleware，创建新实例
+      let middleware: any[] = [];
+      if (useFilesystemMiddleware) {
+        // 获取 workspace 根目录路径
+        const config = await loadConfig();
+        const { resolveWorkspaceRoot } = await import('../services/fs.js');
+        const workspaceRoot = resolveWorkspaceRoot(config.storage.outputPath);
+        
+        // FilesystemMiddleware 直接使用 workspaces 根目录
+        // 因为在子代理context中无法获取到动态的 sessionId
+        const fsMiddleware = createFilesystemMiddleware({
+          backend: new FilesystemBackend({
+            rootDir: workspaceRoot,  // 直接使用 workspaces 根目录
+            virtualMode: true,  // 沙箱模式，限制路径逃逸
+          }),
+        });
+        middleware = [fsMiddleware];
+        console.log(`[AgentFactory] ${subAgentName} 启用 FilesystemMiddleware`);
+        console.log(`[AgentFactory] Workspace root: ${workspaceRoot}`);
+      }
+      
+      // 使用 createAgent 创建子代理
+      const subAgentRunnable = createAgent({
+        model: subLlm,
+        tools: [],  // FilesystemMiddleware 会提供 write_file 等工具
+        systemPrompt: systemPrompt,
+        middleware: middleware.length > 0 ? middleware : undefined,
+      });
+      
+      // 如果是测试调用，直接返回 runnable
+      if (returnRawRunnable) {
+        return subAgentRunnable;
+      }
+      
+      // 包装为 CompiledSubAgent
+      const compiledSubAgent: CompiledSubAgent = {
+        name: subEntry.name,
+        description: subEntry.description,
+        runnable: subAgentRunnable as any,  // 类型兼容性处理
+      };
+      
+      console.log(`[AgentFactory] 创建 CompiledSubAgent: ${subEntry.name} (agent_type: ${agentType}, middleware: ${useFilesystemMiddleware})`);
+      return compiledSubAgent;
+    }
+
+    // createDeepAgent 类型：使用 SubAgent 方式
+    const subAgentTools: any[] = [];
+    
+    // 根据配置中的tools字段添加工具
+    if (subConfig.sub_agent && subConfig.sub_agent.tools) {
+      for (const toolName of subConfig.sub_agent.tools) {
+        if (toolName === 'write_prompt_file') {
+          subAgentTools.push(this.createWritePromptFileTool());
+          console.log(`[AgentFactory] SubAgent ${subEntry.name} 添加工具: write_prompt_file`);
+        }
+        // 可以在这里添加更多工具的映射
+      }
+    }
+
+    const subAgent: SubAgent = {
+      name: subEntry.name,
+      description: subEntry.description,
+      systemPrompt: systemPrompt,
+      tools: subAgentTools.length > 0 ? subAgentTools : undefined,
+    };
+
+    console.log(`[AgentFactory] 创建 SubAgent: ${subEntry.name} (${subAgentTools.length} tools)`);
+    return subAgent;
   }
 
   /**
@@ -515,16 +574,19 @@ export class AgentFactory {
     this.cachePromptToFile('main_agent_system_prompt.txt', mainSystemPrompt);
 
     // 创建SubAgents
-    const subAgents = this.createSubAgents();
+    const subAgents = await this.createSubAgents();
     console.log(`[AgentFactory] 已注册 ${subAgents.length} 个SubAgent`);
 
     // 创建主Agent
+    // 注意：不在主 Agent 中添加 FilesystemMiddleware，因为 prompt_generator 子代理已经通过 createAgent 添加了
+    // 这样可以避免 middleware 重复定义的错误
     // @ts-ignore - Type compatibility with deepagents
     const agent = createDeepAgent({
       model: llm,
       tools,
       systemPrompt: mainSystemPrompt,
       subagents: subAgents,
+      recursionLimit: 200,  // 设置递归限制（默认50，增加到100）
     });
 
     console.log(`[AgentFactory] 主Agent创建成功: ${this.agentConfig.agent.name}`);

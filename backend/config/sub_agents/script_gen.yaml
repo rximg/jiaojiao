@@ -2,6 +2,8 @@ sub_agent:
   name: script_generator
   version: 1.0.0
   description: 根据图片提示词和前提变量生成适配年龄的台词
+  agent_type: createAgent  # 使用 createAgent 而不是 createDeepAgent
+  use_filesystem_middleware: false  # 不需要 FilesystemMiddleware
   
   system_prompt: |
     你是一位专业的儿童绘本台词编写专家。

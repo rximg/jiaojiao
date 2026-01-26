@@ -38,7 +38,7 @@ export function handleAgentIPC() {
           { messages: [{ role: 'user', content: message }] },
           { 
             signal: currentStreamController.signal,
-            recursionLimit: 50  // Reduce to prevent infinite loops
+            recursionLimit: 100  // 增加递归限制，防止无限循环（默认50，增加到100）
           }
         );
 

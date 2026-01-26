@@ -2,6 +2,8 @@ sub_agent:
   name: prompt_generator
   version: 1.0.0
   description: 根据前提变量生成文生图提示词
+  agent_type: createAgent  # 使用 createAgent 而不是 createDeepAgent
+  use_filesystem_middleware: true  # 使用 FilesystemMiddleware 保存提示词到文件
   
   system_prompt: |
     你是一位顶尖的儿童科普绘本设计师和文生图提示词专家，擅长为不同年龄段的儿童创作百科类科普绘本的图像提示词。你深谙儿童认知发展特点，能够将复杂的对象以适合儿童理解的方式进行视觉化呈现。
@@ -66,25 +68,25 @@ sub_agent:
     
     **重要工作流程**：
     1. **生成提示词**：根据上述设计框架，生成完整的文生图提示词
-    2. **保存到文件**：调用 write_prompt_file 工具保存提示词
+    2. **保存到文件**：调用 write_file 工具保存提示词到 "image_prompt.txt"
        ```json
        {
-         "content": "生成的完整提示词文本",
-         "filename": "image_prompt.txt"
+         "file_path": "image_prompt.txt",
+         "content": "生成的完整提示词文本"
        }
        ```
     3. **返回确认**：返回简短确认消息
        示例："✅ 文生图提示词已生成并保存到 image_prompt.txt"
     
     **工具调用格式**：
-    使用 write_prompt_file 工具时，参数格式必须为：
+    使用 write_file 工具时，参数格式必须为：
+    - file_path: (string) 文件路径，使用 "image_prompt.txt"
     - content: (string) 完整的提示词文本内容
-    - filename: (string, 可选) 文件名，默认 "image_prompt.txt"
     
     **重要限制**：
     - ❌ 不要使用 write_todos、parse_premise 等其他工具
     - ❌ 不要进行任务规划或分步骤说明
-    - ✅ 生成提示词后必须立即调用 write_prompt_file 保存
+    - ✅ 生成提示词后必须立即调用 write_file 保存
     - ✅ 确保工具调用成功后再返回确认消息
     - ✅ 返回简短确认消息，不要返回完整提示词内容
   
@@ -103,6 +105,3 @@ sub_agent:
     type: text
     format: plain
     max_length: 5000
-  
-  tools:
-    - write_prompt_file

@@ -28,10 +28,17 @@ export async function generateImage(
   // 支持从文件读取提示词或直接使用参数
   let prompt: string;
   if (params.promptFile) {
-    console.log(`[T2I] Reading prompt from file: ${params.promptFile} (session: ${sessionId})`);
+    console.log(`[T2I] Reading prompt from file: ${params.promptFile}`);
     try {
-      const promptContent = await workspaceFs.readFile(sessionId, params.promptFile, 'utf-8');
-      prompt = typeof promptContent === 'string' ? promptContent : promptContent.toString();
+      // FilesystemMiddleware 将文件直接保存在 workspaces/ 根目录下
+      // 所以这里直接从文件系统读取，不使用 workspaceFs（它会自动加 sessionId 层级）
+      const fs = await import('fs/promises');
+      const workspaceRoot = workspaceFs.root;
+      const fullPath = path.join(workspaceRoot, params.promptFile);
+      console.log(`[T2I] Reading from path: ${fullPath}`);
+      
+      const promptContent = await fs.readFile(fullPath, 'utf-8');
+      prompt = promptContent;
       console.log(`[T2I] Successfully read prompt file, length: ${prompt.length}`);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
