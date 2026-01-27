@@ -4,15 +4,16 @@ let currentStreamController: AbortController | null = null;
 
 export function handleAgentIPC() {
   ipcMain.handle('agent:sendMessage', async (_event, message: string, threadId?: string, sessionId?: string) => {
+    // 获取主窗口用于发送事件
+    const mainWindow = BrowserWindow.getAllWindows()[0];
+    if (!mainWindow) {
+      throw new Error('Main window not found');
+    }
+    
     // 如果提供了sessionId，将其注入到环境变量，供工具使用
     const previousSessionId = process.env.AGENT_SESSION_ID;
     
     try {
-      // 获取主窗口用于发送事件
-      const mainWindow = BrowserWindow.getAllWindows()[0];
-      if (!mainWindow) {
-        throw new Error('Main window not found');
-      }
 
       // 创建新的流控制器
       currentStreamController = new AbortController();
@@ -25,8 +26,8 @@ export function handleAgentIPC() {
       // 动态导入 Agent 工厂（避免在模块加载时执行）
       const { createMainAgent } = await import('../../backend/agent/factory.js');
       
-      // 初始化 Agent（每次调用都创建新的，或者可以缓存）
-      const agent = await createMainAgent();
+      // 初始化 Agent，传入 sessionId（修改）
+      const agent = await createMainAgent(sessionId);
 
       const newThreadId = threadId || `thread-${Date.now()}`;
 

@@ -1,12 +1,13 @@
 import * as path from 'path';
 import * as fs from 'fs';
+import type { LogManager } from '../services/log-manager.js';
 
 export interface DebugConfig {
   log_llm_calls?: boolean;
   save_llm_calls?: boolean;
 }
 
-export function createLLMCallbacks(debugConfig: DebugConfig, projectRoot: string) {
+export function createLLMCallbacks(debugConfig: DebugConfig, projectRoot: string, logManager?: LogManager) {
   return {
     handleLLMStart({ name }: any, prompts: string[], runId?: string, parentRunId?: string, extraParams?: any, tags?: string[], metadata?: any) {
       const modelName = name ?? 'llm';
@@ -100,7 +101,20 @@ export function createLLMCallbacks(debugConfig: DebugConfig, projectRoot: string
         console.log('='.repeat(80) + '\n');
       }
       
-      // 根据配置决定是否保存到文件
+      // 新增：使用 LogManager 记录（如果可用）
+      if (logManager) {
+        const sessionId = process.env.AGENT_SESSION_ID || 'default';
+        logManager.logLLMCall(sessionId, {
+          model: 'unknown',
+          prompt: '',
+          response: JSON.stringify(output).substring(0, 500),
+          tokens: 0,
+          duration: 0,
+          timestamp,
+        }).catch(err => console.error('[LLMCallbacks] Failed to log with LogManager:', err));
+      }
+      
+      // 根据配置决定是否保存到文件（兼容旧方式）
       if (debugConfig.save_llm_calls) {
         try {
           const debugDir = path.resolve(projectRoot, 'outputs', 'debug');
@@ -132,7 +146,22 @@ export function createLLMCallbacks(debugConfig: DebugConfig, projectRoot: string
       
       console.error('\n' + '='.repeat(80));
       console.error('❌ [LLM ERROR]');
-      console.error('='.repeat(80));
+      // 新增：使用 LogManager 记录错误（如果可用）
+      if (logManager) {
+        const sessionId = process.env.AGENT_SESSION_ID || 'default';
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        logManager.logLLMCall(sessionId, {
+          model: 'unknown',
+          prompt: '',
+          response: '',
+          tokens: 0,
+          duration: 0,
+          timestamp,
+          error: errorMsg,
+        }).catch(e => console.error('[LLMCallbacks] Failed to log error with LogManager:', e));
+      }
+      
+      // sole.error('='.repeat(80));
       console.error(`📅 Timestamp: ${timestamp}`);
       
       if (runId) console.error(`🔑 Run ID: ${runId}`);

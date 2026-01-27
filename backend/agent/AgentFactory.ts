@@ -6,11 +6,10 @@ import { createDeepAgent, createFilesystemMiddleware, FilesystemBackend, type Su
 import { ConfigLoader, type AgentConfig } from './ConfigLoader.js';
 import { loadConfig } from './config.js';
 import { createLLMCallbacks } from './LLMCallbacks.js';
-import type { BrowserWindow as BWType, IpcMain as IpcMainType } from 'electron';
 import * as path from 'path';
-import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 import { DEFAULT_SESSION_ID } from '../services/fs.js';
+import { createAgentRuntime, type AgentRuntime } from '../services/runtime-manager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,6 +19,7 @@ export class AgentFactory {
   private agentConfig: AgentConfig;
   private appConfig: any;
   private projectRoot: string;
+  private runtime?: AgentRuntime;  // 新增：Runtime 实例
 
   constructor(configPath?: string) {
     // 计算配置目录路径
@@ -58,10 +58,17 @@ export class AgentFactory {
     console.log(`[AgentFactory] 配置加载成功: ${this.agentConfig.name} v${this.agentConfig.version}`);
   }
 
+  /**初始化运行时（新增）
+   */
+  async initRuntime(sessionId: string): Promise<void> {
+    this.runtime = await createAgentRuntime(sessionId);
+    console.log(`[AgentFactory] Runtime initialized for session: ${sessionId}`);
+  }
+
   /**
    * 创建LLM实例
    */
-  private async createLLM(): Promise<ChatOpenAI> {
+  private async createLLM(sessionId?: string): Promise<ChatOpenAI> {
     this.appConfig = await loadConfig();
 
     const yamlLlmConfig = this.agentConfig.agent.llm;
@@ -75,6 +82,16 @@ export class AgentFactory {
     console.log(`[AgentFactory] LLM配置 - model: ${model}, temperature: ${temperature}, maxTokens: ${maxTokens}`);
     console.log(`[AgentFactory] 配置来源 - 界面: ${!!this.appConfig.agent.model}, YAML: ${!!yamlLlmConfig.model}`);
 
+    // 新增：使用 LogManager 记录 LLM 创建
+    if (this.runtime && sessionId) {
+      await this.runtime.logManager.logSystem('info', 'LLM instance created', {
+        model,
+        temperature,
+        maxTokens,
+        sessionId,
+      });
+    }
+
     return new ChatOpenAI({
       apiKey: this.appConfig.apiKeys.dashscope,
       modelName: model,
@@ -83,7 +100,7 @@ export class AgentFactory {
       configuration: {
         baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
       },
-      callbacks: [createLLMCallbacks(debugConfig, this.projectRoot)],
+      callbacks: [createLLMCallbacks(debugConfig, this.projectRoot, this.runtime?.logManager)],
     });
   }
 
@@ -94,10 +111,7 @@ export class AgentFactory {
     if (process.env.RUN_INTEGRATION_TESTS === 'false' || process.env.NODE_ENV === 'test') return;
     
     try {
-      const { BrowserWindow, ipcMain } = await import('electron') as {
-        BrowserWindow: typeof BWType;
-        IpcMain: typeof IpcMainType;
-      };
+      const { BrowserWindow, ipcMain } = await import('electron');
       const win = BrowserWindow.getAllWindows()[0];
       if (!win) return;
 
@@ -112,7 +126,7 @@ export class AgentFactory {
           }
         }, 30_000);
 
-        ipcMain.once('agent:confirmAction', (_event, data) => {
+        ipcMain.once('agent:confirmAction', (_event: any, data: any) => {
           if (settled) return;
           settled = true;
           clearTimeout(timer);
@@ -132,7 +146,7 @@ export class AgentFactory {
   /**
    * 创建MCP工具
    */
-  private async createMCPTool(mcpKey: string, mcpEntry: AgentConfig['mcp_services'][string]): Promise<any> {
+  private async createMCPTool(_mcpKey: string, mcpEntry: AgentConfig['mcp_services'][string]): Promise<any> {
     if (!mcpEntry.enable || !mcpEntry.config) {
       return null;
     }
@@ -192,23 +206,6 @@ export class AgentFactory {
 
     console.warn(`[AgentFactory] 未知的MCP服务类型: ${serviceType}`);
     return null;
-  }
-
-  /**
-   * 将提示词缓存到文件
-   */
-  private cachePromptToFile(filename: string, content: string): void {
-    try {
-      const debugDir = path.resolve(this.projectRoot, 'outputs', 'debug');
-      if (!fs.existsSync(debugDir)) {
-        fs.mkdirSync(debugDir, { recursive: true });
-      }
-      const filePath = path.join(debugDir, filename);
-      fs.writeFileSync(filePath, content, 'utf-8');
-      console.log(`[AgentFactory] 提示词已缓存: ${filePath}`);
-    } catch (error) {
-      console.error(`[AgentFactory] 缓存提示词失败:`, error);
-    }
   }
 
   /**
@@ -364,9 +361,6 @@ export class AgentFactory {
     
     const promptText = toolConfig.system_prompt;
 
-    // 缓存提示词到文件
-    this.cachePromptToFile('parse_premise_prompt.txt', promptText);
-
     return tool(
       async (input: { text: string }) => {
         const response = await llm.invoke(`${promptText}\n\n用户输入：${input.text}`);
@@ -436,9 +430,6 @@ export class AgentFactory {
     if (!systemPrompt) {
       throw new Error(`SubAgent ${subAgentName} 缺少系统提示词`);
     }
-
-    // 缓存子Agent提示词
-    this.cachePromptToFile(`subagent_${subEntry.name}_prompt.txt`, systemPrompt);
 
     // 从配置中读取 agent_type 和 use_filesystem_middleware
     const agentType = subConfig.sub_agent?.agent_type || 'createDeepAgent';
@@ -522,10 +513,14 @@ export class AgentFactory {
 
   /**
    * 创建主Agent
+   * @param sessionId 会话ID（新增）
    */
-  async createMainAgent(): Promise<any> {
+  async createMainAgent(sessionId: string = DEFAULT_SESSION_ID): Promise<any> {
+    // 初始化运行时（新增）
+    await this.initRuntime(sessionId);
+
     // 创建LLM
-    const llm = await this.createLLM();
+    const llm = await this.createLLM(sessionId);
 
     // 创建工具
     const tools: any[] = [];
@@ -552,6 +547,15 @@ export class AgentFactory {
 
     console.log(`[AgentFactory] 已加载 ${tools.length} 个工具`);
 
+    // 新增：记录审计日志
+    if (this.runtime) {
+      await this.runtime.logManager.logAudit(sessionId, {
+        action: 'agent_created',
+        toolsCount: tools.length,
+        agentName: this.agentConfig.agent.name,
+      });
+    }
+
     // 加载主Agent提示词（已嵌入配置）
     const mainSystemPrompt = typeof this.agentConfig.agent.system_prompt === 'string'
       ? this.agentConfig.agent.system_prompt
@@ -564,9 +568,6 @@ export class AgentFactory {
     if (!mainSystemPrompt) {
       throw new Error('主Agent系统提示词未配置');
     }
-
-    // 缓存系统提示词到文件
-    this.cachePromptToFile('main_agent_system_prompt.txt', mainSystemPrompt);
 
     // 创建SubAgents
     const subAgents = await this.createSubAgents();
@@ -583,7 +584,7 @@ export class AgentFactory {
       subagents: subAgents,
     });
 
-    console.log(`[AgentFactory] 主Agent创建成功: ${this.agentConfig.agent.name}`);
+    console.log(`[AgentFactory] 主Agent创建成功: ${this.agentConfig.agent.name} (session: ${sessionId})`);
 
     return agent;
   }

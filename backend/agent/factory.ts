@@ -6,7 +6,7 @@ export { ConfigLoader } from './ConfigLoader.js';
 // 主入口函数：创建Agent实例
 import { AgentFactory } from './AgentFactory.js';
 
-export async function createMainAgent() {
+export async function createMainAgent(sessionId?: string) {
   const factory = new AgentFactory();
-  return await factory.createMainAgent();
+  return await factory.createMainAgent(sessionId);
 }

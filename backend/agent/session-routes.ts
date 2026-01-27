@@ -3,6 +3,8 @@ import { getWorkspaceFilesystem } from '../services/fs';
 import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { getRuntimeManager } from '../services/runtime-manager.js';
+import { getLogManager } from '../services/log-manager.js';
 
 interface SessionMeta {
   sessionId: string;
@@ -27,6 +29,10 @@ export function registerSessionRoutes(app: Express) {
         prompt: req.body.prompt || '',
       };
 
+      // 创建 Runtime（新增）
+      const runtimeManager = getRuntimeManager();
+      await runtimeManager.createAgentRuntime(sessionId);
+
       // 创建会话目录和元数据
       await fsService.writeFile(
         sessionId,
@@ -34,12 +40,20 @@ export function registerSessionRoutes(app: Express) {
         JSON.stringify(meta, null, 2)
       );
 
-      // 创建子目录
+      // 创建子目录（移除 llm_logs，日志现在统一在 logs/ 目录）
       await Promise.all([
         fsService.writeFile(sessionId, 'images/.gitkeep', ''),
         fsService.writeFile(sessionId, 'audio/.gitkeep', ''),
-        fsService.writeFile(sessionId, 'llm_logs/.gitkeep', ''),
+        fsService.writeFile(sessionId, 'checkpoints/.gitkeep', ''),
       ]);
+
+      // 记录审计日志（新增）
+      const logManager = getLogManager();
+      await logManager.logAudit(sessionId, {
+        action: 'session_created',
+        title: meta.title,
+        prompt: meta.prompt,
+      });
 
       res.json({ sessionId, meta });
     } catch (error) {
@@ -169,7 +183,20 @@ export function registerSessionRoutes(app: Express) {
   app.delete('/api/sessions/:sessionId', async (req: Request, res: Response) => {
     try {
       const { sessionId } = req.params;
+      
+      // 关闭 Runtime（新增）
+      const runtimeManager = getRuntimeManager();
+      await runtimeManager.closeRuntime(sessionId);
+      
+      // 删除文件系统数据
       await fsService.rm(sessionId, '.');
+      
+      // 记录审计日志（新增）
+      const logManager = getLogManager();
+      await logManager.logAudit(sessionId, {
+        action: 'session_deleted',
+      });
+      
       res.json({ success: true });
     } catch (error) {
       console.error('Failed to delete session:', error);

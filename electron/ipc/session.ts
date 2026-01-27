@@ -3,6 +3,8 @@ import { getWorkspaceFilesystem } from '../../backend/services/fs.js';
 import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
+import { getRuntimeManager } from '../../backend/services/runtime-manager.js';
+import { getLogManager } from '../../backend/services/log-manager.js';
 
 interface SessionMeta {
   sessionId: string;
@@ -31,6 +33,10 @@ export function handleSessionIPC() {
         prompt: prompt || '',
       };
 
+      // 创建 Runtime（新增）
+      const runtimeManager = getRuntimeManager();
+      await runtimeManager.createAgentRuntime(sessionId);
+
       // 创建会话目录和元数据
       await fsService.writeFile(
         sessionId,
@@ -38,12 +44,20 @@ export function handleSessionIPC() {
         JSON.stringify(meta, null, 2)
       );
 
-      // 创建子目录
+      // 创建子目录（移除 llm_logs）
       await Promise.all([
         fsService.writeFile(sessionId, 'images/.gitkeep', ''),
         fsService.writeFile(sessionId, 'audio/.gitkeep', ''),
-        fsService.writeFile(sessionId, 'llm_logs/.gitkeep', ''),
+        fsService.writeFile(sessionId, 'checkpoints/.gitkeep', ''),
       ]);
+
+      // 记录审计日志（新增）
+      const logManager = getLogManager();
+      await logManager.logAudit(sessionId, {
+        action: 'session_created',
+        title: meta.title,
+        prompt: meta.prompt,
+      });
 
       return { sessionId, meta };
     } catch (error) {
@@ -276,7 +290,19 @@ export function handleSessionIPC() {
   // 删除会话
   ipcMain.handle('session:delete', async (_event, sessionId: string) => {
     try {
+      // 关闭 Runtime（新增）
+      const runtimeManager = getRuntimeManager();
+      await runtimeManager.closeRuntime(sessionId);
+      
+      // 删除文件系统数据
       await fsService.rm(sessionId, '.');
+      
+      // 记录审计日志（新增）
+      const logManager = getLogManager();
+      await logManager.logAudit(sessionId, {
+        action: 'session_deleted',
+      });
+      
       return { success: true };
     } catch (error) {
       console.error('Failed to delete session:', error);

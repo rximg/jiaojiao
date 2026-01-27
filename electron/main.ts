@@ -2,12 +2,13 @@ import { app, BrowserWindow, protocol } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { promises as fs } from 'fs';
 import { handleConfigIPC } from './ipc/config.js';
 import { handleStorageIPC } from './ipc/storage.js';
 import { handleAgentIPC } from './ipc/agent.js';
 import { handleFilesystemIPC } from './ipc/filesystem.js';
 import { handleSessionIPC } from './ipc/session.js';
+import { handleHITLIPC } from './ipc/hitl.js';
+import { initializeServices, shutdownServices } from '../backend/services/service-initializer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -44,7 +45,15 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // 初始化核心服务（新增）
+  try {
+    await initializeServices();
+    console.log('[Electron] Core services initialized');
+  } catch (error) {
+    console.error('[Electron] Failed to initialize services:', error);
+  }
+
   // 注册自定义协议来服务本地文件
   protocol.registerFileProtocol('local-file', (request, callback) => {
     const url = request.url.replace('local-file://', '');
@@ -64,6 +73,7 @@ app.whenReady().then(() => {
   handleAgentIPC();
   handleFilesystemIPC();
   handleSessionIPC();
+  handleHITLIPC();  // 新增
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -72,8 +82,10 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('window-all-closed', () => {
+app.on('window-all-closed', async () => {
   if (process.platform !== 'darwin') {
+    // 清理服务（新增）
+    await shutdownServices();
     app.quit();
   }
 });
