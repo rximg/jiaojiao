@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 import { getWorkspaceFilesystem } from '../../backend/services/fs.js';
 import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
+import * as path from 'path';
 
 interface SessionMeta {
   sessionId: string;
@@ -11,6 +12,8 @@ interface SessionMeta {
   prompt?: string;
   messages?: any[]; // 历史消息
   todos?: any[]; // todos列表
+  firstMessage?: string; // 第一句话
+  firstImage?: string; // 第一张图片路径
 }
 
 export function handleSessionIPC() {
@@ -74,7 +77,47 @@ export function handleSessionIPC() {
               'utf-8'
             );
             const meta = JSON.parse(metaContent as string) as SessionMeta;
-            return meta;
+            
+            // 提取第一句话和第一张图片
+            let firstMessage = '';
+            let firstImage = '';
+            
+            try {
+              const messagesContent = await fsService.readFile(
+                sessionId,
+                'meta/messages.json',
+                'utf-8'
+              );
+              const messages = JSON.parse(messagesContent as string);
+              
+              // 获取第一条用户消息
+              const firstUserMessage = messages.find((msg: any) => msg.role === 'user');
+              if (firstUserMessage) {
+                firstMessage = firstUserMessage.content.substring(0, 100); // 最多100字符
+              }
+              
+              // 查找第一张图片（从images目录）
+              try {
+                const imagesPath = path.join(rootDir, sessionId, 'images');
+                const imageFiles = await fs.readdir(imagesPath);
+                const imageFile = imageFiles.find((file: string) => 
+                  /\.(png|jpg|jpeg|gif|webp)$/i.test(file)
+                );
+                if (imageFile) {
+                  firstImage = path.join(imagesPath, imageFile);
+                }
+              } catch {
+                // 没有图片目录或图片，忽略
+              }
+            } catch {
+              // 没有消息文件，忽略
+            }
+            
+            return {
+              ...meta,
+              firstMessage,
+              firstImage,
+            };
           } catch {
             // 如果没有元数据，创建一个默认的
             return {
@@ -110,6 +153,32 @@ export function handleSessionIPC() {
       );
       const meta = JSON.parse(metaContent as string) as SessionMeta;
 
+      // 尝试从单独文件读取messages和todos
+      let messages = meta.messages || [];
+      let todos = meta.todos || [];
+      
+      try {
+        const messagesContent = await fsService.readFile(
+          sessionId,
+          'meta/messages.json',
+          'utf-8'
+        );
+        messages = JSON.parse(messagesContent as string);
+      } catch {
+        // messages.json不存在，使用meta中的或空数组
+      }
+      
+      try {
+        const todosContent = await fsService.readFile(
+          sessionId,
+          'meta/todos.json',
+          'utf-8'
+        );
+        todos = JSON.parse(todosContent as string);
+      } catch {
+        // todos.json不存在，使用meta中的或空数组
+      }
+
       // 获取文件清单
       const [images, audio, logs] = await Promise.all([
         fsService.ls(sessionId, 'images'),
@@ -119,8 +188,8 @@ export function handleSessionIPC() {
 
       return {
         meta,
-        messages: meta.messages || [],
-        todos: meta.todos || [],
+        messages,
+        todos,
         files: {
           images: images.filter((f) => !f.name.startsWith('.')),
           audio: audio.filter((f) => !f.name.startsWith('.')),
@@ -136,12 +205,34 @@ export function handleSessionIPC() {
   // 更新会话元数据
   ipcMain.handle('session:update', async (_event, sessionId: string, updates: Partial<SessionMeta>) => {
     try {
-      const metaContent = await fsService.readFile(
-        sessionId,
-        'meta/session.json',
-        'utf-8'
-      );
-      const meta = JSON.parse(metaContent as string) as SessionMeta;
+      let meta: SessionMeta;
+      
+      // 尝试读取现有session
+      try {
+        const metaContent = await fsService.readFile(
+          sessionId,
+          'meta/session.json',
+          'utf-8'
+        );
+        meta = JSON.parse(metaContent as string) as SessionMeta;
+      } catch (readError) {
+        // Session不存在，自动创建
+        console.log(`[session:update] Session ${sessionId} does not exist, creating...`);
+        meta = {
+          sessionId,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          title: updates.title || '未命名对话',
+          prompt: updates.prompt || '',
+        };
+        
+        // 创建子目录
+        await Promise.all([
+          fsService.writeFile(sessionId, 'images/.gitkeep', ''),
+          fsService.writeFile(sessionId, 'audio/.gitkeep', ''),
+          fsService.writeFile(sessionId, 'llm_logs/.gitkeep', ''),
+        ]);
+      }
 
       const updatedMeta: SessionMeta = {
         ...meta,
@@ -150,11 +241,30 @@ export function handleSessionIPC() {
         updatedAt: new Date().toISOString(),
       };
 
+      // 保存元数据
       await fsService.writeFile(
         sessionId,
         'meta/session.json',
         JSON.stringify(updatedMeta, null, 2)
       );
+      
+      // 如果更新包含messages，单独保存到messages.json
+      if (updates.messages) {
+        await fsService.writeFile(
+          sessionId,
+          'meta/messages.json',
+          JSON.stringify(updates.messages, null, 2)
+        );
+      }
+      
+      // 如果更新包含todos，单独保存到todos.json
+      if (updates.todos) {
+        await fsService.writeFile(
+          sessionId,
+          'meta/todos.json',
+          JSON.stringify(updates.todos, null, 2)
+        );
+      }
 
       return { meta: updatedMeta };
     } catch (error) {

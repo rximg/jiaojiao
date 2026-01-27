@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, Image as ImageIcon } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
 interface Session {
@@ -7,6 +7,8 @@ interface Session {
   title: string;
   createdAt: string;
   updatedAt: string;
+  firstMessage?: string;
+  firstImage?: string;
 }
 
 interface HistoryPanelProps {
@@ -58,10 +60,40 @@ export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
                 onClick={() => onSessionClick(session.sessionId)}
                 className="w-full p-4 text-left hover:bg-accent transition-colors"
               >
-                <div className="font-medium text-sm truncate">{session.title}</div>
-                <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                  <Clock className="h-3 w-3" />
-                  {formatDate(session.updatedAt)}
+                <div className="flex gap-3">
+                  {/* 第一张图片预览 */}
+                  {session.firstImage ? (
+                    <div className="flex-shrink-0 w-16 h-16 rounded overflow-hidden bg-muted flex items-center justify-center">
+                      <img 
+                        src={`file://${session.firstImage}`} 
+                        alt="预览" 
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const img = e.target as HTMLImageElement;
+                          img.style.display = 'none';
+                        }}
+                      />
+                      <ImageIcon className="h-6 w-6 text-muted-foreground absolute" />
+                    </div>
+                  ) : (
+                    <div className="flex-shrink-0 w-16 h-16 rounded overflow-hidden bg-muted flex items-center justify-center">
+                      <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                  )}
+                  
+                  {/* 文字信息 */}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm truncate">{session.title}</div>
+                    {session.firstMessage && (
+                      <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                        {session.firstMessage}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      {formatDate(session.updatedAt)}
+                    </div>
+                  </div>
                 </div>
               </button>
             ))}

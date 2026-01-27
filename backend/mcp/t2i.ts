@@ -58,6 +58,39 @@ export async function generateImage(
     || 'https://dashscope.aliyuncs.com/api/v1/tasks';
   const model = process.env.DASHSCOPE_T2I_MODEL || 'wanx-v1';
 
+  // 保存输入参数到文件
+  try {
+    const fs = await import('fs/promises');
+    const debugDir = path.join(process.cwd(), 'outputs', 't2idebug');
+    await fs.mkdir(debugDir, { recursive: true });
+    
+    const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+    const debugFile = path.join(debugDir, `t2i_input_${timestamp}.json`);
+    
+    const debugData = {
+      timestamp: new Date().toISOString(),
+      sessionId,
+      model,
+      endpoint,
+      prompt: prompt.substring(0, 500) + (prompt.length > 500 ? '...' : ''), // 截断长提示词
+      fullPromptLength: prompt.length,
+      parameters: {
+        size,
+        style,
+        count,
+      },
+      config: {
+        promptFile: params.promptFile,
+        promptProvided: !!params.prompt,
+      },
+    };
+    
+    await fs.writeFile(debugFile, JSON.stringify(debugData, null, 2), 'utf-8');
+    console.log(`[T2I] Input parameters saved to: ${debugFile}`);
+  } catch (error) {
+    console.error('[T2I] Failed to save input parameters:', error);
+  }
+
   // 1. 发起异步文生图请求（需要 X-DashScope-Async: enable 头）
   const parameters: Record<string, any> = {
     size,

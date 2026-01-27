@@ -30,6 +30,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onConfirmRequest: (callback: (data: any) => void) => {
       ipcRenderer.on('agent:confirmRequest', (_event, data) => callback(data));
     },
+    onQuotaExceeded: (callback: (data: any) => void) => {
+      ipcRenderer.on('agent:quotaExceeded', (_event, data) => callback(data));
+    },
     confirmAction: (ok: boolean) => ipcRenderer.send('agent:confirmAction', { ok }),
     stopStream: () => ipcRenderer.invoke('agent:stopStream'),
   },
@@ -78,6 +81,7 @@ declare global {
         onToolCall: (callback: (data: any) => void) => void;
         onTodoUpdate: (callback: (data: any) => void) => void;
         onConfirmRequest: (callback: (data: any) => void) => void;
+        onQuotaExceeded: (callback: (data: any) => void) => void;
         confirmAction: (ok: boolean) => void;
         stopStream: () => Promise<void>;
       };

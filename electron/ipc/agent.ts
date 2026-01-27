@@ -38,7 +38,7 @@ export function handleAgentIPC() {
           { messages: [{ role: 'user', content: message }] },
           { 
             signal: currentStreamController.signal,
-            recursionLimit: 100  // 增加递归限制，防止无限循环（默认50，增加到100）
+            recursionLimit: 200  // 增加递归限制，防止无限循环（默认50，增加到200）
           }
         );
 
@@ -109,13 +109,23 @@ export function handleAgentIPC() {
         
         console.error('Stream error:', streamError);
         
+        // 检查是否是 403 错误（额度用完）
+        if (streamError.message?.includes('403') || streamError.status === 403 || streamError.code === 403) {
+          console.error('[agent] 403 Error detected - quota exceeded');
+          mainWindow.webContents.send('agent:quotaExceeded', {
+            message: 'API额度已用完，请前往设置更换模型',
+            error: streamError.message || '403 Forbidden',
+          });
+          throw new Error('API额度已用完，请前往设置更换模型');
+        }
+        
         // 尝试使用 invoke 方法
         try {
           // @ts-ignore - Type instantiation is too deep with deepagents
           const result = await (agent as any).invoke({ 
             messages: [{ role: 'user', content: message }] 
           }, {
-            recursionLimit: 100  // Increase recursion limit for invoke as well
+            recursionLimit: 200  // Increase recursion limit for invoke as well
           });
           
           const state = result as any;
@@ -146,6 +156,16 @@ export function handleAgentIPC() {
       if (error.name === 'AbortError') {
         return 'stream-aborted';
       }
+      
+      // 检查是否是 403 错误
+      if (error.message?.includes('403') || error.status === 403 || error.code === 403) {
+        console.error('[agent] 403 Error detected in catch - quota exceeded');
+        mainWindow.webContents.send('agent:quotaExceeded', {
+          message: 'API额度已用完，请前往设置更换模型',
+          error: error.message || '403 Forbidden',
+        });
+      }
+      
       console.error('Agent error:', error);
       throw error;
     } finally {

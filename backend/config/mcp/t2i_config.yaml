@@ -9,7 +9,7 @@ service:
   endpoint: https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis
   task_endpoint: https://dashscope.aliyuncs.com/api/v1/tasks
   
-  model: wanx-v1
+  model: z-image-turbo
   
   default_params:
     size: "1024*1024"

@@ -5,6 +5,7 @@ import WelcomePage from './app/components/WelcomePage';
 import ChatInterface from './app/components/ChatInterface';
 import ConfigDialog from './app/components/ConfigDialog';
 import { ConfirmDialog } from './app/components/ConfirmDialog';
+import { QuotaErrorDialog } from './app/components/QuotaErrorDialog';
 import type { AppConfig } from './types/types';
 
 type View = 'welcome' | 'chat';
@@ -65,6 +66,7 @@ function AppContent() {
       <ChatProvider>
         <div className="h-screen flex flex-col">
           <ConfirmDialog />
+          <QuotaErrorDialog />
           {view === 'welcome' ? (
             <WelcomePage
               onCaseClick={handleCaseClick}

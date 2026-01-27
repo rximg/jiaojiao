@@ -124,7 +124,8 @@ export class AgentFactory {
         throw new Error(`${action} cancelled by user`);
       }
     } catch (err) {
-      console.warn('[confirm] fallback allow:', err);
+      console.error('[confirm] Human confirmation failed:', err);
+      throw new Error(`${action} cancelled by user`);
     }
   }
 
@@ -282,13 +283,7 @@ export class AgentFactory {
       },
       {
         name: 'finalize_workflow',
-        description: `检查图片、音频文件是否生成，如果都存在则完成工作流。
-
-**重要：这是工作流的最后一步。调用此工具后：**
-1. 工作流自动结束
-2. 不要再调用任何其他工具（包括 write_todos）
-3. 直接向用户展示结果摘要
-4. 立即停止所有操作`,
+        description: '检查图片、音频文件是否生成，如果都存在则完成工作流并向用户展示结果摘要',
         schema: z.object({
           imagePath: z.string().optional().describe('生成的图片文件路径'),
           audioPath: z.string().optional().describe('生成的音频文件路径'),
@@ -586,7 +581,6 @@ export class AgentFactory {
       tools,
       systemPrompt: mainSystemPrompt,
       subagents: subAgents,
-      recursionLimit: 200,  // 设置递归限制（默认50，增加到100）
     });
 
     console.log(`[AgentFactory] 主Agent创建成功: ${this.agentConfig.agent.name}`);

@@ -5,12 +5,14 @@ interface ChatContextType {
   messages: Message[];
   todos: TodoItem[];
   pendingAction: { action: 't2i' | 'tts'; payload: any } | null;
+  quotaError: { message: string; error: string } | null;
   isLoading: boolean;
   currentThreadId: string | null;
   currentSessionId: string | null;
   lastArtifactTime: number; // 最后一次生成产物的时间戳，用于触发刷新
   sendMessage: (text: string, threadId?: string) => Promise<void>;
   respondConfirm: (ok: boolean) => Promise<void>;
+  dismissQuotaError: () => void;
   stopStream: () => Promise<void>;
   setCurrentThreadId: (id: string | null) => void;
   createNewSession: (title?: string) => Promise<string>;
@@ -23,6 +25,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [pendingAction, setPendingAction] = useState<{ action: 't2i' | 'tts'; payload: any } | null>(null);
+  const [quotaError, setQuotaError] = useState<{ message: string; error: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -181,21 +184,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
 
     const handleToolCall = (data: any) => {
-      // 监听工具调用，当检测到generate_image或synthesize_speech时更新时间戳
-      if (data.toolCalls && Array.isArray(data.toolCalls)) {
-        const hasArtifactTool = data.toolCalls.some((call: any) => 
-          call.name === 'generate_image' || call.name === 'synthesize_speech'
-        );
-        if (hasArtifactTool) {
-          console.log('[renderer] Artifact generation detected, updating timestamp');
-          setLastArtifactTime(Date.now());
-        }
-      }
+      // 工具调用事件（保留用于其他用途）
+      console.log('[ChatProvider] Tool called:', data);
+    };
+
+    const handleQuotaExceeded = (data: any) => {
+      console.error('[ChatProvider] Quota exceeded:', data);
+      setQuotaError(data);
+      setIsLoading(false);
     };
 
     window.electronAPI.agent.onMessage(handleMessage);
-    window.electronAPI.agent.onTodoUpdate(handleTodo);
+    window.electronAPI.agent.onTodoUpdate((data) => {
+      handleTodo(data);
+      // Todo 更新时刷新文件系统显示
+      setLastArtifactTime(Date.now());
+    });
     window.electronAPI.agent.onToolCall(handleToolCall);
+    
+    if (typeof window.electronAPI.agent.onQuotaExceeded === 'function') {
+      window.electronAPI.agent.onQuotaExceeded(handleQuotaExceeded);
+    }
 
     if (typeof window.electronAPI.agent.onConfirmRequest === 'function') {
       window.electronAPI.agent.onConfirmRequest(handleConfirm);
@@ -220,42 +229,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setPendingAction(null);
   }, []);
 
-  const sendMessage = useCallback(async (text: string, threadId?: string) => {
-    const thread = threadId || currentThreadId || undefined;
-
-    console.log('[ChatProvider] sendMessage called with:', {
-      text,
-      threadId: thread,
-      currentSessionId,
-    });
-
-    // 添加用户消息
-    const userMessage: Message = {
-      id: `msg-${Date.now()}`,
-      role: 'user',
-      content: text,
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, userMessage]);
-
-    setIsLoading(true);
-    try {
-      const newThreadId = await window.electronAPI.agent.sendMessage(text, thread, currentSessionId || undefined);
-      console.log('[renderer] backend returned threadId:', newThreadId, 'current:', currentThreadId);
-      // Always update to the backend's threadId to keep in sync
-      setCurrentThreadId(newThreadId);
-    } catch (error) {
-      console.error('Failed to send message:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentThreadId, currentSessionId]);
-
-  const stopStream = useCallback(async () => {
-    await window.electronAPI.agent.stopStream();
-    setIsLoading(false);
+  const dismissQuotaError = useCallback(() => {
+    setQuotaError(null);
   }, []);
-const createNewSession = useCallback(async (title?: string) => {
+
+  const createNewSession = useCallback(async (title?: string) => {
     try {
       const { sessionId } = await window.electronAPI.session.create(title);
       setCurrentSessionId(sessionId);
@@ -268,6 +246,49 @@ const createNewSession = useCallback(async (title?: string) => {
       console.error('Failed to create session:', error);
       throw error;
     }
+  }, []);
+
+  const sendMessage = useCallback(async (text: string, threadId?: string) => {
+    const thread = threadId || currentThreadId || undefined;
+
+    console.log('[ChatProvider] sendMessage called with:', {
+      text,
+      threadId: thread,
+      currentSessionId,
+    });
+
+    // 确保session已创建
+    let sessionId = currentSessionId;
+    if (!sessionId) {
+      console.log('[ChatProvider] No session, creating new one...');
+      sessionId = await createNewSession('新对话');
+    }
+
+    // 添加用户消息
+    const userMessage: Message = {
+      id: `msg-${Date.now()}`,
+      role: 'user',
+      content: text,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, userMessage]);
+
+    setIsLoading(true);
+    try {
+      const newThreadId = await window.electronAPI.agent.sendMessage(text, thread, sessionId || undefined);
+      console.log('[renderer] backend returned threadId:', newThreadId, 'current:', currentThreadId);
+      // Always update to the backend's threadId to keep in sync
+      setCurrentThreadId(newThreadId);
+    } catch (error) {
+      console.error('Failed to send message:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentThreadId, currentSessionId, createNewSession]);
+
+  const stopStream = useCallback(async () => {
+    await window.electronAPI.agent.stopStream();
+    setIsLoading(false);
   }, []);
 
   const loadSession = useCallback(async (sessionId: string) => {
@@ -308,12 +329,14 @@ const createNewSession = useCallback(async (title?: string) => {
         messages,
         todos,
         pendingAction,
+        quotaError,
         isLoading,
         currentThreadId,
         currentSessionId,
         lastArtifactTime,
         sendMessage,
         respondConfirm,
+        dismissQuotaError,
         stopStream,
         setCurrentThreadId,
         createNewSession,
