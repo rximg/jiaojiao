@@ -3,7 +3,7 @@
  * 应用启动时调用
  */
 
-import { WorkspaceFilesystem } from './fs.js';
+import { WorkspaceFilesystem, resolveWorkspaceRoot } from './fs.js';
 import { PersistenceService } from './persistence-service.js';
 import { getLogManager } from './log-manager.js';
 import { initRuntimeManager } from './runtime-manager.js';
@@ -27,8 +27,9 @@ export async function initializeServices(): Promise<void> {
     // 加载配置
     const config = await loadConfig();
 
-    // 初始化 WorkspaceService
-    const workspaceService = new WorkspaceFilesystem(config.storage.outputPath);
+    // 初始化 WorkspaceService（与 getWorkspaceFilesystem 使用同一根路径：outputPath/workspaces）
+    const rootDir = resolveWorkspaceRoot(config.storage.outputPath);
+    const workspaceService = new WorkspaceFilesystem(rootDir);
     console.log('[ServiceInit] ✓ WorkspaceFilesystem initialized');
 
     // 初始化 PersistenceService
