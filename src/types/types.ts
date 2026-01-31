@@ -74,6 +74,8 @@ export interface AppConfig {
     language: "zh" | "en";
     welcome?: WelcomeConfig;
     quickOptions?: QuickOption[];
+    /** @deprecated 使用 quickOptions，YAML/后端兼容 */
+    quick_options?: QuickOption[];
   };
 }
 

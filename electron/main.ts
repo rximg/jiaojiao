@@ -2,6 +2,20 @@ import { app, BrowserWindow, protocol } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import dotenv from 'dotenv';
+import fs from 'fs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// 尽早加载 .env（与 AgentFactory 一致：从应用根目录读取，避免 dist-electron 运行时 cwd 不对）
+const appRoot = __dirname.includes('dist-electron') ? path.join(__dirname, '..') : process.cwd();
+const envPath = path.join(appRoot, '.env');
+dotenv.config({ path: envPath });
+if (process.env.NODE_ENV === 'development') {
+  console.log('[Electron] .env path:', envPath, 'exists:', fs.existsSync(envPath));
+}
+
 import { handleConfigIPC } from './ipc/config.js';
 import { handleStorageIPC } from './ipc/storage.js';
 import { handleAgentIPC } from './ipc/agent.js';
@@ -9,9 +23,6 @@ import { handleFilesystemIPC } from './ipc/filesystem.js';
 import { handleSessionIPC } from './ipc/session.js';
 import { handleHITLIPC } from './ipc/hitl.js';
 import { initializeServices, shutdownServices } from '../backend/services/service-initializer.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
 

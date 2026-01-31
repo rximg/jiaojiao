@@ -93,7 +93,12 @@ export class WorkspaceFilesystem {
     await this.ensureRoot();
     const targetPath = this.sessionPath(sessionId, relativePath);
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
-    await fs.appendFile(targetPath, data, encoding);
+    const payload: string | Uint8Array = typeof data === 'string'
+      ? data
+      : data instanceof Uint8ClampedArray
+        ? new Uint8Array(data)
+        : (data as Uint8Array);
+    await fs.appendFile(targetPath, payload, encoding);
     return targetPath;
   }
 

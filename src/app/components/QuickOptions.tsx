@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { useConfig } from '../../providers/ConfigProvider';
+import type { QuickOption } from '@/types/types';
 
 interface QuickOptionsProps {
   onOptionClick: (option: string) => void;
@@ -18,7 +19,7 @@ export default function QuickOptions({ onOptionClick }: QuickOptionsProps) {
 
   return (
     <div className="flex flex-wrap gap-2">
-      {quickOptions.map((option) => (
+      {quickOptions.map((option: QuickOption) => (
         <Button
           key={option.label}
           variant="outline"

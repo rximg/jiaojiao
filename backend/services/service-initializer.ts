@@ -8,6 +8,7 @@ import { PersistenceService } from './persistence-service.js';
 import { getLogManager } from './log-manager.js';
 import { initRuntimeManager } from './runtime-manager.js';
 import { loadConfig } from '../agent/config.js';
+import { initLangSmithEnv } from '../agent/langsmith.js';
 
 let initialized = false;
 
@@ -24,6 +25,9 @@ export async function initializeServices(): Promise<void> {
   console.log('[ServiceInit] Initializing core services...');
 
   try {
+    // 初始化 LangSmith 追踪环境（若 .env 中配置了 LANGCHAIN_API_KEY）
+    initLangSmithEnv();
+
     // 加载配置
     const config = await loadConfig();
 

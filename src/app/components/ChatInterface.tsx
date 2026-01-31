@@ -25,7 +25,7 @@ export default function ChatInterface({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { messages, todos, isLoading, sendMessage, stopStream, currentSessionId, createNewSession, loadSession, lastArtifactTime } = useChat();
   const [showWelcome, setShowWelcome] = useState(true);
-  const [showWorkspace, setShowWorkspace] = useState(true);
+  const [showWorkspace] = useState(true);
 
   // 加载或创建会话
   useEffect(() => {
