@@ -10,7 +10,7 @@ const runIntegration = process.env.RUN_INTEGRATION_TESTS === 'true';
 const createdFiles: string[] = [];
 
 describe('T2I generateImage()', () => {
-  const sessionId = 'integration-session';
+  const sessionId = 'default';
 
   beforeAll(() => {
     if (!hasKey) {
@@ -38,7 +38,36 @@ describe('T2I generateImage()', () => {
   });
 
   it.skipIf(!hasKey || !runIntegration)('should generate an image file', async () => {
-    const result = await generateImage({ prompt: 'A cute cartoon cat', size: '1024*1024', sessionId });
+    const result = await generateImage({ 
+      prompt: 'A cute cartoon cat', 
+      size: '1024*1024', 
+      model: 'wanx-v1',
+      sessionId 
+    });
+
+    // record for cleanup
+    createdFiles.push(result.imagePath);
+
+    const exists = await fs
+      .access(result.imagePath)
+      .then(() => true)
+      .catch(() => false);
+
+    expect(exists).toBe(true);
+
+    const cfg = await loadConfig();
+    const expectedDir = path.join(cfg.storage.outputPath, 'workspaces', sessionId, 'images');
+    expect(result.imagePath.startsWith(path.resolve(expectedDir))).toBe(true);
+  }, 120_000);
+
+  it.skipIf(!hasKey || !runIntegration)('should generate an image from prompt file', async () => {
+    // Use promptFile parameter to read from file
+    const result = await generateImage({ 
+      promptFile: 'image_prompt.txt',
+      size: '1024*1024', 
+      model: 'wan2.6-t2i',
+      sessionId 
+    });
 
     // record for cleanup
     createdFiles.push(result.imagePath);

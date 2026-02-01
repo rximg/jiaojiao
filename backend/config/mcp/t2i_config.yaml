@@ -6,10 +6,11 @@ service:
   type: t2i
   provider: dashscope
   
-  endpoint: https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis
+  # wan2.6-image uses image-generation async API
+  endpoint: https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation
   task_endpoint: https://dashscope.aliyuncs.com/api/v1/tasks
   
-  model: z-image-turbo
+  model: wan2.6-t2i
   
   default_params:
     size: "1024*1024"
