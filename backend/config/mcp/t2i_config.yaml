@@ -13,7 +13,7 @@ service:
   model: wan2.6-t2i
   
   default_params:
-    size: "1024*1024"
+    size: "1472*1104"
     count: 1
   
   timeout:
