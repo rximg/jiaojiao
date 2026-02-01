@@ -59,8 +59,8 @@ RUN_INTEGRATION_TESTS=false
 
 # 可选：为文生图/语音单独配置模型与端点（你的账户权限为准）
 # 文生图（T2I）
-DASHSCOPE_T2I_MODEL=wanx-v1
-DASHSCOPE_T2I_ENDPOINT=https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis
+DASHSCOPE_T2I_MODEL=wan2.6-i2v
+DASHSCOPE_T2I_ENDPOINT=https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
 # 语音合成（TTS）
 DASHSCOPE_TTS_MODEL=sambert-zhichu-v1
 DASHSCOPE_TTS_ENDPOINT=https://dashscope.aliyuncs.com/api/v1/services/audio/tts

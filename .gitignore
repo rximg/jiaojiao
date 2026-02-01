@@ -34,3 +34,4 @@ outputs/
 release/*
 *.code-workspace
 logs/audit/*
+.claude/skills/*

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Clock, Image as ImageIcon } from 'lucide-react';
+import { Clock, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 interface Session {
   sessionId: string;
@@ -34,6 +35,17 @@ export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
     }
   };
 
+  const handleDelete = async (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation();
+    if (!window.confirm('确定删除这条历史记录？删除后无法恢复。')) return;
+    try {
+      await window.electronAPI.session.delete(sessionId);
+      setSessions((prev) => prev.filter((s) => s.sessionId !== sessionId));
+    } catch (error) {
+      console.error('Failed to delete session:', error);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="p-4">
@@ -55,25 +67,28 @@ export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
         ) : (
           <div className="divide-y divide-border">
             {sessions.map((session) => (
-              <button
+              <div
                 key={session.sessionId}
-                onClick={() => onSessionClick(session.sessionId)}
-                className="w-full p-4 text-left hover:bg-accent transition-colors"
+                className="group flex items-center gap-2 p-4 hover:bg-accent transition-colors"
               >
-                <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => onSessionClick(session.sessionId)}
+                  className="flex-1 flex gap-3 text-left min-w-0"
+                >
                   {/* 第一张图片预览 */}
                   {session.firstImage ? (
-                    <div className="flex-shrink-0 w-16 h-16 rounded overflow-hidden bg-muted flex items-center justify-center">
+                    <div className="flex-shrink-0 w-16 h-16 rounded overflow-hidden bg-muted flex items-center justify-center relative">
                       <img 
-                        src={`file://${session.firstImage}`} 
+                        src={`local-file://${session.firstImage}`} 
                         alt="预览" 
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover relative z-10"
                         onError={(e) => {
                           const img = e.target as HTMLImageElement;
                           img.style.display = 'none';
                         }}
                       />
-                      <ImageIcon className="h-6 w-6 text-muted-foreground absolute" />
+                      <ImageIcon className="h-6 w-6 text-muted-foreground absolute inset-0 m-auto" aria-hidden />
                     </div>
                   ) : (
                     <div className="flex-shrink-0 w-16 h-16 rounded overflow-hidden bg-muted flex items-center justify-center">
@@ -94,8 +109,19 @@ export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
                       {formatDate(session.updatedAt)}
                     </div>
                   </div>
-                </div>
-              </button>
+                </button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="flex-shrink-0 h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => handleDelete(e, session.sessionId)}
+                  title="删除"
+                  aria-label="删除"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             ))}
           </div>
         )}

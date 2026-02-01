@@ -293,7 +293,8 @@ export function handleSessionIPC() {
       // 关闭 Runtime（新增）
       const runtimeManager = getRuntimeManager();
       await runtimeManager.closeRuntime(sessionId);
-      
+      // 给 Windows 一点时间释放文件句柄，避免 EPERM
+      await new Promise((r) => setTimeout(r, 300));
       // 删除文件系统数据
       await fsService.rm(sessionId, '.');
       

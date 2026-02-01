@@ -195,7 +195,19 @@ export class WorkspaceFilesystem {
 
   async rm(sessionId: string, relativePath: string): Promise<void> {
     const targetPath = this.sessionPath(sessionId, relativePath);
-    await fs.rm(targetPath, { recursive: true, force: true });
+    const maxRetries = 3;
+    const retryDelayMs = 200;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await fs.rm(targetPath, { recursive: true, force: true });
+        return;
+      } catch (err: unknown) {
+        const code = (err as NodeJS.ErrnoException)?.code;
+        const isRetryable = code === 'EPERM' || code === 'EBUSY';
+        if (!isRetryable || attempt === maxRetries) throw err;
+        await new Promise((r) => setTimeout(r, retryDelayMs));
+      }
+    }
   }
 }
 
