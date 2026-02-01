@@ -31,18 +31,18 @@ agent:
        - 完成后用 write_todos 标记此步骤为 completed
 
     4. **生成台词**
-       - 调用 task 工具委派给 script_generator 子代理
+       - 调用 generate_script_from_image 工具，传入 imagePath 为步骤3返回的图片路径（如 imagePath）
        - 完成后用 write_todos 标记此步骤为 completed
 
     5. **生成语音**
-       - 调用 synthesize_speech 工具（voice: "chinese_female", format: "mp3"）
+       - 使用步骤4返回的 lines，将 lines 中每项的 text 组成数组传入 synthesize_speech 的 texts 参数（voice: "chinese_female", format: "mp3"）
        - 完成后用 write_todos 标记此步骤为 completed
 
     6. **完成工作流并返回结果**
        - 调用 finalize_workflow 工具，传入生成的文件路径和台词
-         - imagePath: 步骤3返回的图片路径
-         - audioPath: 步骤5返回的音频路径  
-         - scriptText: 步骤4返回的台词内容
+         - imagePath: 步骤3返回的图片路径（imagePath）
+         - audioPath: 步骤5返回的音频路径（audioPaths 数组的第一个元素，即 audioPaths[0]）
+         - scriptText: 步骤4返回的台词内容（可将 result.lines 用 JSON.stringify 传入，或传可读摘要）
        - 工具会自动检查文件是否存在并返回完成消息
        - 完成后用 write_todos 标记此步骤为 completed
        - 然后向用户展示绘本生成结果的完整摘要
@@ -117,6 +117,13 @@ mcp_services:
     name: synthesize_speech
     description: 合成语音
     config_path: ./mcp/tts_config.yaml
+  
+  vl_script:
+    enable: true
+    type: vl_script_mcp
+    name: generate_script_from_image
+    description: 根据图片路径，用视觉模型生成台词及坐标
+    config_path: ./mcp/vl_script_config.yaml
 
 # SubAgent配置
 sub_agents:
@@ -125,12 +132,6 @@ sub_agents:
     name: prompt_generator
     description: 根据前提变量生成文生图提示词
     config_path: ./sub_agents/prompt_gen.yaml
-  
-  script_generator:
-    enable: true
-    name: script_generator
-    description: 根据图片提示词和前提变量生成适配年龄的台词
-    config_path: ./sub_agents/script_gen.yaml
 
 # 工作流配置
 workflow:
@@ -152,7 +153,7 @@ workflow:
     
     - id: 4
       name: 生成台词
-      subagent: script_generator
+      tool: generate_script_from_image
       required: true
     
     - id: 5

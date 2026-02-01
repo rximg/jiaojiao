@@ -145,7 +145,7 @@ npm run test:run
 1. **解析前提**：使用 `parse_premise` 工具解析用户输入
 2. **生成提示词**：委派给 `prompt_generator` 子代理
 3. **生成图片**：调用 `generate_image` 工具
-4. **生成台词**：委派给 `script_generator` 子代理
+4. **生成台词**：调用 `generate_script_from_image` MCP（VL：根据图片生成台词与坐标）
 5. **生成语音**：调用 `synthesize_speech` 工具
 6. **整合结果**：返回完整绘本
 

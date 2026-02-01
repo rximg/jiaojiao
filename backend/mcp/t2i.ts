@@ -151,11 +151,21 @@ async function resolvePrompt(
   if (params.prompt) return params.prompt;
   if (!params.promptFile) throw new Error('Either prompt or promptFile must be provided');
 
-  const workspaceRoot = path.join(outputPath, 'workspaces', sessionId);
-  const fullPath = path.join(workspaceRoot, params.promptFile);
-  const content = await fs.readFile(fullPath, 'utf-8');
-  console.log(`[T2I] prompt from file: ${params.promptFile}, length: ${content.length}`);
-  return content;
+  const workspaceFs = getWorkspaceFilesystem({ outputPath });
+  
+  // 从 sessionId 目录读取（prompt_generator 会写入到 workspaces/{sessionId}/image_prompt.txt）
+  const fullPath = workspaceFs.sessionPath(sessionId, params.promptFile);
+  try {
+    const content = await fs.readFile(fullPath, 'utf-8');
+    console.log(`[T2I] prompt from file: ${fullPath}, length: ${content.length}`);
+    return content;
+  } catch (error) {
+    // 如果失败，抛出详细的错误信息
+    throw new Error(
+      `Prompt file not found at: ${fullPath}\n` +
+      `Please ensure prompt_generator subagent has saved the file to workspaces/${sessionId}/${params.promptFile}`
+    );
+  }
 }
 
 export async function generateImage(params: GenerateImageParams): Promise<GenerateImageResult> {
@@ -163,11 +173,7 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
   const { size = '1024*1024', style, count = 1, sessionId = DEFAULT_SESSION_ID } = params;
   const workspaceFs = getWorkspaceFilesystem({ outputPath: appConfig.storage.outputPath });
 
-  if (!params.model) {
-    throw new Error('未传入 model，请指定 params.model');
-  }
-  const modelName = params.model;
-
+  // 加载 t2i 配置以获取默认 model
   let t2iYaml: Record<string, unknown> = {};
   try {
     const yamlPath = path.join(process.cwd(), 'backend', 'config', 'mcp', 't2i_config.yaml');
@@ -176,6 +182,12 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
     // ignore
   }
   const service = t2iYaml.service as Record<string, unknown> | undefined;
+  
+  // 如果未传入 model，使用配置文件中的默认值
+  const modelName = params.model || 
+    (service?.model as string) || 
+    process.env.DASHSCOPE_T2I_MODEL ||
+    'wan2.6-t2i'; // 最终后备值
   const modelConfig = getModelConfig(modelName);
   if (!modelConfig) {
     throw new Error(`不支持的模型: ${modelName}。支持的模型: ${T2I_MODELS.map((m) => m.model_name).join(', ')}`);

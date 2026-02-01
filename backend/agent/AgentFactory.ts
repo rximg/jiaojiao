@@ -107,7 +107,7 @@ export class AgentFactory {
   /**
    * Human-in-the-loop确认
    */
-  private async requestHumanConfirm(action: 't2i' | 'tts', payload: any): Promise<void> {
+  private async requestHumanConfirm(action: 't2i' | 'tts' | 'vl_script', payload: any): Promise<void> {
     if (process.env.RUN_INTEGRATION_TESTS === 'false' || process.env.NODE_ENV === 'test') return;
     
     try {
@@ -160,7 +160,7 @@ export class AgentFactory {
     // 根据服务类型创建工具
     if (serviceType === 't2i') {
           return tool(
-        async (params: { prompt?: string; promptFile?: string; size?: string; style?: string; count?: number; sessionId?: string }) => {
+        async (params: { prompt?: string; promptFile?: string; size?: string; style?: string; count?: number; model?: string; sessionId?: string }) => {
           await this.requestHumanConfirm('t2i', params);
           const { generateImage } = await import('../mcp/t2i.js');
           // 动态从环境变量获取sessionId，优先使用参数传入的sessionId
@@ -177,6 +177,7 @@ export class AgentFactory {
             size: z.string().optional().default(mcpConfig.service.default_params.size).describe('图片尺寸'),
             style: z.string().optional().describe('图片风格'),
             count: z.number().optional().default(mcpConfig.service.default_params.count).describe('生成数量'),
+            model: z.string().optional().default(mcpConfig.service.model).describe('模型名称（留空则使用配置文件中的默认值）'),
             sessionId: z.string().optional().describe('文件写入使用的会话ID（留空则使用当前会话）'),
           }),
         }
@@ -202,6 +203,24 @@ export class AgentFactory {
           }),
         }
       );
+    } else if (serviceType === 'vl_script') {
+      return tool(
+        async (params: { imagePath: string; sessionId?: string }) => {
+          await this.requestHumanConfirm('vl_script', params);
+          const { generateScriptFromImage } = await import('../mcp/vl_script.js');
+          const sessionId = params.sessionId || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
+          console.log(`[vl_script tool] Using sessionId: ${sessionId} (from params: ${params.sessionId}, env: ${process.env.AGENT_SESSION_ID})`);
+          return await generateScriptFromImage({ ...params, sessionId });
+        },
+        {
+          name: toolName,
+          description: mcpEntry.description,
+          schema: z.object({
+            imagePath: z.string().describe('图片路径（步骤3 generate_image 返回的 imagePath）'),
+            sessionId: z.string().optional().describe('会话ID（留空则使用当前会话）'),
+          }),
+        }
+      );
     }
 
     console.warn(`[AgentFactory] 未知的MCP服务类型: ${serviceType}`);
@@ -219,6 +238,25 @@ export class AgentFactory {
         const config = await loadConfig();
         const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
         
+        // 辅助函数：从绝对路径提取相对路径（相对于 sessionId 目录）
+        const extractRelativePath = (absolutePath: string, expectedSessionId: string): string => {
+          const normalized = absolutePath.replace(/\\/g, '/');
+          // 如果包含 workspaces/{sessionId}/，提取相对路径
+          const workspacesMatch = normalized.match(/workspaces\/([^/]+)\/(.+)$/);
+          if (workspacesMatch) {
+            const pathSessionId = workspacesMatch[1];
+            const relativePath = workspacesMatch[2];
+            // 验证 sessionId 是否匹配
+            if (pathSessionId === expectedSessionId) {
+              return relativePath;
+            } else {
+              console.warn(`[finalize_workflow] SessionId mismatch: expected ${expectedSessionId}, found ${pathSessionId}`);
+            }
+          }
+          // 如果不包含 workspaces，假设是相对路径
+          return absolutePath;
+        };
+        
         // 检查文件是否存在
         const checks = {
           hasImage: false,
@@ -228,26 +266,26 @@ export class AgentFactory {
         
         if (imagePath) {
           try {
-            // 提取相对路径（去掉workspace路径前缀）
-            const imageRelPath = imagePath.includes('workspaces') 
-              ? imagePath.split('workspaces/')[1]?.split('/').slice(1).join('/') || imagePath
-              : imagePath;
+            // 从绝对路径提取相对路径（相对于 sessionId 目录）
+            const imageRelPath = extractRelativePath(imagePath, sessionId);
             await workspaceFs.readFile(sessionId, imageRelPath);
             checks.hasImage = true;
+            console.log(`[finalize_workflow] Image verified: ${imageRelPath} (session: ${sessionId})`);
           } catch (error) {
-            console.warn(`[finalize_workflow] Image not found: ${imagePath}`);
+            console.warn(`[finalize_workflow] Image not found: ${imagePath}`, error);
           }
         }
         
         if (audioPath) {
           try {
-            const audioRelPath = audioPath.includes('workspaces')
-              ? audioPath.split('workspaces/')[1]?.split('/').slice(1).join('/') || audioPath
-              : audioPath;
+            // audioPath 可能是数组（多个音频文件），取第一个
+            const actualAudioPath = Array.isArray(audioPath) ? audioPath[0] : audioPath;
+            const audioRelPath = extractRelativePath(actualAudioPath, sessionId);
             await workspaceFs.readFile(sessionId, audioRelPath);
             checks.hasAudio = true;
+            console.log(`[finalize_workflow] Audio verified: ${audioRelPath} (session: ${sessionId})`);
           } catch (error) {
-            console.warn(`[finalize_workflow] Audio not found: ${audioPath}`);
+            console.warn(`[finalize_workflow] Audio not found: ${audioPath}`, error);
           }
         }
         
@@ -381,8 +419,9 @@ export class AgentFactory {
 
   /**
    * 创建SubAgents
+   * @param sessionId 会话ID（用于配置 FilesystemMiddleware）
    */
-  private async createSubAgents(): Promise<Array<SubAgent | CompiledSubAgent>> {
+  private async createSubAgents(sessionId: string = DEFAULT_SESSION_ID): Promise<Array<SubAgent | CompiledSubAgent>> {
     const subAgents: Array<SubAgent | CompiledSubAgent> = [];
 
     for (const [key, subEntry] of Object.entries(this.agentConfig.sub_agents)) {
@@ -400,7 +439,7 @@ export class AgentFactory {
 
       try {
         // 使用 createSubAgent 统一创建子代理
-        const subAgent = await this.createSubAgent(subEntry.name, false);
+        const subAgent = await this.createSubAgent(subEntry.name, sessionId, false);
         subAgents.push(subAgent);
       } catch (error) {
         console.error(`[AgentFactory] 创建 SubAgent ${subEntry.name} 失败:`, error);
@@ -413,9 +452,10 @@ export class AgentFactory {
   /**
    * 创建单个子代理
    * @param subAgentName 子代理名称
+   * @param sessionId 会话ID（用于配置 FilesystemMiddleware 的根目录）
    * @param returnRawRunnable 是否返回原始 runnable（用于测试），默认 false 返回包装后的 SubAgent/CompiledSubAgent
    */
-  async createSubAgent(subAgentName: string, returnRawRunnable: boolean = false): Promise<SubAgent | CompiledSubAgent | any> {
+  async createSubAgent(subAgentName: string, sessionId: string = DEFAULT_SESSION_ID, returnRawRunnable: boolean = false): Promise<SubAgent | CompiledSubAgent | any> {
     const subEntry = Object.values(this.agentConfig.sub_agents).find(
       (entry) => entry.name === subAgentName && entry.enable
     );
@@ -444,22 +484,23 @@ export class AgentFactory {
       // 如果需要 FilesystemMiddleware，创建新实例
       let middleware: any[] = [];
       if (useFilesystemMiddleware) {
-        // 获取 workspace 根目录路径
+        // 获取 workspace 根目录路径，使用 sessionId 作为子目录
         const config = await loadConfig();
         const { resolveWorkspaceRoot } = await import('../services/fs.js');
         const workspaceRoot = resolveWorkspaceRoot(config.storage.outputPath);
+        const sessionWorkspaceRoot = path.join(workspaceRoot, sessionId);
         
-        // FilesystemMiddleware 直接使用 workspaces 根目录
-        // 因为在子代理context中无法获取到动态的 sessionId
+        // FilesystemMiddleware 使用 workspaces/{sessionId} 作为根目录
+        // 确保文件写入到正确的 session 目录
         const fsMiddleware = createFilesystemMiddleware({
           backend: new FilesystemBackend({
-            rootDir: workspaceRoot,  // 直接使用 workspaces 根目录
+            rootDir: sessionWorkspaceRoot,  // 使用 sessionId 目录
             virtualMode: true,  // 沙箱模式，限制路径逃逸
           }),
         });
         middleware = [fsMiddleware];
         console.log(`[AgentFactory] ${subAgentName} 启用 FilesystemMiddleware`);
-        console.log(`[AgentFactory] Workspace root: ${workspaceRoot}`);
+        console.log(`[AgentFactory] Session workspace root: ${sessionWorkspaceRoot}`);
       }
       
       // 使用 createAgent 创建子代理
@@ -570,7 +611,7 @@ export class AgentFactory {
     }
 
     // 创建SubAgents
-    const subAgents = await this.createSubAgents();
+    const subAgents = await this.createSubAgents(sessionId);
     console.log(`[AgentFactory] 已注册 ${subAgents.length} 个SubAgent`);
 
     // 创建主Agent

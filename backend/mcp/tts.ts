@@ -26,7 +26,26 @@ const voiceMap: Record<string, string> = {
   'Chelsie': 'Chelsie',
 };
 
+/** 全局锁：同一时间只允许一个 synthesizeSpeech 在执行，避免多 session/多次调用并行触发 rate limit */
+let ttsMutex: Promise<void> = Promise.resolve();
+
 export async function synthesizeSpeech(
+  params: SynthesizeSpeechParams
+): Promise<SynthesizeSpeechResult> {
+  const previous = ttsMutex;
+  let resolveMutex: () => void;
+  ttsMutex = new Promise<void>((resolve) => { resolveMutex = resolve; });
+  await previous;
+
+  try {
+    return await synthesizeSpeechSequential(params);
+  } finally {
+    resolveMutex!();
+  }
+}
+
+/** 单次调用的内部实现：对 texts 严格顺序执行，避免 Requests rate limit exceeded */
+async function synthesizeSpeechSequential(
   params: SynthesizeSpeechParams
 ): Promise<SynthesizeSpeechResult> {
   const config = await loadConfig();
@@ -37,17 +56,17 @@ export async function synthesizeSpeech(
   const endpoint = process.env.DASHSCOPE_TTS_ENDPOINT 
     || 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
   const model = process.env.DASHSCOPE_TTS_MODEL || 'qwen-tts';
+  const rateLimitMs = Number(process.env.TTS_RATE_LIMIT_MS) || 2000;
 
   const audioPaths: string[] = [];
   const audioUris: string[] = [];
 
-  // 批量生成语音
+  // 顺序执行每条 TTS，条与条之间等待 rateLimitMs，避免 rate limit
   for (let i = 0; i < texts.length; i++) {
     const text = texts[i];
 
-    // 防限流延迟
     if (i > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, rateLimitMs));
     }
 
     try {

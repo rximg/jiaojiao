@@ -14,6 +14,7 @@
     "test:run": "vitest run",
     "test:unit": "vitest run tests/t2i.unit.test.ts tests/tts.unit.test.ts tests/llm.unit.test.ts",
     "test:integration": "vitest run tests/llm.test.ts tests/t2i.test.ts tests/tts.test.ts",
+    "test:t2i:prompt-file": "vitest run tests/t2i.test.ts -t \"prompt file\"",
     "test:agent": "tsx backend/tests/test-agent-factory.ts",
     "test:agent:run": "tsx backend/tests/test-agent-run.ts",
     "lint": "eslint . --ext .ts,.tsx",
@@ -21,6 +22,7 @@
   },
   "dependencies": {
     "@langchain/core": "^1.1.0",
+    "dotenv": "^16.4.5",
     "@langchain/langgraph": "^1.1.0",
     "@langchain/openai": "^1.1.0",
     "@radix-ui/colors": "^1.0.0",

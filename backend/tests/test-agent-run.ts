@@ -5,6 +5,7 @@
  */
 
 import { AgentFactory } from '../agent/AgentFactory.js';
+import { initializeServices } from '../services/service-initializer.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -16,6 +17,10 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 async function testAgentRun() {
+  // 初始化服务（包括 RuntimeManager）
+  console.log('\n[初始化服务]');
+  await initializeServices();
+  console.log('✅ 服务初始化完成');
   console.log('='.repeat(60));
   console.log('测试 Agent 实际运行');
   console.log('='.repeat(60));
