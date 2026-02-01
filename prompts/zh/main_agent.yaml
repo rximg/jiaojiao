@@ -24,7 +24,7 @@ system_prompt: |
      - 完成后用 write_todos 标记此步骤为 completed
 
   4. **生成台词**
-     - 调用 task 工具委派给 script_generator 子代理
+     - 调用 generate_script_from_image 工具，传入 imagePath 为步骤3返回的图片路径
      - 完成后用 write_todos 标记此步骤为 completed
 
   5. **生成语音**

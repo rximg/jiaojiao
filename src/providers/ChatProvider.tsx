@@ -1,11 +1,17 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import type { Message, TodoItem } from '../types/types';
 
+interface AgentErrorState {
+  message: string;
+  onRetry: () => void;
+}
+
 interface ChatContextType {
   messages: Message[];
   todos: TodoItem[];
   pendingAction: { action: 't2i' | 'tts'; payload: any } | null;
   quotaError: { message: string; error: string } | null;
+  agentError: AgentErrorState | null;
   isLoading: boolean;
   currentThreadId: string | null;
   currentSessionId: string | null;
@@ -13,10 +19,12 @@ interface ChatContextType {
   sendMessage: (text: string, threadId?: string) => Promise<void>;
   respondConfirm: (ok: boolean) => Promise<void>;
   dismissQuotaError: () => void;
+  dismissAgentError: () => void;
   stopStream: () => Promise<void>;
   setCurrentThreadId: (id: string | null) => void;
   createNewSession: (title?: string) => Promise<string>;
   loadSession: (sessionId: string) => Promise<void>;
+  resetSession: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -26,6 +34,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [pendingAction, setPendingAction] = useState<{ action: 't2i' | 'tts'; payload: any } | null>(null);
   const [quotaError, setQuotaError] = useState<{ message: string; error: string } | null>(null);
+  const [agentError, setAgentError] = useState<AgentErrorState | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -235,7 +244,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const createNewSession = useCallback(async (title?: string) => {
     try {
+      // 如果已经有 sessionId，先检查是否真的需要创建新 session
+      // 这个检查由调用方负责，这里直接创建
+      console.log('[ChatProvider] Creating new session, title:', title);
       const { sessionId } = await window.electronAPI.session.create(title);
+      console.log('[ChatProvider] Session created:', sessionId);
       setCurrentSessionId(sessionId);
       // 清空消息和todos
       setMessages([]);
@@ -274,6 +287,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setMessages((prev) => [...prev, userMessage]);
 
     setIsLoading(true);
+    setAgentError(null);
     try {
       const newThreadId = await window.electronAPI.agent.sendMessage(text, thread, sessionId || undefined);
       console.log('[renderer] backend returned threadId:', newThreadId, 'current:', currentThreadId);
@@ -281,10 +295,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setCurrentThreadId(newThreadId);
     } catch (error) {
       console.error('Failed to send message:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setAgentError({
+        message: errorMessage,
+        onRetry: () => {
+          setAgentError(null);
+          sendMessage(text, thread ?? undefined);
+        },
+      });
     } finally {
       setIsLoading(false);
     }
   }, [currentThreadId, currentSessionId, createNewSession]);
+
+  const dismissAgentError = useCallback(() => {
+    setAgentError(null);
+  }, []);
 
   const stopStream = useCallback(async () => {
     await window.electronAPI.agent.stopStream();
@@ -323,6 +349,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const resetSession = useCallback(() => {
+    console.log('[ChatProvider] Resetting session');
+    setCurrentSessionId(null);
+    setMessages([]);
+    setTodos([]);
+    setCurrentThreadId(null);
+    allMessagesRef.current = [];
+  }, []);
+
   return (
     <ChatContext.Provider
       value={{
@@ -330,6 +365,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         todos,
         pendingAction,
         quotaError,
+        agentError,
         isLoading,
         currentThreadId,
         currentSessionId,
@@ -337,10 +373,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         sendMessage,
         respondConfirm,
         dismissQuotaError,
+        dismissAgentError,
         stopStream,
         setCurrentThreadId,
         createNewSession,
         loadSession,
+        resetSession,
       }}
     >
       {children}

@@ -8,27 +8,17 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 加载 main_agent_config.yaml 中的 UI 配置
-function loadUIConfigFromYaml() {
+// 加载 main_agent_config.yaml 中的 UI 配置（仅在此处调用，get 时合并到返回值）
+function loadUIConfigFromYaml(): Record<string, unknown> {
   try {
-    // 开发环境: electron/ipc -> backend/config
-    // 生产环境: dist-electron -> backend/config
     let configPath: string;
-    
     if (__dirname.includes('dist-electron')) {
-      // 生产环境：dist-electron -> app根目录 -> backend/config
       configPath = path.resolve(__dirname, '..', 'backend', 'config', 'main_agent_config.yaml');
     } else {
-      // 开发环境：electron/ipc -> app根目录 -> backend/config
       configPath = path.resolve(__dirname, '..', '..', 'backend', 'config', 'main_agent_config.yaml');
     }
-    
-    console.log(`[loadUIConfigFromYaml] Trying to load: ${configPath}`);
-    
     if (!fs.existsSync(configPath)) {
-      console.warn('main_agent_config.yaml not found, using defaults');
-      console.warn(`  __dirname: ${__dirname}`);
-      console.warn(`  Attempted path: ${configPath}`);
+      console.warn('[loadUIConfigFromYaml] main_agent_config.yaml not found:', configPath);
       return {};
     }
     const fileContent = fs.readFileSync(configPath, 'utf-8');
@@ -39,8 +29,6 @@ function loadUIConfigFromYaml() {
     return {};
   }
 }
-
-const uiConfigFromYaml = loadUIConfigFromYaml();
 
 const store = new Store({
   name: 'config',
@@ -61,7 +49,6 @@ const store = new Store({
     ui: {
       theme: 'light',
       language: 'zh',
-      ...uiConfigFromYaml,
     },
   },
 });
