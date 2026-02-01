@@ -23,6 +23,8 @@ import { handleFilesystemIPC } from './ipc/filesystem.js';
 import { handleSessionIPC } from './ipc/session.js';
 import { handleHITLIPC } from './ipc/hitl.js';
 import { initializeServices, shutdownServices } from '../backend/services/service-initializer.js';
+import { loadConfig } from '../backend/agent/config.js';
+import { initLangSmithEnv } from '../backend/agent/langsmith.js';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -57,9 +59,10 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-  // 初始化核心服务（新增）
   try {
-    await initializeServices();
+    initLangSmithEnv();
+    const config = await loadConfig();
+    await initializeServices({ outputPath: config.storage?.outputPath });
     console.log('[Electron] Core services initialized');
   } catch (error) {
     console.error('[Electron] Failed to initialize services:', error);

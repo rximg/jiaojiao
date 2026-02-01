@@ -26,69 +26,44 @@ export default function ChatInterface({
   const { messages, todos, isLoading, sendMessage, stopStream, currentSessionId, createNewSession, loadSession, resetSession, lastArtifactTime } = useChat();
   const [showWelcome, setShowWelcome] = useState(true);
   const [showWorkspace] = useState(true);
-  const previousLoadSessionIdRef = useRef<string | null>(null);
   const isCreatingSessionRef = useRef(false);
-  const hasInitializedRef = useRef(false);
+  /** 本次「案例」模式下是否已执行过创建新 session，避免重复创建 */
+  const createdForNullRef = useRef(false);
 
   // 加载或创建会话
   useEffect(() => {
-    // 防止重复创建
     if (isCreatingSessionRef.current) {
       console.log('[ChatInterface] Already creating session, skipping...');
       return;
     }
 
-    const previousLoadSessionId = previousLoadSessionIdRef.current;
-    const loadSessionIdChanged = previousLoadSessionId !== loadSessionId;
-    previousLoadSessionIdRef.current = loadSessionId;
-
-    // 如果 loadSessionId 没有变化且已经初始化过，不执行
-    if (!loadSessionIdChanged && hasInitializedRef.current) {
-      return;
-    }
-
     if (loadSessionId) {
-      // 点击历史记录：加载指定的session
+      // 点击历史记录：加载指定的 session
+      createdForNullRef.current = false;
       console.log('[ChatInterface] Loading session:', loadSessionId);
-      hasInitializedRef.current = true;
       loadSession(loadSessionId).catch(console.error);
       setShowWelcome(false);
-    } else if (previousLoadSessionId !== null && loadSessionId === null) {
-      // 从历史记录切换回案例：重置并创建新session
-      console.log('[ChatInterface] Resetting and creating new session (switched from history to case)');
-      hasInitializedRef.current = false; // 重置标志，允许创建新session
+    } else {
+      // loadSessionId === null：点击案例或从欢迎页进入，一律重置并创建新 session
+      if (createdForNullRef.current) {
+        return;
+      }
+      console.log('[ChatInterface] Creating new session (case clicked or first load)');
+      createdForNullRef.current = true;
       isCreatingSessionRef.current = true;
       resetSession();
       createNewSession('新对话')
         .then(() => {
           isCreatingSessionRef.current = false;
-          hasInitializedRef.current = true;
         })
         .catch((err) => {
           isCreatingSessionRef.current = false;
+          createdForNullRef.current = false; // 失败后允许重试
           console.error('Failed to create session:', err);
         });
-    } else if (loadSessionId === null && !currentSessionId) {
-      // 首次进入或点击案例：创建新session
-      // 如果已经初始化过但 currentSessionId 为 null，说明需要重新创建
-      if (hasInitializedRef.current && isCreatingSessionRef.current) {
-        // 正在创建中，跳过
-        return;
-      }
-      console.log('[ChatInterface] Creating new session (case clicked or first load)');
-      hasInitializedRef.current = true;
-      isCreatingSessionRef.current = true;
-      createNewSession('新对话')
-        .then(() => {
-          isCreatingSessionRef.current = false;
-        })
-        .catch((err) => {
-          isCreatingSessionRef.current = false;
-          hasInitializedRef.current = false; // 失败时重置，允许重试
-          console.error('Failed to create session:', err);
-        });
+      // 不在这里 setShowWelcome(false)，保留快捷选项，等用户发消息后再隐藏
     }
-  }, [loadSessionId, currentSessionId, createNewSession, loadSession, resetSession]);
+  }, [loadSessionId, createNewSession, loadSession, resetSession]);
 
   const handleSubmit = useCallback(
     async (e?: FormEvent) => {

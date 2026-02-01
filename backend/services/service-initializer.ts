@@ -1,22 +1,25 @@
 /**
  * Service Initializer - 初始化所有核心服务
- * 应用启动时调用
+ * 应用启动时调用。不依赖 agent 模块，由调用方传入 outputPath 并自行完成 LangSmith 等初始化。
  */
 
 import { WorkspaceFilesystem, resolveWorkspaceRoot } from './fs.js';
 import { PersistenceService } from './persistence-service.js';
 import { getLogManager } from './log-manager.js';
 import { initRuntimeManager } from './runtime-manager.js';
-import { loadConfig } from '../agent/config.js';
-import { initLangSmithEnv } from '../agent/langsmith.js';
 
 let initialized = false;
 
+export interface InitializeServicesOptions {
+  /** 存储根路径（如 ./outputs），不传则使用 process.cwd() + outputs */
+  outputPath?: string;
+}
+
 /**
  * 初始化所有服务
- * 应在应用启动时调用一次
+ * 应在应用启动时调用一次。调用方需自行执行 initLangSmithEnv()、loadConfig() 等，再将 config.storage.outputPath 传入。
  */
-export async function initializeServices(): Promise<void> {
+export async function initializeServices(options?: InitializeServicesOptions): Promise<void> {
   if (initialized) {
     console.log('[ServiceInit] Services already initialized');
     return;
@@ -25,14 +28,8 @@ export async function initializeServices(): Promise<void> {
   console.log('[ServiceInit] Initializing core services...');
 
   try {
-    // 初始化 LangSmith 追踪环境（若 .env 中配置了 LANGCHAIN_API_KEY）
-    initLangSmithEnv();
-
-    // 加载配置
-    const config = await loadConfig();
-
-    // 初始化 WorkspaceService（与 getWorkspaceFilesystem 使用同一根路径：outputPath/workspaces）
-    const rootDir = resolveWorkspaceRoot(config.storage.outputPath);
+    // 由调用方传入 outputPath，避免 services 依赖 agent/config
+    const rootDir = resolveWorkspaceRoot(options?.outputPath);
     const workspaceService = new WorkspaceFilesystem(rootDir);
     console.log('[ServiceInit] ✓ WorkspaceFilesystem initialized');
 
