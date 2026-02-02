@@ -7,6 +7,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     get: () => ipcRenderer.invoke('config:get'),
     set: (config: any) => ipcRenderer.invoke('config:set', config),
   },
+  // 同步 mp3 到 store（由前端按钮触发，非 MCP）
+  sync: {
+    syncAudioToStore: () => ipcRenderer.invoke('sync:audioToStore'),
+  },
   // 存储相关
   storage: {
     getHistory: () => ipcRenderer.invoke('storage:getHistory'),
@@ -68,6 +72,9 @@ declare global {
       config: {
         get: () => Promise<any>;
         set: (config: any) => Promise<void>;
+      };
+      sync: {
+        syncAudioToStore: () => Promise<{ success: boolean; copied: number; storeDir: string; files: string[]; message: string }>;
       };
       storage: {
         getHistory: () => Promise<any[]>;

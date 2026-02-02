@@ -1,6 +1,7 @@
 import path from 'path';
 import { loadConfig } from '../agent/config';
 import { DEFAULT_SESSION_ID, getWorkspaceFilesystem } from '../services/fs';
+import { readLineNumbers, appendEntries, type LineNumberEntry } from './line-numbers.js';
 
 export interface SynthesizeSpeechParams {
   texts: string[];
@@ -13,6 +14,14 @@ export interface SynthesizeSpeechResult {
   audioPaths: string[];
   audioUris: string[];
   sessionId: string;
+}
+
+/** 去掉标点、限制长度、替换非法文件名字符，用于 TTS 文件名 */
+function sanitizeForFilename(text: string, maxLen: number = 40): string {
+  const noPunctuation = text.replace(/[\s\p{P}\p{S}]/gu, '').trim();
+  const truncated = noPunctuation.slice(0, maxLen);
+  const safe = truncated.replace(/[/\\:*?"<>|]/g, '_');
+  return safe || 'line';
 }
 
 const voiceMap: Record<string, string> = {
@@ -51,6 +60,17 @@ async function synthesizeSpeechSequential(
   const config = await loadConfig();
   const { texts, voice = 'chinese_female', format = 'mp3', sessionId = DEFAULT_SESSION_ID } = params;
   const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
+  const outputPath = config.storage.outputPath;
+  const ttsStartNumber = config.storage.ttsStartNumber ?? 6000;
+
+  // 在持有 mutex 内读 line_numbers，预留本批编号
+  const { nextNumber } = await readLineNumbers(outputPath, ttsStartNumber);
+  const planned: { num: number; relativePath: string; text: string }[] = texts.map((text, i) => {
+    const num = nextNumber + i;
+    const sanitized = sanitizeForFilename(text);
+    const relativePath = path.posix.join('audio', `${num}_${sanitized}.${format}`);
+    return { num, relativePath, text };
+  });
 
   const token = config.apiKeys.tts || config.apiKeys.dashscope || '';
   const endpoint = process.env.DASHSCOPE_TTS_ENDPOINT 
@@ -64,6 +84,7 @@ async function synthesizeSpeechSequential(
   // 顺序执行每条 TTS，条与条之间等待 rateLimitMs，避免 rate limit
   for (let i = 0; i < texts.length; i++) {
     const text = texts[i];
+    const { relativePath } = planned[i];
 
     if (i > 0) {
       await new Promise((resolve) => setTimeout(resolve, rateLimitMs));
@@ -115,8 +136,6 @@ async function synthesizeSpeechSequential(
       }
       const audioBuffer = await audioResponse.arrayBuffer();
 
-      const audioFileName = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${format}`;
-      const relativePath = path.posix.join('audio', audioFileName);
       const audioPath = await workspaceFs.writeFile(sessionId, relativePath, Buffer.from(audioBuffer));
       const audioUri = workspaceFs.toFileUri(audioPath);
       audioPaths.push(audioPath);
@@ -127,6 +146,15 @@ async function synthesizeSpeechSequential(
       throw error;
     }
   }
+
+  // 本批全部成功后，更新 workspace 下的 audio_record.json
+  const newEntries: LineNumberEntry[] = planned.map((p) => ({
+    number: p.num,
+    sessionId,
+    relativePath: p.relativePath,
+    text: p.text,
+  }));
+  await appendEntries(outputPath, newEntries, ttsStartNumber);
 
   return { audioPaths, audioUris, sessionId };
 }

@@ -38,9 +38,14 @@ agent:
        - 使用步骤4返回的 lines，将 lines 中每项的 text 组成数组传入 synthesize_speech 的 texts 参数（voice: "chinese_female", format: "mp3"）
        - 完成后用 write_todos 标记此步骤为 completed
 
-    6. **完成工作流并返回结果**
+    6. **标注图片序号**
+       - 调用 annotate_image_numbers 工具，传入 imagePath 为步骤3返回的图片路径，lines 为步骤4返回的 lines（或 annotations 为 lines 转成的 { number: index+1, x, y }）
+       - 生成带白底数字标签的图片并保存（如 images/xxx_annotated.png）
+       - 完成后用 write_todos 标记此步骤为 completed
+
+    7. **完成工作流并返回结果**
        - 调用 finalize_workflow 工具，传入生成的文件路径和台词
-         - imagePath: 步骤3返回的图片路径（imagePath）
+         - imagePath: 步骤3返回的图片路径（imagePath），或步骤6返回的标注图路径
          - audioPath: 步骤5返回的音频路径（audioPaths 数组的第一个元素，即 audioPaths[0]）
          - scriptText: 步骤4返回的台词内容（可将 result.lines 用 JSON.stringify 传入，或传可读摘要）
        - 工具会自动检查文件是否存在并返回完成消息
@@ -50,7 +55,7 @@ agent:
     ## 关键要求：
     - 必须在每个步骤完成后立即调用 write_todos 更新进度
     - 严格按顺序执行，不要跳过或重复
-    - 所有6个步骤的todos都要标记为completed
+    - 所有7个步骤的todos都要标记为completed
     - 最后向用户展示清晰的完成摘要
   
   storage:
@@ -102,6 +107,7 @@ tools:
         required:
           - theme
 
+# 内置工具（除 MCP 外）：sync_audio_to_store（同步 mp3 到 store）、annotate_image_numbers（图上白底数字标注）
 # MCP服务配置
 mcp_services:
   t2i:
@@ -162,6 +168,11 @@ workflow:
       required: true
     
     - id: 6
+      name: 标注图片序号
+      tool: annotate_image_numbers
+      required: true
+    
+    - id: 7
       name: 完成工作流并返回结果
       tool: finalize_workflow
       required: true

@@ -330,6 +330,56 @@ export class AgentFactory {
   }
 
   /**
+   * 创建 annotate_image_numbers 工具（按坐标在图上画白底数字标签并保存新图）
+   */
+  private createAnnotateImageNumbersTool(): any {
+    return tool(
+      async (input: {
+        imagePath: string;
+        annotations?: Array<{ number: number; x: number; y: number }>;
+        lines?: Array<{ text?: string; x: number; y: number }>;
+        sessionId?: string;
+      }) => {
+        const sessionId = input.sessionId || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
+        let annotations: Array<{ number: number; x: number; y: number }>;
+        if (input.annotations && input.annotations.length > 0) {
+          annotations = input.annotations;
+        } else if (input.lines && input.lines.length > 0) {
+          annotations = input.lines.map((line, i) => ({
+            number: i + 1,
+            x: line.x,
+            y: line.y,
+          }));
+        } else {
+          throw new Error('annotate_image_numbers 需要 annotations 或 lines 参数');
+        }
+        const { annotateImageNumbers } = await import('../mcp/annotate_numbers.js');
+        return await annotateImageNumbers({
+          imagePath: input.imagePath,
+          annotations,
+          sessionId,
+        });
+      },
+      {
+        name: 'annotate_image_numbers',
+        description: '在图片上按坐标绘制白底数字标签并保存为新图（如 images/xxx_annotated.png），可用于标注 vl_script 返回的 lines 序号',
+        schema: z.object({
+          imagePath: z.string().describe('当前 session 下图片路径（与 generate_image / generate_script_from_image 一致）'),
+          annotations: z
+            .array(z.object({ number: z.number(), x: z.number(), y: z.number() }))
+            .optional()
+            .describe('标注点：number, x, y；与 lines 二选一'),
+          lines: z
+            .array(z.object({ text: z.string().optional(), x: z.number(), y: z.number() }))
+            .optional()
+            .describe('vl_script 返回的 lines，将用 index+1 作为 number；与 annotations 二选一'),
+          sessionId: z.string().optional().describe('会话ID（留空使用当前会话）'),
+        }),
+      }
+    );
+  }
+
+  /**
    * 创建write_prompt_file工具（保存提示词到文件）
    */
   private createWritePromptFileTool(): any {
@@ -577,6 +627,10 @@ export class AgentFactory {
     // 添加finalize_workflow工具（检查文件并完成流程）
     const finalizeTool = this.createFinalizeWorkflowTool();
     tools.push(finalizeTool);
+
+    // 添加 annotate_image_numbers 工具（按坐标在图上画白底数字标签）
+    const annotateTool = this.createAnnotateImageNumbersTool();
+    tools.push(annotateTool);
 
     // 添加MCP工具
     for (const [mcpKey, mcpEntry] of Object.entries(this.agentConfig.mcp_services)) {

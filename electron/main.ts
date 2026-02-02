@@ -22,6 +22,7 @@ import { handleAgentIPC } from './ipc/agent.js';
 import { handleFilesystemIPC } from './ipc/filesystem.js';
 import { handleSessionIPC } from './ipc/session.js';
 import { handleHITLIPC } from './ipc/hitl.js';
+import { handleSyncIPC } from './ipc/sync.js';
 import { initializeServices, shutdownServices } from '../backend/services/service-initializer.js';
 import { loadConfig } from '../backend/agent/config.js';
 import { initLangSmithEnv } from '../backend/agent/langsmith.js';
@@ -87,7 +88,8 @@ app.whenReady().then(async () => {
   handleAgentIPC();
   handleFilesystemIPC();
   handleSessionIPC();
-  handleHITLIPC();  // 新增
+  handleHITLIPC();
+  handleSyncIPC();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

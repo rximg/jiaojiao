@@ -68,6 +68,8 @@ export interface AppConfig {
   };
   storage: {
     outputPath: string;
+    /** TTS 起始编号，如 6000，后续生成 6001、6002… */
+    ttsStartNumber?: number;
   };
   ui: {
     theme: "light" | "dark";

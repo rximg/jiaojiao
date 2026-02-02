@@ -38,6 +38,7 @@ export async function loadConfig(): Promise<AppConfig> {
       },
       storage: {
         outputPath: storedConfig?.storage?.outputPath || './outputs',
+        ttsStartNumber: storedConfig?.storage?.ttsStartNumber ?? 6000,
       },
       ui: {
         theme: storedConfig?.ui?.theme || 'light',
@@ -59,6 +60,7 @@ export async function loadConfig(): Promise<AppConfig> {
       },
       storage: {
         outputPath: './outputs',
+        ttsStartNumber: 6000,
       },
       ui: {
         theme: 'light',

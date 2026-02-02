@@ -30,6 +30,7 @@ export default function ConfigDialog({
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(2048);
   const [outputPath, setOutputPath] = useState('./outputs');
+  const [ttsStartNumber, setTtsStartNumber] = useState(6000);
 
   useEffect(() => {
     if (open && initialConfig) {
@@ -38,6 +39,7 @@ export default function ConfigDialog({
       setTemperature(initialConfig.agent?.temperature || 0.7);
       setMaxTokens(initialConfig.agent?.maxTokens || 2048);
       setOutputPath(initialConfig.storage?.outputPath || './outputs');
+      setTtsStartNumber(initialConfig.storage?.ttsStartNumber ?? 6000);
     }
   }, [open, initialConfig]);
 
@@ -59,6 +61,7 @@ export default function ConfigDialog({
         },
         storage: {
           outputPath,
+          ttsStartNumber,
         },
         ui: {
           theme: 'light',
@@ -129,6 +132,16 @@ export default function ConfigDialog({
               id="outputPath"
               value={outputPath}
               onChange={(e) => setOutputPath(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="ttsStartNumber">TTS 起始编号</Label>
+            <Input
+              id="ttsStartNumber"
+              type="number"
+              min={1}
+              value={ttsStartNumber}
+              onChange={(e) => setTtsStartNumber(parseInt(e.target.value, 10) || 6000)}
             />
           </div>
         </div>

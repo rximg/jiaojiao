@@ -45,6 +45,7 @@ const store = new Store({
     },
     storage: {
       outputPath: './outputs',
+      ttsStartNumber: 6000,
     },
     ui: {
       theme: 'light',

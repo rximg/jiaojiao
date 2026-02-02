@@ -75,7 +75,7 @@ export function handleAgentIPC() {
               mainWindow.webContents.send('agent:message', {
                 threadId: newThreadId,
                 messages: newMessages.map((msg: any) => ({
-                  id: msg.id || `msg-${Date.now()}`,
+                  id: msg.id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
                   role: msg.role,
                   content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
                   timestamp: new Date(),
@@ -137,7 +137,7 @@ export function handleAgentIPC() {
             mainWindow.webContents.send('agent:message', {
               threadId: newThreadId,
               messages: [{
-                id: `msg-${Date.now()}`,
+                id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
                 role: lastMessage.role || 'assistant',
                 content: typeof lastMessage.content === 'string' 
                   ? lastMessage.content 

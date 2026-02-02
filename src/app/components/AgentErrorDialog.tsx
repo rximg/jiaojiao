@@ -12,9 +12,6 @@ export const AgentErrorDialog: React.FC = () => {
     if (!isOpen) dismissAgentError();
   };
 
-  const handleRetry = () => {
-    agentError?.onRetry();
-  };
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -29,16 +26,13 @@ export const AgentErrorDialog: React.FC = () => {
           <p className="text-sm text-muted-foreground">
             {agentError?.message || '代理执行过程中发生异常。'}
           </p>
-          <p className="text-sm font-medium">
-            是否重试？选择「重试」将重新发送上一条消息；选择「停止」将关闭并结束本次操作。
+          <p className="text-sm font-medium text-destructive">
+            执行已中断。如需重试，请重新发送消息。
           </p>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={dismissAgentError}>
-            停止
-          </Button>
-          <Button variant="default" onClick={handleRetry}>
-            重试
+          <Button variant="default" onClick={dismissAgentError}>
+            确定
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, FormEvent, useEffect } from 'react';
-import { ArrowUp, Square, Settings, ArrowLeft } from 'lucide-react';
+import { ArrowUp, Square, Settings, ArrowLeft, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import ChatMessage from './ChatMessage';
@@ -119,10 +119,32 @@ export default function ChatInterface({
           </Button>
           <h1 className="text-xl font-semibold">百科绘本</h1>
         </div>
-        <Button variant="outline" size="sm" onClick={onConfigClick}>
-          <Settings className="mr-2 h-4 w-4" />
-          配置
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                const res = await window.electronAPI?.sync?.syncAudioToStore?.();
+                if (res?.success !== undefined) {
+                  alert(res.message ?? `已同步 ${res.copied ?? 0} 个 mp3`);
+                } else {
+                  alert('同步功能不可用');
+                }
+              } catch (e) {
+                console.error(e);
+                alert('同步失败：' + (e instanceof Error ? e.message : String(e)));
+              }
+            }}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            同步
+          </Button>
+          <Button variant="outline" size="sm" onClick={onConfigClick}>
+            <Settings className="mr-2 h-4 w-4" />
+            配置
+          </Button>
+        </div>
       </header>
 
       {/* 主聊天区 */}

@@ -279,7 +279,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     // 添加用户消息
     const userMessage: Message = {
-      id: `msg-${Date.now()}`,
+      id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       role: 'user',
       content: text,
       timestamp: new Date(),
@@ -295,14 +295,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setCurrentThreadId(newThreadId);
     } catch (error) {
       console.error('Failed to send message:', error);
+      // 异常时立即停止流式传输（直接调用 API，避免循环依赖）
+      try {
+        await window.electronAPI.agent.stopStream();
+      } catch (stopError) {
+        console.warn('Failed to stop stream:', stopError);
+      }
       const errorMessage = error instanceof Error ? error.message : String(error);
+      // 异常时直接中断，不提供自动重试，仅显示错误信息
       setAgentError({
         message: errorMessage,
         onRetry: () => {
+          // 不自动执行，仅用于兼容接口
           setAgentError(null);
-          sendMessage(text, thread ?? undefined);
         },
       });
+      setIsLoading(false); // 确保停止加载状态
     } finally {
       setIsLoading(false);
     }
