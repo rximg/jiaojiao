@@ -10,16 +10,6 @@ import { randomUUID } from 'crypto';
 export type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 export type LogType = 'llm' | 'audit' | 'hitl' | 'system';
 
-export interface LLMCallData {
-  model: string;
-  prompt: string;
-  response: string;
-  tokens: number;
-  duration: number;
-  timestamp: string;
-  error?: string;
-}
-
 export interface LogFilter {
   startDate?: string;
   endDate?: string;
@@ -52,32 +42,6 @@ export class LogManager {
     
     await fs.mkdir(dirPath, { recursive: true });
     return dirPath;
-  }
-  
-  /**
-   * 记录 LLM 调用日志
-   */
-  async logLLMCall(sessionId: string, data: LLMCallData): Promise<void> {
-    try {
-      const dirPath = await this.ensureLogDir('llm');
-      const logFile = path.join(dirPath, `${sessionId}_llm.log`);
-      
-      const logEntry = {
-        timestamp: data.timestamp || new Date().toISOString(),
-        sessionId,
-        model: data.model,
-        tokens: data.tokens,
-        duration: data.duration,
-        prompt: data.prompt.substring(0, 500), // 截断过长内容
-        response: data.response.substring(0, 500),
-        error: data.error,
-      };
-      
-      const logLine = JSON.stringify(logEntry) + '\n';
-      await fs.appendFile(logFile, logLine, 'utf-8');
-    } catch (error) {
-      console.error('[LogManager] Failed to log LLM call:', error);
-    }
   }
   
   /**
@@ -283,13 +247,22 @@ export class LogManager {
 
 // 单例实例
 let logManagerInstance: LogManager | null = null;
+/** 由主进程在启动时设置（如打包后设为 exe 目录），与 electron/logger 同一根目录便于用户查看 */
+let defaultLogRoot: string | null = null;
+
+/**
+ * 设置日志根目录（主进程在 app.whenReady 时调用，打包后传 exe 同目录）
+ */
+export function setDefaultLogRoot(root: string): void {
+  defaultLogRoot = root;
+}
 
 /**
  * 获取 LogManager 单例
  */
 export function getLogManager(): LogManager {
   if (!logManagerInstance) {
-    logManagerInstance = new LogManager();
+    logManagerInstance = new LogManager(defaultLogRoot ?? undefined);
   }
   return logManagerInstance;
 }

@@ -24,22 +24,22 @@ export class AgentFactory {
 
   constructor(configPath?: string) {
     // 计算配置目录路径
-    // 开发环境：backend/agent -> backend/config
-    // 生产环境：dist-electron -> backend/config
+    // 优先使用主进程注入的目录（打包后为 resources/backend/config）
+    // 开发环境：backend/agent -> backend/config；生产 dist-electron 或 asar 内用 __dirname
     let configDir: string;
     let projectRoot: string;
-    
-    if (__dirname.includes('dist-electron')) {
-      // 生产环境：从dist-electron找到app根目录
+
+    if (process.env.AGENT_CONFIG_DIR) {
+      configDir = path.resolve(process.env.AGENT_CONFIG_DIR);
+      projectRoot = path.resolve(configDir, '..', '..');
+    } else if (__dirname.includes('dist-electron')) {
       projectRoot = path.resolve(__dirname, '..');
       configDir = path.join(projectRoot, 'backend', 'config');
     } else {
-      // 开发环境：backend/agent -> backend/config
       configDir = path.join(__dirname, '..', 'config');
-      // 从backend/config向上两级到app根目录
       projectRoot = path.resolve(configDir, '..', '..');
     }
-    
+
     console.log(`[AgentFactory] __dirname: ${__dirname}`);
     console.log(`[AgentFactory] Project root: ${projectRoot}`);
     console.log(`[AgentFactory] Config directory: ${configDir}`);
@@ -69,29 +69,15 @@ export class AgentFactory {
   /**
    * 创建LLM实例
    */
-  private async createLLM(sessionId?: string): Promise<ChatOpenAI> {
+  private async createLLM(_sessionId?: string): Promise<ChatOpenAI> {
     this.appConfig = await loadConfig();
 
     const yamlLlmConfig = this.agentConfig.agent.llm;
-    const debugConfig = this.agentConfig.agent.debug || { log_llm_calls: true, save_llm_calls: true };
 
     // 优先使用界面配置（electron-store），YAML配置作为后备
     const model = this.appConfig.agent.model || yamlLlmConfig.model;
     const temperature = this.appConfig.agent.temperature ?? yamlLlmConfig.temperature;
     const maxTokens = this.appConfig.agent.maxTokens ?? yamlLlmConfig.max_tokens;
-
-    console.log(`[AgentFactory] LLM配置 - model: ${model}, temperature: ${temperature}, maxTokens: ${maxTokens}`);
-    console.log(`[AgentFactory] 配置来源 - 界面: ${!!this.appConfig.agent.model}, YAML: ${!!yamlLlmConfig.model}`);
-
-    // 新增：使用 LogManager 记录 LLM 创建
-    if (this.runtime && sessionId) {
-      await this.runtime.logManager.logSystem('info', 'LLM instance created', {
-        model,
-        temperature,
-        maxTokens,
-        sessionId,
-      });
-    }
 
     return new ChatOpenAI({
       apiKey: this.appConfig.apiKeys.dashscope,
@@ -101,7 +87,7 @@ export class AgentFactory {
       configuration: {
         baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
       },
-      callbacks: [createLLMCallbacks(debugConfig, this.projectRoot, this.runtime?.logManager)],
+      callbacks: [createLLMCallbacks(this.agentConfig.agent.debug)],
     });
   }
 

@@ -7,7 +7,7 @@ try {
   store = new Store(
     { 
       name: 'config',
-      projectName: 'agent-app' 
+      projectName: 'jiaojiao' 
     } as any
   );
 } catch {

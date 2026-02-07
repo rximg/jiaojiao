@@ -1,4 +1,5 @@
 import { ipcMain, BrowserWindow } from 'electron';
+import { getBackendConfigDir } from './config.js';
 
 let currentStreamController: AbortController | null = null;
 
@@ -50,6 +51,9 @@ export function handleAgentIPC() {
         process.env.AGENT_SESSION_ID = sessionId;
         console.log(`[agent] Set AGENT_SESSION_ID to: ${sessionId}`);
       }
+
+      // 打包后 backend 在 extraResources，需让 AgentFactory 使用 resources/backend/config
+      process.env.AGENT_CONFIG_DIR = getBackendConfigDir();
 
       // 动态导入 Agent 工厂（避免在模块加载时执行）
       const { createMainAgent } = await import('../../backend/agent/factory.js');

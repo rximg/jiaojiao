@@ -273,11 +273,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       currentSessionId,
     });
 
-    // 确保session已创建
-    let sessionId = currentSessionId;
+    // 无 session 时不创建、不发送，由界面回退到欢迎页
+    const sessionId = currentSessionId;
     if (!sessionId) {
-      console.log('[ChatProvider] No session, creating new one...');
-      sessionId = await createNewSession('新对话');
+      console.warn('[ChatProvider] No session, cannot send; UI should navigate to welcome.');
+      return;
     }
 
     // 添加用户消息
@@ -317,7 +317,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [currentThreadId, currentSessionId, createNewSession]);
+  }, [currentThreadId, currentSessionId]);
 
   const dismissAgentError = useCallback(() => {
     setAgentError(null);

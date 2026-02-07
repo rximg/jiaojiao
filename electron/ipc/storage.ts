@@ -3,7 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 
-const storageDir = path.join(os.homedir(), '.有声绘本智能体');
+const storageDir = path.join(os.homedir(), '.jiaojiao');
 const historyFile = path.join(storageDir, 'history.json');
 const booksDir = path.join(storageDir, 'books');
 

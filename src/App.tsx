@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ConfigProvider, useConfig } from './providers/ConfigProvider';
 import { ChatProvider } from './providers/ChatProvider';
 import WelcomePage from './app/components/WelcomePage';
@@ -12,10 +12,16 @@ import type { AppConfig } from './types/types';
 type View = 'welcome' | 'chat';
 
 function AppContent() {
-  const { config, updateConfig } = useConfig();
+  const { config, updateConfig, needApiKeyConfig, isLoading } = useConfig();
   const [view, setView] = useState<View>('welcome');
   const [loadSessionId, setLoadSessionId] = useState<string | null>(null);
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isLoading && needApiKeyConfig && config) {
+      setConfigDialogOpen(true);
+    }
+  }, [isLoading, needApiKeyConfig, config]);
 
   const handleCaseClick = () => {
     // 点击案例：清空loadSessionId，ChatInterface会创建新session

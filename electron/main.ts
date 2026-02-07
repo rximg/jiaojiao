@@ -1,4 +1,4 @@
-import { app, BrowserWindow, protocol } from 'electron';
+import { app, BrowserWindow, protocol, Menu } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -16,6 +16,7 @@ if (process.env.NODE_ENV === 'development') {
   console.log('[Electron] .env path:', envPath, 'exists:', fs.existsSync(envPath));
 }
 
+import { log } from './logger.js';
 import { handleConfigIPC } from './ipc/config.js';
 import { handleStorageIPC } from './ipc/storage.js';
 import { handleAgentIPC } from './ipc/agent.js';
@@ -23,6 +24,7 @@ import { handleFilesystemIPC } from './ipc/filesystem.js';
 import { handleSessionIPC } from './ipc/session.js';
 import { handleHITLIPC } from './ipc/hitl.js';
 import { handleSyncIPC } from './ipc/sync.js';
+import { setDefaultLogRoot } from '../backend/services/log-manager.js';
 import { initializeServices, shutdownServices } from '../backend/services/service-initializer.js';
 import { loadConfig } from '../backend/agent/config.js';
 import { initLangSmithEnv } from '../backend/agent/langsmith.js';
@@ -52,6 +54,7 @@ function createWindow() {
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    mainWindow.webContents.openDevTools();
   }
 
   mainWindow.on('closed', () => {
@@ -60,6 +63,11 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  if (app.isPackaged) {
+    const exeLogRoot = path.join(path.dirname(process.execPath), 'logs');
+    setDefaultLogRoot(exeLogRoot);
+  }
+  log.info('App ready, userData=', app.getPath('userData'));
   try {
     initLangSmithEnv();
     const config = await loadConfig();
@@ -81,6 +89,9 @@ app.whenReady().then(async () => {
   });
 
   createWindow();
+
+  // 去掉整个菜单栏（未使用）
+  Menu.setApplicationMenu(null);
 
   // 注册 IPC 处理器
   handleConfigIPC();

@@ -56,6 +56,8 @@ export interface Book {
 }
 
 export interface AppConfig {
+  /** 配置版本号，与 package.json version 一致（如 "1.0.0"） */
+  configVersion?: string;
   apiKeys: {
     dashscope: string;
     t2i?: string;

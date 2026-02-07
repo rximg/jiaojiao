@@ -1,3 +1,7 @@
+/**
+ * Preload API 定义与类型。实际被 Electron 加载的是 preload.cjs（CJS），
+ * 因预加载脚本必须为 CommonJS。修改 API 时请同步更新 preload.cjs。
+ */
 import { contextBridge, ipcRenderer } from 'electron';
 
 // 暴露安全的 API 给渲染进程

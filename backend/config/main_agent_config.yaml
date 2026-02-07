@@ -67,10 +67,10 @@ agent:
     temperature: 0.1
     max_tokens: 20000
   
-  # 调试配置
+  # 调试配置（详细追踪请用 LangSmith，此处仅保留简短控制台信息）
   debug:
-    log_llm_calls: true      # 是否在控制台打印LLM调用
-    save_llm_calls: true     # 是否保存LLM调用到文件
+    log_llm_calls: false
+    save_llm_calls: false
 
 # 内置工具配置
 tools:

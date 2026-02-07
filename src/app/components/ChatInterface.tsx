@@ -72,6 +72,11 @@ export default function ChatInterface({
       }
       const messageText = input.trim();
       if (!messageText || isLoading) return;
+      // 无 session 时回退到欢迎页，让用户点击案例或历史记录
+      if (!currentSessionId) {
+        onBack();
+        return;
+      }
 
       setShowWelcome(false);
       await sendMessage(messageText);
@@ -80,7 +85,7 @@ export default function ChatInterface({
         textareaRef.current.focus();
       }
     },
-    [input, isLoading, sendMessage]
+    [input, isLoading, currentSessionId, sendMessage, onBack]
   );
 
   const handleKeyDown = useCallback(
@@ -94,18 +99,18 @@ export default function ChatInterface({
   );
 
   const handleQuickOptionClick = useCallback(
-    async (option: string) => {
-      // 快捷选项点击时，总是创建新session（确保每次点击都是新对话）
-      console.log('[ChatInterface] Quick option clicked, creating new session');
-      resetSession();
-      await createNewSession('新对话');
+    (option: string) => {
+      // 无 session 时回退到欢迎页
+      if (!currentSessionId) {
+        onBack();
+        return;
+      }
+      // 快捷选项只复用当前 session 发一条消息
       setInput(option);
       setShowWelcome(false);
-      setTimeout(() => {
-        handleSubmit();
-      }, 0);
+      setTimeout(() => handleSubmit(), 0);
     },
-    [handleSubmit, createNewSession, resetSession]
+    [currentSessionId, handleSubmit, onBack]
   );
 
   return (

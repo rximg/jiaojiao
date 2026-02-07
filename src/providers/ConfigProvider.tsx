@@ -5,6 +5,8 @@ interface ConfigContextType {
   config: AppConfig | null;
   updateConfig: (newConfig: Partial<AppConfig>) => Promise<void>;
   isLoading: boolean;
+  /** 无 config.json 或未配置 API Key 时需弹出配置窗口 */
+  needApiKeyConfig: boolean;
 }
 
 const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
@@ -12,6 +14,7 @@ const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
 export function ConfigProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [needApiKeyConfig, setNeedApiKeyConfig] = useState(false);
 
   useEffect(() => {
     loadConfig();
@@ -21,13 +24,23 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     try {
       if (!window.electronAPI?.config) {
         console.warn('electronAPI.config not available, using default config');
+        setNeedApiKeyConfig(true);
         setIsLoading(false);
         return;
       }
-      const savedConfig = await window.electronAPI.config.get();
+      const raw = await window.electronAPI.config.get();
+      const resolved =
+        raw && typeof raw === 'object' && 'config' in raw
+          ? (raw as { config: AppConfig; isFirstRun?: boolean })
+          : { config: raw as AppConfig, isFirstRun: false };
+      const savedConfig = resolved.config ?? null;
+      const isFirstRun = resolved.isFirstRun === true;
       setConfig(savedConfig);
+      const noApiKey = !savedConfig?.apiKeys?.dashscope?.trim();
+      setNeedApiKeyConfig(isFirstRun || noApiKey);
     } catch (error) {
       console.error('Failed to load config:', error);
+      setNeedApiKeyConfig(true);
     } finally {
       setIsLoading(false);
     }
@@ -47,6 +60,9 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
       const updatedConfig = { ...baseConfig, ...newConfig } as AppConfig;
       await window.electronAPI.config.set(updatedConfig);
       setConfig(updatedConfig);
+      if (updatedConfig.apiKeys?.dashscope?.trim()) {
+        setNeedApiKeyConfig(false);
+      }
     } catch (error) {
       console.error('Failed to update config:', error);
       throw error;
@@ -54,7 +70,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <ConfigContext.Provider value={{ config, updateConfig, isLoading }}>
+    <ConfigContext.Provider value={{ config, updateConfig, isLoading, needApiKeyConfig }}>
       {children}
     </ConfigContext.Provider>
   );
