@@ -2,6 +2,34 @@ import { ipcMain, BrowserWindow } from 'electron';
 
 let currentStreamController: AbortController | null = null;
 
+/**
+ * 修复消息历史中的工具调用，确保所有工具调用都有 id 字段
+ * OpenAI API 要求所有工具调用必须有 id 字段
+ */
+function fixToolCallsInMessages(messages: any[]): any[] {
+  return messages.map((msg) => {
+    if (msg.tool_calls && Array.isArray(msg.tool_calls)) {
+      msg.tool_calls = msg.tool_calls.map((toolCall: any, index: number) => {
+        if (!toolCall.id) {
+          // 如果没有 id，生成一个
+          toolCall.id = `call_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 9)}`;
+        }
+        return toolCall;
+      });
+    }
+    // 兼容 toolCalls (camelCase)
+    if (msg.toolCalls && Array.isArray(msg.toolCalls)) {
+      msg.toolCalls = msg.toolCalls.map((toolCall: any, index: number) => {
+        if (!toolCall.id) {
+          toolCall.id = `call_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 9)}`;
+        }
+        return toolCall;
+      });
+    }
+    return msg;
+  });
+}
+
 export function handleAgentIPC() {
   ipcMain.handle('agent:sendMessage', async (_event, message: string, threadId?: string, sessionId?: string) => {
     // 获取主窗口用于发送事件
@@ -34,9 +62,13 @@ export function handleAgentIPC() {
       // 发送消息并流式返回结果
       // deepagentsjs 返回的是 LangGraph graph，支持 stream 方法
       try {
+        // 准备消息，确保工具调用有 id 字段
+        const inputMessages = [{ role: 'user', content: message }];
+        const fixedMessages = fixToolCallsInMessages(inputMessages);
+        
         // @ts-ignore - Type instantiation is too deep with deepagents
         const stream = await (agent as any).stream(
-          { messages: [{ role: 'user', content: message }] },
+          { messages: fixedMessages },
           { 
             signal: currentStreamController.signal,
             recursionLimit: 200  // 增加递归限制，防止无限循环（默认50，增加到200）
@@ -67,7 +99,9 @@ export function handleAgentIPC() {
 
           // 发送消息块
           if (state.messages && Array.isArray(state.messages)) {
-            const newMessages = state.messages
+            // 修复消息中的工具调用，确保都有 id 字段
+            const fixedMessages = fixToolCallsInMessages(state.messages);
+            const newMessages = fixedMessages
               .filter((msg: any) => msg.role === 'assistant')
               .slice(-1); // 只取最后一条助手消息
             
@@ -120,11 +154,30 @@ export function handleAgentIPC() {
           throw new Error('API额度已用完，请前往设置更换模型');
         }
         
+        // 检查是否是 429 错误（配额/额度不足）
+        if (streamError.name === 'InsufficientQuotaError' || 
+            streamError.message?.includes('429') || 
+            streamError.message?.includes('quota') ||
+            streamError.status === 429 || 
+            streamError.code === 429) {
+          console.error('[agent] 429 Error detected - insufficient quota');
+          mainWindow.webContents.send('agent:quotaExceeded', {
+            message: 'API配额不足，请检查您的账户余额和套餐详情',
+            error: streamError.message || '429 Insufficient Quota',
+            details: '您已超出当前配额，请检查您的计划和账单详情。详情请参阅：https://help.aliyun.com/zh/model-studio/error-code#token-limit',
+          });
+          throw new Error('API配额不足，请检查您的账户余额和套餐详情');
+        }
+        
         // 尝试使用 invoke 方法
         try {
+          // 准备消息，确保工具调用有 id 字段
+          const inputMessages = [{ role: 'user', content: message }];
+          const fixedMessages = fixToolCallsInMessages(inputMessages);
+          
           // @ts-ignore - Type instantiation is too deep with deepagents
           const result = await (agent as any).invoke({ 
-            messages: [{ role: 'user', content: message }] 
+            messages: fixedMessages 
           }, {
             recursionLimit: 200  // Increase recursion limit for invoke as well
           });
@@ -158,12 +211,26 @@ export function handleAgentIPC() {
         return 'stream-aborted';
       }
       
-      // 检查是否是 403 错误
+      // 检查是否是 403 错误（额度用完）
       if (error.message?.includes('403') || error.status === 403 || error.code === 403) {
         console.error('[agent] 403 Error detected in catch - quota exceeded');
         mainWindow.webContents.send('agent:quotaExceeded', {
           message: 'API额度已用完，请前往设置更换模型',
           error: error.message || '403 Forbidden',
+        });
+      }
+      
+      // 检查是否是 429 错误（配额/额度不足）
+      if (error.name === 'InsufficientQuotaError' || 
+          error.message?.includes('429') || 
+          error.message?.includes('quota') ||
+          error.status === 429 || 
+          error.code === 429) {
+        console.error('[agent] 429 Error detected in catch - insufficient quota');
+        mainWindow.webContents.send('agent:quotaExceeded', {
+          message: 'API配额不足，请检查您的账户余额和套餐详情',
+          error: error.message || '429 Insufficient Quota',
+          details: '您已超出当前配额，请检查您的计划和账单详情。详情请参阅：https://help.aliyun.com/zh/model-studio/error-code#token-limit',
         });
       }
       

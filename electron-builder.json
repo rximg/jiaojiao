@@ -24,5 +24,7 @@
   "nsis": {
     "oneClick": false,
     "allowToChangeInstallationDirectory": true
-  }
+  },
+  "buildDependenciesFromSource": false,
+  "nodeGypRebuild": false
 }

@@ -150,20 +150,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       
       if (data.threadId === threadRef.current) {
         const newMessages = data.messages.map((msg: any) => ({
-          id: msg.id || `msg-${Date.now()}-${Math.random()}`,
+          id: msg.id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
           role: msg.role || 'assistant',
           content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
           timestamp: new Date(),
         }));
         
         setMessages((prev) => {
-          const updated = [...prev, ...newMessages];
+          // 去重：新消息按 id 替换已有消息，避免流式更新时重复
+          const newMessageIds = new Set(newMessages.map((m: Message) => m.id));
+          const prevDeduped = prev.filter((m: Message) => !newMessageIds.has(m.id));
+          const updated = [...prevDeduped, ...newMessages];
           allMessagesRef.current = updated;
           return updated;
         });
         
         // 当有新消息时，尝试匹配并附加artifacts到todos
-        setTodos(prev => attachArtifactsToTodos(prev, [...allMessagesRef.current, ...newMessages]));
+        setTodos(prev => attachArtifactsToTodos(prev, allMessagesRef.current));
       }
     };
 

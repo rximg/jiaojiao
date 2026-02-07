@@ -13,6 +13,7 @@ export interface SynthesizeSpeechParams {
 export interface SynthesizeSpeechResult {
   audioPaths: string[];
   audioUris: string[];
+  numbers: number[]; // 返回生成的 number 列表，与 audioPaths 一一对应
   sessionId: string;
 }
 
@@ -156,5 +157,6 @@ async function synthesizeSpeechSequential(
   }));
   await appendEntries(outputPath, newEntries, ttsStartNumber);
 
-  return { audioPaths, audioUris, sessionId };
+  const numbers = planned.map((p) => p.num);
+  return { audioPaths, audioUris, numbers, sessionId };
 }

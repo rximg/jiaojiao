@@ -8,6 +8,39 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// 延迟初始化 Store：在首次 get/set 时再创建，此时 handleConfigIPC 已在 app.whenReady 中执行，
+// app.getPath('userData') 可正确返回，避免打包后保存配置失败
+let store: Store<Record<string, unknown>> | null = null;
+
+function getStore(): Store<Record<string, unknown>> {
+  if (store) return store;
+  store = new Store({
+    name: 'config',
+    projectName: 'agent-app',
+    defaults: {
+      apiKeys: {
+        dashscope: '',
+        t2i: '',
+        tts: '',
+      },
+      agent: {
+        model: 'qwen-plus-2025-12-01',
+        temperature: 0.7,
+        maxTokens: 4096,
+      },
+      storage: {
+        outputPath: './outputs',
+        ttsStartNumber: 6000,
+      },
+      ui: {
+        theme: 'light',
+        language: 'zh',
+      },
+    },
+  });
+  return store;
+}
+
 // 加载 main_agent_config.yaml 中的 UI 配置（仅在此处调用，get 时合并到返回值）
 function loadUIConfigFromYaml(): Record<string, unknown> {
   try {
@@ -30,35 +63,11 @@ function loadUIConfigFromYaml(): Record<string, unknown> {
   }
 }
 
-const store = new Store({
-  name: 'config',
-  defaults: {
-    apiKeys: {
-      dashscope: '',
-      t2i: '',
-      tts: '',
-    },
-    agent: {
-      model: 'qwen-plus-2025-12-01',
-      temperature: 0.7,
-      maxTokens: 4096,
-    },
-    storage: {
-      outputPath: './outputs',
-      ttsStartNumber: 6000,
-    },
-    ui: {
-      theme: 'light',
-      language: 'zh',
-    },
-  },
-});
-
 export function handleConfigIPC() {
   ipcMain.handle('config:get', async () => {
-    // 每次都重新加载 UI 配置，确保最新
+    const s = getStore();
     const latestUIConfig = loadUIConfigFromYaml();
-    const currentStore = store.store as any;
+    const currentStore = s.store as any;
     return {
       ...currentStore,
       ui: {
@@ -69,7 +78,13 @@ export function handleConfigIPC() {
   });
 
   ipcMain.handle('config:set', async (_event, config: any) => {
-    store.set(config);
-    return store.store;
+    try {
+      const s = getStore();
+      s.set(config);
+      return s.store;
+    } catch (error) {
+      console.error('[config:set] Save failed:', error);
+      throw error;
+    }
   });
 }

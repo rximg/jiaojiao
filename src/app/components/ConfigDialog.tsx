@@ -26,18 +26,18 @@ export default function ConfigDialog({
   initialConfig,
 }: ConfigDialogProps) {
   const [dashscopeApiKey, setDashscopeApiKey] = useState('');
-  const [model, setModel] = useState('qwen-plus');
-  const [temperature, setTemperature] = useState(0.7);
-  const [maxTokens, setMaxTokens] = useState(2048);
+  const [model, setModel] = useState('qwen-plus-2025-12-01');
+  const [temperature, setTemperature] = useState(0.1);
+  const [maxTokens, setMaxTokens] = useState(20000);
   const [outputPath, setOutputPath] = useState('./outputs');
   const [ttsStartNumber, setTtsStartNumber] = useState(6000);
 
   useEffect(() => {
     if (open && initialConfig) {
       setDashscopeApiKey(initialConfig.apiKeys?.dashscope || '');
-      setModel(initialConfig.agent?.model || 'qwen-plus');
-      setTemperature(initialConfig.agent?.temperature || 0.7);
-      setMaxTokens(initialConfig.agent?.maxTokens || 2048);
+      setModel(initialConfig.agent?.model || 'qwen-plus-2025-12-01');
+      setTemperature(initialConfig.agent?.temperature || 0.1);
+      setMaxTokens(initialConfig.agent?.maxTokens || 20000);
       setOutputPath(initialConfig.storage?.outputPath || './outputs');
       setTtsStartNumber(initialConfig.storage?.ttsStartNumber ?? 6000);
     }

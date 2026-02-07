@@ -10,6 +10,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { DEFAULT_SESSION_ID } from '../services/fs.js';
 import { createAgentRuntime, type AgentRuntime } from '../services/runtime-manager.js';
+import { readLineNumbers } from '../mcp/line-numbers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -338,6 +339,7 @@ export class AgentFactory {
         imagePath: string;
         annotations?: Array<{ number: number; x: number; y: number }>;
         lines?: Array<{ text?: string; x: number; y: number }>;
+        numbers?: number[];
         sessionId?: string;
       }) => {
         const sessionId = input.sessionId || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
@@ -345,8 +347,22 @@ export class AgentFactory {
         if (input.annotations && input.annotations.length > 0) {
           annotations = input.annotations;
         } else if (input.lines && input.lines.length > 0) {
+          // 优先使用传入的 numbers（来自 TTS 返回），否则从 audio_record.json 读取
+          let numbers: number[];
+          if (input.numbers && input.numbers.length === input.lines.length) {
+            // 使用传入的 numbers（与 lines 按索引对应）
+            numbers = input.numbers;
+          } else {
+            // 从 audio_record.json 读取当前 session 的 number（向后兼容）
+            const config = await loadConfig();
+            const { entries } = await readLineNumbers(config.storage.outputPath);
+            const sessionEntries = entries.filter((e) => e.sessionId === sessionId);
+            const n = input.lines.length;
+            const lastN = sessionEntries.slice(-n);
+            numbers = lastN.map((e) => e.number);
+          }
           annotations = input.lines.map((line, i) => ({
-            number: i + 1,
+            number: numbers[i] ?? i + 1,
             x: line.x,
             y: line.y,
           }));
@@ -362,7 +378,7 @@ export class AgentFactory {
       },
       {
         name: 'annotate_image_numbers',
-        description: '在图片上按坐标绘制白底数字标签并保存为新图（如 images/xxx_annotated.png），可用于标注 vl_script 返回的 lines 序号',
+        description: '在图片上按坐标绘制白底数字标签并保存为新图（如 images/xxx_annotated.png）。使用 lines 时，优先使用 numbers 参数（来自 TTS 返回），否则从 audio_record.json 读取；使用 annotations 时直接使用传入的 number。',
         schema: z.object({
           imagePath: z.string().describe('当前 session 下图片路径（与 generate_image / generate_script_from_image 一致）'),
           annotations: z
@@ -372,7 +388,11 @@ export class AgentFactory {
           lines: z
             .array(z.object({ text: z.string().optional(), x: z.number(), y: z.number() }))
             .optional()
-            .describe('vl_script 返回的 lines，将用 index+1 作为 number；与 annotations 二选一'),
+            .describe('vl_script 返回的 lines，序号将使用 numbers 参数（如果提供）或 audio_record.json 中当前 session 对应条目的 number（与音频 6000.mp3 等对应）；与 annotations 二选一'),
+          numbers: z
+            .array(z.number())
+            .optional()
+            .describe('可选的 number 列表（来自 TTS 返回的 numbers），与 lines 按索引一一对应；如果提供则优先使用，否则从 audio_record.json 读取'),
           sessionId: z.string().optional().describe('会话ID（留空使用当前会话）'),
         }),
       }

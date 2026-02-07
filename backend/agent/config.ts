@@ -33,8 +33,8 @@ export async function loadConfig(): Promise<AppConfig> {
       },
       agent: {
         model: storedConfig?.agent?.model || process.env.DASHSCOPE_MODEL || 'qwen-plus-2025-12-01',
-        temperature: storedConfig?.agent?.temperature ?? 0.7,
-        maxTokens: storedConfig?.agent?.maxTokens ?? 4096,
+        temperature: storedConfig?.agent?.temperature ?? 0.1,
+        maxTokens: storedConfig?.agent?.maxTokens ?? 20000,
       },
       storage: {
         outputPath: storedConfig?.storage?.outputPath || './outputs',
@@ -54,9 +54,9 @@ export async function loadConfig(): Promise<AppConfig> {
         tts: process.env.TTS_API_KEY,
       },
       agent: {
-        model: process.env.DASHSCOPE_MODEL || 'qwen-plus',
-        temperature: 0.7,
-        maxTokens: 2048,
+        model: process.env.DASHSCOPE_MODEL || 'qwen-plus-2025-12-01',
+        temperature: 0.1,
+        maxTokens: 20000,
       },
       storage: {
         outputPath: './outputs',
