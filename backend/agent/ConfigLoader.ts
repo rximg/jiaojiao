@@ -46,6 +46,8 @@ export interface AgentConfig {
       config?: any;
     };
   };
+  /** 内置工具（非 MCP）：工具名 -> 选项，enable 默认为 true */
+  tools?: Record<string, { enable?: boolean }>;
   workflow?: {
     steps: Array<{
       id: number;

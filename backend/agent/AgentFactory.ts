@@ -386,7 +386,8 @@ export class AgentFactory {
   }
 
   /**
-   * 创建write_prompt_file工具（保存提示词到文件）
+   * 创建 write_prompt_file 工具（保存提示词到文件）。
+   * 保留实现供日后使用；当前 prompt_generator 使用 FilesystemMiddleware 的 write_file。
    */
   private createWritePromptFileTool(): any {
     return tool(
@@ -438,36 +439,6 @@ export class AgentFactory {
           content: z.string().describe('要保存的提示词内容'),
           filename: z.string().optional().default('image_prompt.txt').describe('文件名（默认: image_prompt.txt）'),
           sessionId: z.string().optional().describe('会话ID（留空使用当前会话）'),
-        }),
-      }
-    );
-  }
-
-  /**
-   * 创建parse_premise工具（内置工具）
-   */
-  private async createParsePremiseTool(llm: ChatOpenAI): Promise<any> {
-    // 从主配置加载parse_premise提示词
-    const toolConfig = (this.agentConfig as any).tools?.parse_premise;
-    if (!toolConfig?.system_prompt) {
-      throw new Error('parse_premise 工具配置缺失');
-    }
-    
-    const promptText = toolConfig.system_prompt;
-
-    return tool(
-      async (input: { text: string }) => {
-        const response = await llm.invoke(`${promptText}\n\n用户输入：${input.text}`);
-        const content = typeof response.content === 'string' 
-          ? response.content 
-          : JSON.stringify(response.content);
-        return JSON.parse(content);
-      },
-      {
-        name: 'parse_premise',
-        description: '解析用户输入，提取前提变量（年龄、主题、风格、语言等）',
-        schema: z.object({
-          text: z.string().describe('用户输入的文本'),
         }),
       }
     );
@@ -586,14 +557,10 @@ export class AgentFactory {
     // createDeepAgent 类型：使用 SubAgent 方式
     const subAgentTools: any[] = [];
     
-    // 根据配置中的tools字段添加工具
+    // 根据配置中的 tools 字段添加工具（子代理专用；write_prompt_file 已由 FilesystemMiddleware 的 write_file 替代）
     if (subConfig.sub_agent && subConfig.sub_agent.tools) {
-      for (const toolName of subConfig.sub_agent.tools) {
-        if (toolName === 'write_prompt_file') {
-          subAgentTools.push(this.createWritePromptFileTool());
-          console.log(`[AgentFactory] SubAgent ${subEntry.name} 添加工具: write_prompt_file`);
-        }
-        // 可以在这里添加更多工具的映射
+      for (const _toolName of subConfig.sub_agent.tools) {
+        // 可在此添加更多子代理工具的映射，例如：if (_toolName === 'xxx') subAgentTools.push(this.createXxxTool());
       }
     }
 
@@ -609,6 +576,20 @@ export class AgentFactory {
   }
 
   /**
+   * 根据配置中的名称创建内置工具（非 MCP），未在配置中声明的工具不会创建
+   */
+  private createBuiltInTool(toolName: string): any | null {
+    switch (toolName) {
+      case 'finalize_workflow':
+        return this.createFinalizeWorkflowTool();
+      case 'annotate_image_numbers':
+        return this.createAnnotateImageNumbersTool();
+      default:
+        return null;
+    }
+  }
+
+  /**
    * 创建主Agent
    * @param sessionId 会话ID（新增）
    */
@@ -619,24 +600,17 @@ export class AgentFactory {
     // 创建LLM
     const llm = await this.createLLM(sessionId);
 
-    // 创建工具
+    // 创建工具：先按配置添加内置工具，再添加 MCP 工具
     const tools: any[] = [];
-
-    // 添加parse_premise工具
-    const parseTool = await this.createParsePremiseTool(llm);
-    tools.push(parseTool);
-
-    // 添加write_prompt_file工具（用于SubAgent保存生成的提示词）
-    const writePromptTool = this.createWritePromptFileTool();
-    tools.push(writePromptTool);
-
-    // 添加finalize_workflow工具（检查文件并完成流程）
-    const finalizeTool = this.createFinalizeWorkflowTool();
-    tools.push(finalizeTool);
-
-    // 添加 annotate_image_numbers 工具（按坐标在图上画白底数字标签）
-    const annotateTool = this.createAnnotateImageNumbersTool();
-    tools.push(annotateTool);
+    const toolsConfig = this.agentConfig.tools ?? {};
+    for (const [name, opts] of Object.entries(toolsConfig)) {
+      if ((opts as { enable?: boolean })?.enable === false) continue;
+      const tool = this.createBuiltInTool(name);
+      if (tool) {
+        tools.push(tool);
+        console.log(`[AgentFactory] 添加内置工具: ${name}`);
+      }
+    }
 
     // 添加MCP工具
     for (const [mcpKey, mcpEntry] of Object.entries(this.agentConfig.mcp_services)) {

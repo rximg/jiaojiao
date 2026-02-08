@@ -42,7 +42,7 @@ async function testAgentFactory() {
     console.log('\n[配置信息]');
     console.log('- 项目根目录:', path.resolve(__dirname, '../..'));
     console.log('- 配置目录:', path.resolve(__dirname, '../../backend/config'));
-    console.log('- 提示词目录:', path.resolve(__dirname, '../../prompts/zh'));
+    console.log('- 提示词: 使用各配置内的内联 system_prompt');
 
     console.log('\n' + '='.repeat(60));
     console.log('✅ 所有测试通过！');

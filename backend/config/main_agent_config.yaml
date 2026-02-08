@@ -8,55 +8,20 @@ agent:
   type: main_agent
   
   system_prompt: |
-    你是有声绘本制作助手，负责协调整个绘本生成流程。
+    你是有声绘本制作助手：根据用户输入生成绘本图片与音频，并总结返回。
 
-    ## 你的职责：
-    根据用户输入，使用工具生成绘本相关资源（图片和音频），然后将结果总结并返回给用户。
+    ## 工作流程（每步完成后立即 write_todos 标记 completed）
 
-    ## 工作流程（每完成一步立即用write_todos更新状态为completed）：
+    1. **提示词**：task 委派 prompt_generator，在 description 中传入用户回答（即用户本轮输入或用户描述），子代理会 write_file 到 image_prompt.txt
+    2. **图片**：generate_image(promptFile: "image_prompt.txt", size: "1024*1024", count: 1)，勿用 prompt 参数
+    3. **台词**：generate_script_from_image(imagePath: 步骤2的图片路径)
+    4. **语音**：synthesize_speech(texts: 步骤3的 lines[].text, voice: "chinese_female", format: "mp3")
+    5. **标注**：annotate_image_numbers(imagePath: 步骤2路径, lines: 步骤3的 lines)，输出 xxx_annotated.png
+    6. **收尾**：finalize_workflow(imagePath: 步骤5标注图或步骤2图, audioPath: 步骤4的 audioPaths[0], scriptText: 步骤3的 lines)，再向用户展示完成摘要
 
-    1. **解析用户输入**
-       - 调用 parse_premise 工具解析为JSON格式
-       - 完成后用 write_todos 标记此步骤为 completed
-
-    2. **生成文生图提示词并保存到文件**
-       - 调用 task 工具委派给 prompt_generator 子代理
-       - prompt_generator会自动调用 write_file 保存提示词到文件（默认: image_prompt.txt）
-       - 完成后用 write_todos 标记此步骤为 completed
-
-    3. **生成绘本图片**
-       - 调用 generate_image 工具，使用 promptFile 参数读取文件（promptFile: "image_prompt.txt"）
-       - 不要使用 prompt 参数，避免长提示词占用上下文
-       - 其他参数：size: "1024*1024", count: 1
-       - 完成后用 write_todos 标记此步骤为 completed
-
-    4. **生成台词**
-       - 调用 generate_script_from_image 工具，传入 imagePath 为步骤3返回的图片路径（如 imagePath）
-       - 完成后用 write_todos 标记此步骤为 completed
-
-    5. **生成语音**
-       - 使用步骤4返回的 lines，将 lines 中每项的 text 组成数组传入 synthesize_speech 的 texts 参数（voice: "chinese_female", format: "mp3"）
-       - 完成后用 write_todos 标记此步骤为 completed
-
-    6. **标注图片序号**
-       - 调用 annotate_image_numbers 工具，传入 imagePath 为步骤3返回的图片路径，lines 为步骤4返回的 lines（或 annotations 为 lines 转成的 { number: index+1, x, y }）
-       - 生成带白底数字标签的图片并保存（如 images/xxx_annotated.png）
-       - 完成后用 write_todos 标记此步骤为 completed
-
-    7. **完成工作流并返回结果**
-       - 调用 finalize_workflow 工具，传入生成的文件路径和台词
-         - imagePath: 步骤3返回的图片路径（imagePath），或步骤6返回的标注图路径
-         - audioPath: 步骤5返回的音频路径（audioPaths 数组的第一个元素，即 audioPaths[0]）
-         - scriptText: 步骤4返回的台词内容（可将 result.lines 用 JSON.stringify 传入，或传可读摘要）
-       - 工具会自动检查文件是否存在并返回完成消息
-       - 完成后用 write_todos 标记此步骤为 completed
-       - 然后向用户展示绘本生成结果的完整摘要
-
-    ## 关键要求：
-    - 必须在每个步骤完成后立即调用 write_todos 更新进度
-    - 严格按顺序执行，不要跳过或重复
-    - 所有7个步骤的todos都要标记为completed
-    - 最后向用户展示清晰的完成摘要
+    ## 要求
+    - 严格按 1→6 顺序执行，每步完成即 write_todos
+    - 6 步 todos 均需标记 completed，最后给出清晰摘要
   
   storage:
     type: local
@@ -72,42 +37,10 @@ agent:
     log_llm_calls: false
     save_llm_calls: false
 
-# 内置工具配置
+# 主 Agent 内置工具（仅主 Agent 使用的工具；SubAgent 专用工具在各自 sub_agent 配置中）
 tools:
-  parse_premise:
-    name: parse_premise
-    description: 解析用户输入，提取前提变量（年龄、主题、风格、语言等）
-    system_prompt: |
-      请解析以下用户输入，提取前提变量，返回 JSON 格式，包含：age (年龄), theme (主题), style (风格), language (语言)。
-      
-      示例输入："生成5岁海洋主题绘本"
-      示例输出：{"age": 5, "theme": "海洋", "style": "卡通", "language": "中文"}
-      
-      如果某些信息未提供，请使用合理的默认值。
-    output_format:
-      type: json
-      schema:
-        type: object
-        properties:
-          age:
-            type: integer
-            description: 目标年龄（岁）
-            default: 4
-          theme:
-            type: string
-            description: 绘本主题
-          style:
-            type: string
-            description: 绘画风格
-            default: "卡通"
-          language:
-            type: string
-            description: 语言
-            default: "中文"
-        required:
-          - theme
-
-# 内置工具（除 MCP 外）：sync_audio_to_store（同步 mp3 到 store）、annotate_image_numbers（图上白底数字标注）
+  finalize_workflow: {}      # 检查文件并完成流程
+  annotate_image_numbers: {} # 按坐标在图上画白底数字标签
 # MCP服务配置
 mcp_services:
   t2i:
@@ -136,43 +69,38 @@ sub_agents:
   prompt_generator:
     enable: true
     name: prompt_generator
-    description: 根据前提变量生成文生图提示词
+    description: 根据用户回答生成文生图提示词
     config_path: ./sub_agents/prompt_gen.yaml
 
 # 工作流配置
 workflow:
   steps:
     - id: 1
-      name: 解析用户输入
-      tool: parse_premise
-      required: true
-    
-    - id: 2
-      name: 生成文生图提示词
+      name: 生成文生图提示词（传入用户回答）
       subagent: prompt_generator
       required: true
     
-    - id: 3
+    - id: 2
       name: 生成绘本图片
       tool: generate_image
       required: true
     
-    - id: 4
+    - id: 3
       name: 生成台词
       tool: generate_script_from_image
       required: true
     
-    - id: 5
+    - id: 4
       name: 生成语音
       tool: synthesize_speech
       required: true
     
-    - id: 6
+    - id: 5
       name: 标注图片序号
       tool: annotate_image_numbers
       required: true
     
-    - id: 7
+    - id: 6
       name: 完成工作流并返回结果
       tool: finalize_workflow
       required: true
