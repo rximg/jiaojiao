@@ -1,6 +1,7 @@
 import path from 'path';
 import { promises as fs } from 'fs';
 import { readLineNumbers } from './line-numbers.js';
+import { loadConfig } from '../agent/config.js';
 
 const WORKSPACES_DIRNAME = 'workspaces';
 const STORE_DIRNAME = 'store';
@@ -25,8 +26,10 @@ export async function syncSessionAudioToStore(
   await fs.mkdir(storeDir, { recursive: true });
 
   const copiedFiles: string[] = [];
+  const config = await loadConfig();
+  const ttsStartNumber = config.storage.ttsStartNumber ?? 6000;
 
-  const { entries } = await readLineNumbers(outputPath, 6000);
+  const { entries } = await readLineNumbers(outputPath, ttsStartNumber);
   for (const entry of entries) {
     const sessionDir = path.join(workspacesDir, entry.sessionId);
     const srcPath = path.join(sessionDir, entry.relativePath);

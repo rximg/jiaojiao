@@ -33,7 +33,9 @@ export async function readLineNumbers(
   try {
     const raw = await fs.readFile(filePath, 'utf-8');
     const data = JSON.parse(raw) as Partial<LineNumbersData>;
-    const nextNumber = typeof data.nextNumber === 'number' ? data.nextNumber : ttsStartNumber;
+    const fileNext = typeof data.nextNumber === 'number' ? data.nextNumber : ttsStartNumber;
+    // 取 max，使界面调高「TTS 起始编号」后下次生成会从新起始值开始
+    const nextNumber = Math.max(fileNext, ttsStartNumber);
     const entries = Array.isArray(data.entries) ? data.entries : [];
     return { nextNumber, entries };
   } catch (err: unknown) {

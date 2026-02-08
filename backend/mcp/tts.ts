@@ -1,4 +1,6 @@
 import path from 'path';
+import { promises as fs } from 'fs';
+import jsyaml from 'js-yaml';
 import { loadConfig } from '../agent/config';
 import { DEFAULT_SESSION_ID, getWorkspaceFilesystem } from '../services/fs';
 import { readLineNumbers, appendEntries, type LineNumberEntry } from './line-numbers.js';
@@ -36,6 +38,10 @@ const voiceMap: Record<string, string> = {
   'Chelsie': 'Chelsie',
 };
 
+/** 429/503 时重试：最多重试次数与退避基数（毫秒） */
+const TTS_RATE_LIMIT_RETRIES = 3;
+const TTS_RATE_LIMIT_BACKOFF_MS = 5000;
+
 /** 全局锁：同一时间只允许一个 synthesizeSpeech 在执行，避免多 session/多次调用并行触发 rate limit */
 let ttsMutex: Promise<void> = Promise.resolve();
 
@@ -52,6 +58,72 @@ export async function synthesizeSpeech(
   } finally {
     resolveMutex!();
   }
+}
+
+/** 单条 TTS：请求 API，遇 429/503 时退避重试 */
+async function doOneTtsWithRetry(options: {
+  endpoint: string;
+  token: string;
+  model: string;
+  voice: string;
+  format: string;
+  text: string;
+  sessionId: string;
+  relativePath: string;
+  workspaceFs: ReturnType<typeof getWorkspaceFilesystem>;
+  audioPaths: string[];
+  audioUris: string[];
+  backoffBaseMs: number;
+  maxRetries: number;
+}): Promise<void> {
+  const voiceApi = voiceMap[options.voice] || 'Cherry';
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= options.maxRetries; attempt++) {
+    if (attempt > 0) {
+      const waitMs = options.backoffBaseMs * Math.pow(2, attempt - 1);
+      console.warn(`[TTS] Rate limit (429/503), retry ${attempt}/${options.maxRetries} after ${waitMs}ms`);
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
+    const response = await fetch(options.endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${options.token}`,
+      },
+      body: JSON.stringify({
+        model: options.model,
+        input: { text: options.text, voice: voiceApi },
+        parameters: { format: options.format, sample_rate: 44100 },
+      }),
+    });
+    if (response.status === 429 || response.status === 503) {
+      const body = await response.text().catch(() => '');
+      lastError = new Error(`TTS API error: ${response.status} ${response.statusText} ${body}`);
+      continue;
+    }
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(`TTS API error: ${response.status} ${response.statusText} ${body}`);
+    }
+    const data = (await response.json()) as any;
+    const audioUrl = data?.output?.audio?.url || data?.audio?.url || data?.url;
+    if (!audioUrl) throw new Error('TTS API did not return audio URL');
+    const audioResponse = await fetch(audioUrl);
+    if (!audioResponse.ok) {
+      const body = await audioResponse.text().catch(() => '');
+      throw new Error(`TTS audio download failed: ${audioResponse.status} ${audioResponse.statusText} ${body}`);
+    }
+    const audioBuffer = await audioResponse.arrayBuffer();
+    const audioPath = await options.workspaceFs.writeFile(
+      options.sessionId,
+      options.relativePath,
+      Buffer.from(audioBuffer)
+    );
+    options.audioPaths.push(audioPath);
+    options.audioUris.push(options.workspaceFs.toFileUri(audioPath));
+    return;
+  }
+  throw lastError ?? new Error('TTS rate limit retries exhausted');
 }
 
 /** 单次调用的内部实现：对 texts 严格顺序执行，避免 Requests rate limit exceeded */
@@ -77,7 +149,20 @@ async function synthesizeSpeechSequential(
   const endpoint = process.env.DASHSCOPE_TTS_ENDPOINT 
     || 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
   const model = process.env.DASHSCOPE_TTS_MODEL || 'qwen-tts';
-  const rateLimitMs = Number(process.env.TTS_RATE_LIMIT_MS) || 2000;
+
+  // 条与条之间的间隔：环境变量 > tts_config.yaml service.batch.delay > 默认 2000ms
+  let rateLimitMs = Number(process.env.TTS_RATE_LIMIT_MS);
+  if (!rateLimitMs) {
+    try {
+      const yamlPath = path.join(process.cwd(), 'backend', 'config', 'mcp', 'tts_config.yaml');
+      const ttsYaml = (jsyaml.load(await fs.readFile(yamlPath, 'utf-8')) as Record<string, unknown>) ?? {};
+      const service = ttsYaml.service as Record<string, unknown> | undefined;
+      const batch = service?.batch as { delay?: number } | undefined;
+      rateLimitMs = typeof batch?.delay === 'number' ? batch.delay : 2000;
+    } catch {
+      rateLimitMs = 2000;
+    }
+  }
 
   const audioPaths: string[] = [];
   const audioUris: string[] = [];
@@ -92,55 +177,21 @@ async function synthesizeSpeechSequential(
     }
 
     try {
-      // 映射音色到 API 支持的值
-      const voiceApi = voiceMap[voice] || 'Cherry';
-
-      // 调用阿里百炼 TTS API（使用multimodal-generation端点）
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          model,
-          input: {
-            text,
-            voice: voiceApi,
-          },
-          parameters: {
-            format,
-            sample_rate: 44100,
-          },
-        }),
+      await doOneTtsWithRetry({
+        endpoint,
+        token,
+        model,
+        voice,
+        format,
+        text,
+        sessionId,
+        relativePath,
+        workspaceFs,
+        audioPaths,
+        audioUris,
+        backoffBaseMs: TTS_RATE_LIMIT_BACKOFF_MS,
+        maxRetries: TTS_RATE_LIMIT_RETRIES,
       });
-
-      if (!response.ok) {
-        const body = await response.text().catch(() => '');
-        throw new Error(`TTS API error: ${response.status} ${response.statusText} ${body}`);
-      }
-
-      const data = await response.json() as any;
-
-      // 提取音频 URL
-      const audioUrl = data?.output?.audio?.url || data?.audio?.url || data?.url;
-
-      if (!audioUrl) {
-        throw new Error('TTS API did not return audio URL');
-      }
-
-      // 下载音频
-      const audioResponse = await fetch(audioUrl);
-      if (!audioResponse.ok) {
-        const body = await audioResponse.text().catch(() => '');
-        throw new Error(`TTS audio download failed: ${audioResponse.status} ${audioResponse.statusText} ${body}`);
-      }
-      const audioBuffer = await audioResponse.arrayBuffer();
-
-      const audioPath = await workspaceFs.writeFile(sessionId, relativePath, Buffer.from(audioBuffer));
-      const audioUri = workspaceFs.toFileUri(audioPath);
-      audioPaths.push(audioPath);
-      audioUris.push(audioUri);
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error(`TTS synthesis failed for text ${i + 1}:`, error);

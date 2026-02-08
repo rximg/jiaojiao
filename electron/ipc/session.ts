@@ -81,9 +81,9 @@ export function handleSessionIPC() {
         return { sessions: [] };
       }
 
-      // 读取每个会话的元数据
-      const sessions = await Promise.all(
-        sessionDirs.map(async (sessionId) => {
+      // 只把含有 meta/session.json 的目录视为会话，避免把 workspaces 下的其他目录（如 annoted_images）当会话
+      const sessionsRaw = await Promise.all(
+        sessionDirs.map(async (sessionId): Promise<SessionMeta & { firstMessage?: string; firstImage?: string } | null> => {
           try {
             const metaContent = await fsService.readFile(
               sessionId,
@@ -91,11 +91,10 @@ export function handleSessionIPC() {
               'utf-8'
             );
             const meta = JSON.parse(metaContent as string) as SessionMeta;
-            
-            // 提取第一句话和第一张图片
+
             let firstMessage = '';
             let firstImage = '';
-            
+
             try {
               const messagesContent = await fsService.readFile(
                 sessionId,
@@ -103,46 +102,35 @@ export function handleSessionIPC() {
                 'utf-8'
               );
               const messages = JSON.parse(messagesContent as string);
-              
-              // 获取第一条用户消息
               const firstUserMessage = messages.find((msg: any) => msg.role === 'user');
               if (firstUserMessage) {
-                firstMessage = firstUserMessage.content.substring(0, 100); // 最多100字符
+                firstMessage = firstUserMessage.content.substring(0, 100);
               }
-              
-              // 查找第一张图片（从images目录）
               try {
                 const imagesPath = path.join(rootDir, sessionId, 'images');
                 const imageFiles = await fs.readdir(imagesPath);
-                const imageFile = imageFiles.find((file: string) => 
+                const imageFile = imageFiles.find((file: string) =>
                   /\.(png|jpg|jpeg|gif|webp)$/i.test(file)
                 );
                 if (imageFile) {
                   firstImage = path.join(imagesPath, imageFile);
                 }
               } catch {
-                // 没有图片目录或图片，忽略
+                // ignore
               }
             } catch {
-              // 没有消息文件，忽略
+              // ignore
             }
-            
-            return {
-              ...meta,
-              firstMessage,
-              firstImage,
-            };
+
+            return { ...meta, firstMessage, firstImage };
           } catch {
-            // 如果没有元数据，创建一个默认的
-            return {
-              sessionId,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              title: '未命名对话',
-            } as SessionMeta;
+            // 无 meta/session.json 的目录（如 annoted_images）不列入会话列表
+            return null;
           }
         })
       );
+
+      const sessions = sessionsRaw.filter((s): s is SessionMeta & { firstMessage?: string; firstImage?: string } => s !== null);
 
       // 按更新时间倒序排列
       sessions.sort(

@@ -1,27 +1,35 @@
 import type { AppConfig } from '../../src/types/types';
 import Store from 'electron-store';
 
-// Initialize Store - use projectName when in Electron, handle Node environment
-let store: Store<Partial<AppConfig>>;
-try {
-  store = new Store(
-    { 
-      name: 'config',
-      projectName: 'jiaojiao' 
-    } as any
-  );
-} catch {
-  // In Node.js/test environment, create a minimal mock store
-  store = {
-    store: {},
-    set: () => {},
-    get: () => undefined,
-  } as any;
+// 与 Electron 主进程 IPC 使用同一 config 文件（userData/config.json），界面修改的配置才能被 backend 读到
+function getConfigStore(): Store<Partial<AppConfig>> {
+  try {
+    const { app } = require('electron');
+    if (app && typeof app.getPath === 'function') {
+      const userData = app.getPath('userData');
+      return new Store({
+        name: 'config',
+        cwd: userData,
+      } as any) as Store<Partial<AppConfig>>;
+    }
+  } catch {
+    // 非 Electron 或 app 未 ready
+  }
+  try {
+    return new Store({ name: 'config', projectName: 'jiaojiao' } as any) as Store<Partial<AppConfig>>;
+  } catch {
+    return {
+      store: {},
+      set: () => {},
+      get: () => undefined,
+    } as any;
+  }
 }
 
 export async function loadConfig(): Promise<AppConfig> {
+  const store = getConfigStore();
   try {
-    // 每次都从 Electron Store 读取，避免缓存导致的旧值
+    // 每次都从 Electron Store 读取，避免缓存导致的旧值（与界面配置同一文件）
     const storedConfig = store.store as Partial<AppConfig>;
     const dashscopeKey = storedConfig?.apiKeys?.dashscope || process.env.DASHSCOPE_API_KEY || '';
 

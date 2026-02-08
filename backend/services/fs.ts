@@ -59,9 +59,16 @@ export class WorkspaceFilesystem {
 
   sessionPath(sessionId: string, relativePath = ''): string {
     const safeSession = sessionId || DEFAULT_SESSION_ID;
-    const normalizedRelative = normalizeRelative(relativePath);
+    // 若传入绝对路径会导致 resolve 结果脱离 root，只接受相对路径
+    const trimmed = relativePath.replace(/\\/g, '/').replace(/^\/+/, '').trim();
+    if (path.isAbsolute(relativePath) || trimmed.includes('..')) {
+      throw new Error('Path escapes workspace root');
+    }
+    const normalizedRelative = normalizeRelative(trimmed || relativePath);
     const resolved = path.resolve(this.rootDir, safeSession, normalizedRelative);
-    if (!resolved.startsWith(this.rootWithSep) && resolved !== this.rootDir) {
+    const resolvedNorm = path.normalize(resolved);
+    const rootNorm = path.normalize(this.rootWithSep);
+    if (!resolvedNorm.startsWith(rootNorm) && resolvedNorm !== path.normalize(this.rootDir)) {
       throw new Error('Path escapes workspace root');
     }
     return resolved;

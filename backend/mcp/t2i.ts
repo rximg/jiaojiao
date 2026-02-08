@@ -143,6 +143,15 @@ async function pollForImageUrl(
 // 主入口：解析配置 → 提交任务 → 轮询结果 → 下载保存
 // ---------------------------------------------------------------------------
 
+/** 将可能为绝对路径或含 .. 的 promptFile 规范为仅相对于 session 目录的安全相对路径，避免 Path escapes workspace root */
+function toSafePromptRelative(promptFile: string): string {
+  const normalized = promptFile.replace(/\\/g, '/').replace(/^\/+/, '');
+  if (path.isAbsolute(promptFile) || normalized.includes('..')) {
+    return path.basename(promptFile);
+  }
+  return normalized || path.basename(promptFile);
+}
+
 async function resolvePrompt(
   params: GenerateImageParams,
   sessionId: string,
@@ -152,9 +161,10 @@ async function resolvePrompt(
   if (!params.promptFile) throw new Error('Either prompt or promptFile must be provided');
 
   const workspaceFs = getWorkspaceFilesystem({ outputPath });
-  
+  const safeRelative = toSafePromptRelative(params.promptFile);
+
   // 从 sessionId 目录读取（prompt_generator 会写入到 workspaces/{sessionId}/image_prompt.txt）
-  const fullPath = workspaceFs.sessionPath(sessionId, params.promptFile);
+  const fullPath = workspaceFs.sessionPath(sessionId, safeRelative);
   try {
     const content = await fs.readFile(fullPath, 'utf-8');
     console.log(`[T2I] prompt from file: ${fullPath}, length: ${content.length}`);

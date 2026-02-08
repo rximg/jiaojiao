@@ -17,7 +17,8 @@ service:
   
   batch:
     enabled: true
-    delay: 1500  # 批量生成时的延迟（毫秒）
+    # 每条 TTS 之间的间隔（毫秒），遇 429 限流时可调大（如 3000）
+    delay: 2500
   
   output:
     directory: ./outputs/audio

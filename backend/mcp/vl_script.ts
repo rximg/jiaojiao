@@ -47,30 +47,27 @@ function resolveImageAbsolutePath(
   sessionId: string,
   workspaceRoot: string
 ): string {
-  const normalized = imagePath.replace(/\\/g, '/');
+  const normalized = imagePath.replace(/\\/g, '/').replace(/^\/+/, '');
   
-  // 如果已是绝对路径，直接返回
-  if (path.isAbsolute(imagePath)) {
-    // 验证路径是否在正确的 sessionId 目录下
-    const normalizedAbs = imagePath.replace(/\\/g, '/');
-    const workspacesMatch = normalizedAbs.match(/workspaces\/([^/]+)\//);
-    if (workspacesMatch) {
-      const pathSessionId = workspacesMatch[1];
-      if (pathSessionId !== sessionId) {
-        console.warn(`[VL script] SessionId mismatch: expected ${sessionId}, found ${pathSessionId} in path ${imagePath}`);
-      }
-    }
-    return imagePath;
-  }
-  
-  // 包含 workspaces/{sessionId}/ 的路径，提取相对路径并拼出绝对路径
-  const workspacesMatch = normalized.match(/workspaces\/([^/]+)\/(.+)$/);
+  // 形如 "outputs/workspaces/{sessionId}/..." 或 "/outputs/workspaces/..."（LLM/前端常返回）按 workspace 根解析为真实绝对路径
+  const workspacesMatch = normalized.match(/outputs\/workspaces\/([^/]+)\/(.+)$/);
   if (workspacesMatch) {
     const sid = workspacesMatch[1];
     const rel = workspacesMatch[2];
-    // 如果 sessionId 匹配，使用传入的 sessionId；否则使用路径中的 sessionId
     const targetSessionId = sid === sessionId ? sessionId : sid;
     return path.join(workspaceRoot, targetSessionId, rel);
+  }
+  
+  // 已是真实绝对路径（如 C:\...\outputs\workspaces\...），直接返回（/outputs/... 已在上方按 workspace 处理）
+  if (path.isAbsolute(imagePath)) {
+    const normalizedAbs = imagePath.replace(/\\/g, '/');
+    if (normalizedAbs.includes('workspaces/')) {
+      const match = normalizedAbs.match(/workspaces\/([^/]+)\//);
+      if (match && match[1] !== sessionId) {
+        console.warn(`[VL script] SessionId mismatch: expected ${sessionId}, found ${match[1]} in path ${imagePath}`);
+      }
+    }
+    return imagePath;
   }
   
   // 否则视为相对当前 session 的路径（如 images/xxx.png）
