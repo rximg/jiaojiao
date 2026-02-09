@@ -9,10 +9,10 @@ interface TodoPanelProps {
 
 function statusIcon(status: TodoItem['status']) {
   if (status === 'completed') {
-    return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+    return <CheckCircle2 className="h-4 w-4 text-success" />;
   }
   if (status === 'in_progress') {
-    return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
+    return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
   }
   return <Clock3 className="h-4 w-4 text-muted-foreground" />;
 }
@@ -52,7 +52,7 @@ export default function TodoPanel({ todos }: TodoPanelProps) {
   console.log('[TodoPanel] rendering with todos:', todos.length, 'items:', todos);
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 shadow-sm">
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
       <div className="flex items-center justify-between text-sm font-medium text-foreground">
         <span>任务进度</span>
         <span className="text-muted-foreground">{completed}/{total} · {percent}%</span>
@@ -69,10 +69,10 @@ export default function TodoPanel({ todos }: TodoPanelProps) {
             return (
               <div
                 key={todoId}
-                className="rounded-md bg-card border border-border shadow-sm overflow-hidden"
+                className="rounded-xl bg-card border border-border shadow-sm overflow-hidden"
               >
                 <div
-                  className={`flex items-start gap-2 px-3 py-2 ${showArtifacts ? 'cursor-pointer hover:bg-muted/50' : ''}`}
+                  className={`flex items-start gap-2 px-3 py-2.5 ${showArtifacts ? 'cursor-pointer hover:bg-muted/50 rounded-xl' : ''}`}
                   onClick={() => showArtifacts && toggleExpanded(todoId)}
                 >
                   <div className="mt-0.5">{statusIcon(todo.status)}</div>
@@ -91,7 +91,7 @@ export default function TodoPanel({ todos }: TodoPanelProps) {
                   )}
                 </div>
                 {isExpanded && showArtifacts && (
-                  <div className="px-3 pb-3 border-t border-border bg-muted/20">
+                  <div className="px-3 pb-3 border-t border-border/50 bg-muted/20">
                     <ArtifactViewer artifacts={todo.artifacts} />
                   </div>
                 )}

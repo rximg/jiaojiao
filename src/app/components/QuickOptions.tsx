@@ -25,7 +25,7 @@ export default function QuickOptions({ onOptionClick }: QuickOptionsProps) {
           variant="outline"
           size="sm"
           onClick={() => onOptionClick(option.prompt)}
-          className="text-xs"
+          className="text-xs rounded-full border-border hover:bg-accent"
           title={option.description}
         >
           {option.label}

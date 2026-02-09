@@ -21,7 +21,7 @@ export const QuotaErrorDialog: React.FC = () => {
           <p className="text-sm text-muted-foreground">
             {quotaError?.message || '当前模型的API额度已用完，无法继续使用。'}
           </p>
-          <div className="rounded bg-muted p-3 text-xs font-mono text-muted-foreground">
+          <div className="rounded-xl bg-muted p-3 text-xs font-mono text-muted-foreground">
             {quotaError?.error || '403 Forbidden'}
           </div>
           <p className="text-sm font-medium">

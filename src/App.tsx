@@ -47,13 +47,13 @@ function AppContent() {
 
   if (!config) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-2">欢迎使用有声绘本智能体</h1>
-          <p className="text-muted-foreground mb-4">请先配置 API Key</p>
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center p-8 rounded-xl border border-border bg-card shadow-sm max-w-sm">
+          <h1 className="text-2xl font-bold mb-2 text-foreground">欢迎使用有声绘本智能体</h1>
+          <p className="text-muted-foreground mb-6">请先配置 API Key</p>
           <button
             onClick={() => setConfigDialogOpen(true)}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+            className="px-5 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 shadow-sm transition-colors"
           >
             打开配置
           </button>

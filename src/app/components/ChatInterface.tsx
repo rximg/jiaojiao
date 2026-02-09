@@ -116,13 +116,13 @@ export default function ChatInterface({
   return (
     <div className="flex h-screen flex-col">
       {/* 配置栏 */}
-      <header className="flex h-16 items-center justify-between border-b border-border px-6">
+      <header className="flex h-16 items-center justify-between border-b border-border bg-card/80 px-6 shadow-sm">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" onClick={onBack}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             返回
           </Button>
-          <h1 className="text-xl font-semibold">百科绘本</h1>
+          <h1 className="text-xl font-semibold text-foreground">百科绘本</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -164,7 +164,6 @@ export default function ChatInterface({
           {/* 待办进度 */}
           <div className="px-6 pt-4">
             <TodoPanel todos={todos} />
-            <div className="text-xs text-muted-foreground mt-1">Debug: todos.length = {todos.length}</div>
           </div>
 
           <div
@@ -193,15 +192,15 @@ export default function ChatInterface({
           )}
 
           {/* 输入框 */}
-          <div className="border-t border-border p-4">
-            <form onSubmit={handleSubmit} className="flex gap-2">
+          <div className="border-t border-border bg-card/50 p-4">
+            <form onSubmit={handleSubmit} className="flex gap-3 items-end">
               <Textarea
                 ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={isLoading ? '正在处理...' : '输入消息...'}
-                className="min-h-[60px] max-h-[200px] resize-none"
+                className="min-h-[60px] max-h-[200px] resize-none rounded-xl border-border"
                 disabled={isLoading}
               />
               <Button

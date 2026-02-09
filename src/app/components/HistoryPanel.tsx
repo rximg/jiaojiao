@@ -48,28 +48,28 @@ export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
 
   if (isLoading) {
     return (
-      <div className="p-4">
+      <div className="p-4 rounded-lg">
         <p className="text-sm text-muted-foreground">加载中...</p>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-sidebar">
       <div className="p-4 border-b border-border">
-        <h2 className="text-sm font-semibold">历史记录</h2>
+        <h2 className="text-sm font-semibold text-sidebar-foreground">历史记录</h2>
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto p-2">
         {sessions.length === 0 ? (
-          <div className="p-4 text-center text-sm text-muted-foreground">
+          <div className="p-4 text-center text-sm text-muted-foreground rounded-lg">
             暂无历史记录
           </div>
         ) : (
-          <div className="divide-y divide-border">
+          <div className="space-y-1">
             {sessions.map((session) => (
               <div
                 key={session.sessionId}
-                className="group flex items-center gap-2 p-4 hover:bg-accent transition-colors"
+                className="group flex items-center gap-2 p-2 rounded-xl hover:bg-accent/80 transition-colors"
               >
                 <button
                   type="button"
@@ -78,7 +78,7 @@ export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
                 >
                   {/* 第一张图片预览 */}
                   {session.firstImage ? (
-                    <div className="flex-shrink-0 w-16 h-16 rounded overflow-hidden bg-muted flex items-center justify-center relative">
+                    <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-muted flex items-center justify-center relative">
                       <img 
                         src={`local-file://${session.firstImage}`} 
                         alt="预览" 
@@ -91,7 +91,7 @@ export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
                       <ImageIcon className="h-6 w-6 text-muted-foreground absolute inset-0 m-auto" aria-hidden />
                     </div>
                   ) : (
-                    <div className="flex-shrink-0 w-16 h-16 rounded overflow-hidden bg-muted flex items-center justify-center">
+                    <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-muted flex items-center justify-center">
                       <ImageIcon className="h-6 w-6 text-muted-foreground" />
                     </div>
                   )}

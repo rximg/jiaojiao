@@ -31,7 +31,7 @@ export const ConfirmDialog: React.FC = () => {
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <div className="rounded bg-card p-3 text-sm font-sans whitespace-pre-wrap max-h-64 overflow-auto border border-border text-foreground">
+        <div className="rounded-xl bg-card p-4 text-sm font-sans whitespace-pre-wrap max-h-64 overflow-auto border border-border text-foreground">
           {payloadText || '无内容'}
         </div>
         <DialogFooter className="gap-2">

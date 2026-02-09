@@ -140,8 +140,8 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
 
   if (!sessionId) {
     return (
-      <div className="w-80 border-l border-border bg-muted/20 p-4">
-        <div className="text-center text-sm text-muted-foreground">
+      <div className="w-80 border-l border-border bg-sidebar p-6">
+        <div className="text-center text-sm text-muted-foreground rounded-xl py-6">
           <Folder className="h-8 w-8 mx-auto mb-2 opacity-50" />
           <p>开始对话后将显示工作区文件</p>
         </div>
@@ -150,12 +150,12 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
   }
 
   return (
-    <div className="w-80 border-l border-border bg-muted/20 flex flex-col">
+    <div className="w-80 border-l border-border bg-sidebar flex flex-col">
       {/* 标题栏 */}
       <div className="flex items-center justify-between p-4 border-b border-border">
         <div className="flex items-center gap-2">
-          <Folder className="h-4 w-4" />
-          <span className="font-semibold text-sm">工作区</span>
+          <Folder className="h-4 w-4 text-sidebar-foreground" />
+          <span className="font-semibold text-sm text-sidebar-foreground">工作区</span>
         </div>
         <div className="flex items-center gap-1">
           <Button
@@ -187,7 +187,7 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
             <div key={category} className="mb-2">
               <button
                 onClick={() => toggleExpand(category)}
-                className="flex items-center gap-2 w-full p-2 hover:bg-muted rounded-md text-sm transition-colors"
+                className="flex items-center gap-2 w-full p-2.5 hover:bg-accent/80 rounded-xl text-sm transition-colors"
               >
                 {expanded[category] ? (
                   <ChevronDown className="h-4 w-4" />
@@ -202,9 +202,9 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
               </button>
 
               {expanded[category] && (
-                <div className="ml-6 mt-1 space-y-1">
+                <div className="ml-4 mt-1 space-y-1">
                   {entries.length === 0 ? (
-                    <div className="text-xs text-muted-foreground p-2">
+                    <div className="text-xs text-muted-foreground p-2 rounded-lg">
                       暂无文件
                     </div>
                   ) : category === 'images' ? (
@@ -213,9 +213,9 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
                       <button
                         key={file.path}
                         onClick={() => handleFileClick(file, category)}
-                        className="flex items-center gap-2 w-full p-2 hover:bg-muted rounded-md transition-colors text-left"
+                        className="flex items-center gap-2 w-full p-2 hover:bg-accent/80 rounded-xl transition-colors text-left"
                       >
-                        <div className="w-12 h-12 flex-shrink-0 rounded border border-border overflow-hidden bg-muted">
+                        <div className="w-12 h-12 flex-shrink-0 rounded-lg border border-border overflow-hidden bg-muted">
                           <img
                             src={`local-file://${file.path}`}
                             alt={file.name}
@@ -238,7 +238,7 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
                     entries.map((file) => (
                       <div
                         key={file.path}
-                        className="p-2 rounded-md bg-card border border-border"
+                        className="p-2.5 rounded-xl bg-card border border-border shadow-sm"
                       >
                         <div className="text-xs mb-1 truncate">{file.name}</div>
                         <audio
@@ -258,7 +258,7 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
                       <button
                         key={file.path}
                         onClick={() => handleFileClick(file, category)}
-                        className="flex items-center gap-2 w-full p-2 hover:bg-muted rounded-md text-xs transition-colors text-left"
+                        className="flex items-center gap-2 w-full p-2 hover:bg-accent/80 rounded-xl text-xs transition-colors text-left"
                       >
                         <span className="truncate flex-1">{file.name}</span>
                         {file.size && (
@@ -286,13 +286,13 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
             <img
               src={previewUrl}
               alt="Preview"
-              className="max-w-full max-h-[90vh] object-contain"
+              className="max-w-full max-h-[90vh] object-contain rounded-xl"
             />
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => setPreviewUrl(null)}
-              className="absolute top-4 right-4"
+              onClick={(e) => { e.stopPropagation(); setPreviewUrl(null); }}
+              className="absolute top-4 right-4 rounded-xl"
             >
               关闭
             </Button>

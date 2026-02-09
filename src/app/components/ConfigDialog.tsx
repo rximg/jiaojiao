@@ -84,9 +84,9 @@ export default function ConfigDialog({
             配置 API Key 和 Agent 参数。配置将保存在本地。
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
+        <div className="grid gap-5 py-4">
           <div className="space-y-2">
-            <Label htmlFor="dashscope">阿里百炼 API Key *</Label>
+            <Label htmlFor="dashscope" className="text-foreground">阿里百炼 API Key *</Label>
             <Input
               id="dashscope"
               type="password"
@@ -97,7 +97,7 @@ export default function ConfigDialog({
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="model">模型</Label>
+              <Label htmlFor="model" className="text-foreground">模型</Label>
               <Input
                 id="model"
                 value={model}
@@ -105,7 +105,7 @@ export default function ConfigDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="temperature">温度</Label>
+              <Label htmlFor="temperature" className="text-foreground">温度</Label>
               <Input
                 id="temperature"
                 type="number"
@@ -118,7 +118,7 @@ export default function ConfigDialog({
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="maxTokens">最大 Token 数</Label>
+            <Label htmlFor="maxTokens" className="text-foreground">最大 Token 数</Label>
             <Input
               id="maxTokens"
               type="number"
@@ -127,7 +127,7 @@ export default function ConfigDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="outputPath">输出路径</Label>
+            <Label htmlFor="outputPath" className="text-foreground">输出路径</Label>
             <Input
               id="outputPath"
               value={outputPath}
@@ -135,7 +135,7 @@ export default function ConfigDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="ttsStartNumber">TTS 起始编号</Label>
+            <Label htmlFor="ttsStartNumber" className="text-foreground">TTS 起始编号</Label>
             <Input
               id="ttsStartNumber"
               type="number"
@@ -145,11 +145,11 @@ export default function ConfigDialog({
             />
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-lg">
             取消
           </Button>
-          <Button onClick={handleSave}>保存</Button>
+          <Button onClick={handleSave} className="rounded-lg">保存</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

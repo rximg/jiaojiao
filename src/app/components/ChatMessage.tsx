@@ -23,7 +23,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
       )}
       <div
         className={cn(
-          'max-w-[80%] rounded-lg px-4 py-2',
+          'max-w-[80%] rounded-2xl px-4 py-3 shadow-sm',
           isUser
             ? 'bg-primary text-primary-foreground'
             : 'bg-muted text-muted-foreground'
@@ -35,7 +35,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
             {message.toolCalls.map((toolCall) => (
               <div
                 key={toolCall.id}
-                className="text-xs opacity-70 border-t pt-1 mt-1"
+                className="text-xs opacity-70 border-t border-border/50 pt-2 mt-2"
               >
                 <div className="font-medium">工具: {toolCall.name}</div>
                 {toolCall.status === 'completed' && toolCall.result && (

@@ -16,22 +16,23 @@ const cases = [
 export default function CaseList({ onCaseClick }: CaseListProps) {
   return (
     <div className="max-w-4xl mx-auto">
-      <h2 className="text-2xl font-bold mb-6">选择案例</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <h2 className="text-2xl font-bold mb-2 text-foreground">选择案例</h2>
+      <p className="text-sm text-muted-foreground mb-8">选择下方案例开始创建您的绘本</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {cases.map((caseItem) => {
           const Icon = caseItem.icon;
           return (
             <button
               key={caseItem.id}
               onClick={() => onCaseClick(caseItem.id)}
-              className="p-6 border border-border rounded-lg hover:bg-accent transition-colors text-left group"
+              className="p-6 border border-border rounded-xl bg-card shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 text-left group"
             >
               <div className="flex items-start gap-4">
-                <div className="p-3 bg-primary/10 rounded-lg group-hover:bg-primary/20 transition-colors">
-                  <Icon className="h-6 w-6 text-primary" />
+                <div className="p-4 bg-primary/10 rounded-xl group-hover:bg-primary/15 transition-colors">
+                  <Icon className="h-7 w-7 text-primary" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-lg mb-2">{caseItem.title}</h3>
+                  <h3 className="font-semibold text-lg mb-2 text-foreground">{caseItem.title}</h3>
                   <p className="text-sm text-muted-foreground">{caseItem.description}</p>
                 </div>
               </div>

@@ -23,8 +23,8 @@ export default function WelcomePage({
     <>
       <div className="flex h-screen flex-col">
         {/* 配置栏 */}
-        <header className="flex h-16 items-center justify-between border-b border-border px-6">
-          <h1 className="text-xl font-semibold">有声绘本智能体</h1>
+        <header className="flex h-16 items-center justify-between border-b border-border bg-card/80 px-6 shadow-sm">
+          <h1 className="text-xl font-semibold text-foreground">有声绘本智能体</h1>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
