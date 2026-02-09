@@ -63,12 +63,27 @@ export function handleAgentIPC() {
 
       const newThreadId = threadId || `thread-${Date.now()}`;
 
+      // 若有 sessionId，加载该会话的历史消息，与当前消息一起传给 agent，使回复能结合上下文
+      let inputMessages: any[];
+      if (sessionId) {
+        const { getSessionMessages } = await import('./session.js');
+        const history = await getSessionMessages(sessionId);
+        const maxHistory = 30; // 最多保留最近 30 条，避免 token 超限
+        const recent = history.slice(-maxHistory);
+        const historyForAgent = recent.map((m: any) => ({
+          role: m.role || 'user',
+          content: typeof m.content === 'string' ? m.content : (m.content ?? ''),
+        }));
+        inputMessages = [...historyForAgent, { role: 'user', content: message }];
+        console.log(`[agent] Loaded ${recent.length} history messages for session ${sessionId}`);
+      } else {
+        inputMessages = [{ role: 'user', content: message }];
+      }
+      const fixedMessages = fixToolCallsInMessages(inputMessages);
+
       // 发送消息并流式返回结果
       // deepagentsjs 返回的是 LangGraph graph，支持 stream 方法
       try {
-        // 准备消息，确保工具调用有 id 字段
-        const inputMessages = [{ role: 'user', content: message }];
-        const fixedMessages = fixToolCallsInMessages(inputMessages);
         
         // @ts-ignore - Type instantiation is too deep with deepagents
         const stream = await (agent as any).stream(
@@ -173,12 +188,8 @@ export function handleAgentIPC() {
           throw new Error('API配额不足，请检查您的账户余额和套餐详情');
         }
         
-        // 尝试使用 invoke 方法
+        // 尝试使用 invoke 方法（使用与 stream 相同的 inputMessages，已含历史）
         try {
-          // 准备消息，确保工具调用有 id 字段
-          const inputMessages = [{ role: 'user', content: message }];
-          const fixedMessages = fixToolCallsInMessages(inputMessages);
-          
           // @ts-ignore - Type instantiation is too deep with deepagents
           const result = await (agent as any).invoke({ 
             messages: fixedMessages 

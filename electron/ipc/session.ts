@@ -18,6 +18,31 @@ interface SessionMeta {
   firstImage?: string; // 第一张图片路径
 }
 
+/** 供 agent 等主进程逻辑使用：根据 sessionId 读取该会话的 messages，用于拼接到 agent 的上下文中 */
+export async function getSessionMessages(sessionId: string): Promise<any[]> {
+  const fsService = getWorkspaceFilesystem();
+  try {
+    const messagesContent = await fsService.readFile(
+      sessionId,
+      'meta/messages.json',
+      'utf-8'
+    );
+    return JSON.parse(messagesContent as string);
+  } catch {
+    try {
+      const metaContent = await fsService.readFile(
+        sessionId,
+        'meta/session.json',
+        'utf-8'
+      );
+      const meta = JSON.parse(metaContent as string) as SessionMeta;
+      return meta.messages || [];
+    } catch {
+      return [];
+    }
+  }
+}
+
 export function handleSessionIPC() {
   const fsService = getWorkspaceFilesystem();
 
