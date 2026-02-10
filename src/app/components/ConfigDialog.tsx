@@ -26,6 +26,7 @@ export default function ConfigDialog({
   initialConfig,
 }: ConfigDialogProps) {
   const [dashscopeApiKey, setDashscopeApiKey] = useState('');
+  const [zhipuApiKey, setZhipuApiKey] = useState('');
   const [model, setModel] = useState('qwen-plus-2025-12-01');
   const [temperature, setTemperature] = useState(0.1);
   const [maxTokens, setMaxTokens] = useState(20000);
@@ -35,6 +36,7 @@ export default function ConfigDialog({
   useEffect(() => {
     if (open && initialConfig) {
       setDashscopeApiKey(initialConfig.apiKeys?.dashscope || '');
+      setZhipuApiKey(initialConfig.apiKeys?.zhipu || '');
       setModel(initialConfig.agent?.model || 'qwen-plus-2025-12-01');
       setTemperature(initialConfig.agent?.temperature || 0.1);
       setMaxTokens(initialConfig.agent?.maxTokens || 20000);
@@ -44,20 +46,22 @@ export default function ConfigDialog({
   }, [open, initialConfig]);
 
   const handleSave = async () => {
-    if (!dashscopeApiKey) {
-      alert('请填写阿里百炼 API Key');
+    if (!dashscopeApiKey.trim() && !zhipuApiKey.trim()) {
+      alert('请至少填写一个供应商的 API Key（通义或智谱）');
       return;
     }
 
     try {
       await onSave({
         apiKeys: {
-          dashscope: dashscopeApiKey,
+          dashscope: dashscopeApiKey.trim() || undefined,
+          zhipu: zhipuApiKey.trim() || undefined,
         },
         agent: {
           model,
           temperature,
           maxTokens,
+          provider: initialConfig?.agent?.provider ?? 'dashscope',
         },
         storage: {
           outputPath,
@@ -86,13 +90,23 @@ export default function ConfigDialog({
         </DialogHeader>
         <div className="grid gap-5 py-4">
           <div className="space-y-2">
-            <Label htmlFor="dashscope" className="text-foreground">阿里百炼 API Key *</Label>
+            <Label htmlFor="dashscope" className="text-foreground">通义（DashScope）API Key</Label>
             <Input
               id="dashscope"
               type="password"
-              placeholder="sk-..."
+              placeholder="sk-...（LLM/VL/TTS/T2I 共用）"
               value={dashscopeApiKey}
               onChange={(e) => setDashscopeApiKey(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="zhipu" className="text-foreground">智谱（Zhipu）API Key</Label>
+            <Input
+              id="zhipu"
+              type="password"
+              placeholder="sk-...（LLM/VL/TTS/T2I 共用）"
+              value={zhipuApiKey}
+              onChange={(e) => setZhipuApiKey(e.target.value)}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">

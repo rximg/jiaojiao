@@ -26,12 +26,20 @@ export interface Thread {
   lastMessage?: string;
 }
 
+/** 单条步骤结果，用于聊天流中渲染文档/图片/音频块 */
+export type StepResult =
+  | { type: 'image'; payload: { path: string; prompt?: string } }
+  | { type: 'audio'; payload: { path: string; text?: string } }
+  | { type: 'document'; payload: { pathOrContent: string; title?: string } };
+
 export interface Message {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
   timestamp: Date;
   toolCalls?: ToolCall[];
+  /** 与该条消息关联的步骤结果（文档/图片/音频），由 agent:stepResult 写入 */
+  stepResults?: StepResult[];
 }
 
 export interface Book {
@@ -58,15 +66,17 @@ export interface Book {
 export interface AppConfig {
   /** 配置版本号，与 package.json version 一致（如 "1.0.0"） */
   configVersion?: string;
+  /** 按供应商区分的 API Key：一个 provider 一个 key，所有能力（LLM/VL/TTS/T2I）共用 */
   apiKeys: {
-    dashscope: string;
-    t2i?: string;
-    tts?: string;
+    dashscope?: string;
+    zhipu?: string;
   };
   agent: {
     model: string;
     temperature: number;
     maxTokens: number;
+    /** 当前使用的 LLM 供应商：dashscope（通义）| zhipu（智谱） */
+    provider?: 'dashscope' | 'zhipu';
   };
   storage: {
     outputPath: string;

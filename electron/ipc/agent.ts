@@ -3,6 +3,32 @@ import { getBackendConfigDir } from './config.js';
 
 let currentStreamController: AbortController | null = null;
 
+/** 结构化步骤结果，供前端按文档/图片/音频控件渲染 */
+export type StepResult =
+  | { type: 'image'; payload: { path: string; prompt?: string } }
+  | { type: 'audio'; payload: { path: string; text?: string } }
+  | { type: 'document'; payload: { pathOrContent: string; title?: string } };
+
+function extractStepResultsFromContent(content: string): StepResult[] {
+  if (!content || typeof content !== 'string') return [];
+  const results: StepResult[] = [];
+  const imageMatches = content.match(/(?:图片：|outputs[/\\]images[/\\])[^\n\s]+\.(?:png|jpg|jpeg)/gi);
+  if (imageMatches) {
+    for (const raw of imageMatches) {
+      const path = raw.replace(/^图片：/, '').trim();
+      results.push({ type: 'image', payload: { path } });
+    }
+  }
+  const audioMatches = content.match(/(?:音频：|outputs[/\\]audio[/\\])[^\n\s]+\.(?:mp3|wav)/gi);
+  if (audioMatches) {
+    for (const raw of audioMatches) {
+      const path = raw.replace(/^音频：/, '').trim();
+      results.push({ type: 'audio', payload: { path } });
+    }
+  }
+  return results;
+}
+
 /**
  * 修复消息历史中的工具调用，确保所有工具调用都有 id 字段
  * OpenAI API 要求所有工具调用必须有 id 字段
@@ -125,15 +151,25 @@ export function handleAgentIPC() {
               .slice(-1); // 只取最后一条助手消息
             
             if (newMessages.length > 0) {
+              const mapped = newMessages.map((msg: any) => ({
+                id: msg.id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+                role: msg.role,
+                content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+                timestamp: new Date(),
+              }));
               mainWindow.webContents.send('agent:message', {
                 threadId: newThreadId,
-                messages: newMessages.map((msg: any) => ({
-                  id: msg.id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-                  role: msg.role,
-                  content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-                  timestamp: new Date(),
-                })),
+                messages: mapped,
               });
+              const lastMsg = mapped[mapped.length - 1];
+              const stepResults = extractStepResultsFromContent(lastMsg.content);
+              if (stepResults.length > 0) {
+                mainWindow.webContents.send('agent:stepResult', {
+                  threadId: newThreadId,
+                  messageId: lastMsg.id,
+                  stepResults,
+                });
+              }
             }
           }
 
@@ -202,17 +238,27 @@ export function handleAgentIPC() {
           const lastMessage = messages[messages.length - 1];
           
           if (lastMessage) {
+            const content = typeof lastMessage.content === 'string'
+              ? lastMessage.content
+              : JSON.stringify(lastMessage.content);
+            const msgId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
             mainWindow.webContents.send('agent:message', {
               threadId: newThreadId,
               messages: [{
-                id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+                id: msgId,
                 role: lastMessage.role || 'assistant',
-                content: typeof lastMessage.content === 'string' 
-                  ? lastMessage.content 
-                  : JSON.stringify(lastMessage.content),
+                content,
                 timestamp: new Date(),
               }],
             });
+            const stepResults = extractStepResultsFromContent(content);
+            if (stepResults.length > 0) {
+              mainWindow.webContents.send('agent:stepResult', {
+                threadId: newThreadId,
+                messageId: msgId,
+                stepResults,
+              });
+            }
           }
         } catch (invokeError) {
           console.error('Invoke error:', invokeError);

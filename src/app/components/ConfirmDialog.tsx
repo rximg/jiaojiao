@@ -12,18 +12,22 @@ function formatPayload(payload: any) {
   }
 }
 
-export const ConfirmDialog: React.FC = () => {
-  const { pendingAction, respondConfirm } = useChat();
-  const open = Boolean(pendingAction);
+const ACTION_TITLE: Record<string, string> = {
+  'ai.text2image': '生成图像？',
+  'ai.text2speech': '合成语音？',
+  'ai.vl_script': '以图生剧本？',
+};
 
-  console.log('[ConfirmDialog] pendingAction:', pendingAction, 'open:', open);
+export const ConfirmDialog: React.FC = () => {
+  const { pendingHitlRequest, respondConfirm } = useChat();
+  const open = Boolean(pendingHitlRequest);
 
   const title = useMemo(() => {
-    if (!pendingAction) return '确认操作';
-    return pendingAction.action === 't2i' ? '生成图像？' : '合成语音？';
-  }, [pendingAction]);
+    if (!pendingHitlRequest) return '确认操作';
+    return ACTION_TITLE[pendingHitlRequest.actionType] ?? '确认操作';
+  }, [pendingHitlRequest]);
 
-  const payloadText = useMemo(() => formatPayload(pendingAction?.payload), [pendingAction]);
+  const payloadText = useMemo(() => formatPayload(pendingHitlRequest?.payload), [pendingHitlRequest]);
 
   return (
     <Dialog open={open}>
@@ -35,10 +39,10 @@ export const ConfirmDialog: React.FC = () => {
           {payloadText || '无内容'}
         </div>
         <DialogFooter className="gap-2">
-          <Button variant="secondary" onClick={() => respondConfirm(false)}>
+          <Button variant="secondary" onClick={() => pendingHitlRequest && respondConfirm(pendingHitlRequest.requestId, false)}>
             取消
           </Button>
-          <Button variant="default" onClick={() => respondConfirm(true)}>
+          <Button variant="default" onClick={() => pendingHitlRequest && respondConfirm(pendingHitlRequest.requestId, true)}>
             确认
           </Button>
         </DialogFooter>

@@ -36,7 +36,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
       const savedConfig = resolved.config ?? null;
       const isFirstRun = resolved.isFirstRun === true;
       setConfig(savedConfig);
-      const noApiKey = !savedConfig?.apiKeys?.dashscope?.trim();
+      const noApiKey = !savedConfig?.apiKeys?.dashscope?.trim() && !savedConfig?.apiKeys?.zhipu?.trim();
       setNeedApiKeyConfig(isFirstRun || noApiKey);
     } catch (error) {
       console.error('Failed to load config:', error);
@@ -52,15 +52,15 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
         throw new Error('electronAPI.config is not available');
       }
       const baseConfig: AppConfig = config || {
-        apiKeys: { dashscope: '', t2i: '', tts: '' },
-        agent: { model: 'qwen-plus-2025-12-01', temperature: 0.1, maxTokens: 20000 },
+        apiKeys: { dashscope: '', zhipu: '' },
+        agent: { model: 'qwen-plus-2025-12-01', temperature: 0.1, maxTokens: 20000, provider: 'dashscope' },
         storage: { outputPath: './outputs' },
         ui: { theme: 'light', language: 'zh' },
       };
       const updatedConfig = { ...baseConfig, ...newConfig } as AppConfig;
       await window.electronAPI.config.set(updatedConfig);
       setConfig(updatedConfig);
-      if (updatedConfig.apiKeys?.dashscope?.trim()) {
+      if (updatedConfig.apiKeys?.dashscope?.trim() || updatedConfig.apiKeys?.zhipu?.trim()) {
         setNeedApiKeyConfig(false);
       }
     } catch (error) {

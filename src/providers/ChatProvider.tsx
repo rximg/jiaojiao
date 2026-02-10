@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
-import type { Message, TodoItem } from '../types/types';
+import type { Message, TodoItem, StepResult } from '../types/types';
 
 interface AgentErrorState {
   message: string;
@@ -9,7 +9,8 @@ interface AgentErrorState {
 interface ChatContextType {
   messages: Message[];
   todos: TodoItem[];
-  pendingAction: { action: 't2i' | 'tts'; payload: any } | null;
+  /** 当前待确认的 HITL 请求（统一人工确认通道） */
+  pendingHitlRequest: { requestId: string; actionType: string; payload: Record<string, unknown>; timeout: number } | null;
   quotaError: { message: string; error: string } | null;
   agentError: AgentErrorState | null;
   isLoading: boolean;
@@ -17,7 +18,7 @@ interface ChatContextType {
   currentSessionId: string | null;
   lastArtifactTime: number; // 最后一次生成产物的时间戳，用于触发刷新
   sendMessage: (text: string, threadId?: string) => Promise<void>;
-  respondConfirm: (ok: boolean) => Promise<void>;
+  respondConfirm: (requestId: string, approved: boolean) => Promise<void>;
   dismissQuotaError: () => void;
   dismissAgentError: () => void;
   stopStream: () => Promise<void>;
@@ -32,7 +33,7 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [todos, setTodos] = useState<TodoItem[]>([]);
-  const [pendingAction, setPendingAction] = useState<{ action: 't2i' | 'tts'; payload: any } | null>(null);
+  const [pendingHitlRequest, setPendingHitlRequest] = useState<{ requestId: string; actionType: string; payload: Record<string, unknown>; timeout: number } | null>(null);
   const [quotaError, setQuotaError] = useState<{ message: string; error: string } | null>(null);
   const [agentError, setAgentError] = useState<AgentErrorState | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -190,9 +191,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    const handleConfirm = (data: any) => {
-      console.log('[renderer] received confirmRequest:', data);
-      setPendingAction(data);
+    const handleHitlConfirm = (data: { requestId: string; actionType: string; payload: Record<string, unknown>; timeout: number }) => {
+      console.log('[renderer] received hitl:confirmRequest:', data);
+      setPendingHitlRequest(data);
+    };
+
+    const handleStepResult = (data: { threadId: string; messageId: string; stepResults: Array<{ type: 'image' | 'audio' | 'document'; payload: Record<string, unknown> }> }) => {
+      if (data.threadId !== threadRef.current) return;
+      const stepResults = data.stepResults as StepResult[];
+      setMessages((prev) =>
+        prev.map((m) => (m.id === data.messageId ? { ...m, stepResults } : m))
+      );
+      allMessagesRef.current = allMessagesRef.current.map((m) =>
+        m.id === data.messageId ? { ...m, stepResults } : m
+      );
     };
 
     const handleToolCall = (data: any) => {
@@ -207,6 +219,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
 
     window.electronAPI.agent.onMessage(handleMessage);
+    if (typeof window.electronAPI.agent.onStepResult === 'function') {
+      window.electronAPI.agent.onStepResult(handleStepResult);
+    }
     window.electronAPI.agent.onTodoUpdate((data) => {
       handleTodo(data);
       // Todo 更新时刷新文件系统显示
@@ -218,11 +233,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       window.electronAPI.agent.onQuotaExceeded(handleQuotaExceeded);
     }
 
-    if (typeof window.electronAPI.agent.onConfirmRequest === 'function') {
-      window.electronAPI.agent.onConfirmRequest(handleConfirm);
+    if (typeof window.electronAPI.hitl?.onConfirmRequest === 'function') {
+      window.electronAPI.hitl.onConfirmRequest(handleHitlConfirm);
     } else {
       // eslint-disable-next-line no-console
-      console.warn('[agent] onConfirmRequest not available in preload');
+      console.warn('[hitl] onConfirmRequest not available in preload');
     }
 
     return () => {
@@ -230,15 +245,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
   }, [attachArtifactsToTodos]);
 
-  const respondConfirm = useCallback(async (ok: boolean) => {
-    console.log('[renderer] responding to confirm with:', ok);
-    if (typeof window.electronAPI.agent.confirmAction === 'function') {
-      await window.electronAPI.agent.confirmAction(ok);
+  const respondConfirm = useCallback(async (requestId: string, approved: boolean) => {
+    console.log('[renderer] responding to HITL with:', requestId, approved);
+    if (typeof window.electronAPI.hitl?.respond === 'function') {
+      await window.electronAPI.hitl.respond(requestId, { approved });
     } else {
-      // eslint-disable-next-line no-console
-      console.warn('[agent] confirmAction not available in preload');
+      console.warn('[hitl] respond not available in preload');
     }
-    setPendingAction(null);
+    setPendingHitlRequest(null);
   }, []);
 
   const dismissQuotaError = useCallback(() => {
@@ -374,7 +388,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       value={{
         messages,
         todos,
-        pendingAction,
+        pendingHitlRequest,
         quotaError,
         agentError,
         isLoading,

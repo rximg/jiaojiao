@@ -1,6 +1,7 @@
 import { User, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Message } from '@/types/types';
+import StepResultBlocks from './StepResultBlocks';
 
 interface ChatMessageProps {
   message: Message;
@@ -44,6 +45,9 @@ export default function ChatMessage({ message }: ChatMessageProps) {
               </div>
             ))}
           </div>
+        )}
+        {message.stepResults && message.stepResults.length > 0 && (
+          <StepResultBlocks stepResults={message.stepResults} />
         )}
       </div>
       {isUser && (

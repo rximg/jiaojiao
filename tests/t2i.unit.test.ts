@@ -27,15 +27,15 @@ describe('T2I generateImage() [unit]', () => {
         } as any;
       }
       
-      // Second call: GET request to poll task status
+      // Second call: GET request to poll task status (dashscope shape: output.choices[0].message.content[].image)
       if (callCount === 2) {
         return {
           ok: true,
-          json: async () => ({ 
-            output: { 
+          json: async () => ({
+            output: {
               task_status: 'SUCCEEDED',
-              results: [{ url: 'https://example.com/fake.png' }] 
-            } 
+              choices: [{ message: { content: [{ type: 'image', image: 'https://example.com/fake.png' }] } }],
+            },
           }),
         } as any;
       }

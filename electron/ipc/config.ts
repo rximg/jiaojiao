@@ -21,13 +21,13 @@ function getAppVersion(): string {
 const DEFAULTS: Record<string, unknown> = {
   apiKeys: {
     dashscope: '',
-    t2i: '',
-    tts: '',
+    zhipu: '',
   },
   agent: {
     model: 'qwen-plus-2025-12-01',
     temperature: 0.1,
     maxTokens: 20000,
+    provider: 'dashscope',
   },
   storage: {
     outputPath: './outputs',
@@ -143,7 +143,7 @@ export function handleConfigIPC() {
         ...latestUIConfig,
       },
     };
-    log.info('[config] config:get ok, hasDashscope=', Boolean(currentStore?.apiKeys?.dashscope));
+    log.info('[config] config:get ok, hasApiKey=', Boolean(currentStore?.apiKeys?.dashscope || currentStore?.apiKeys?.zhipu));
     return { config, isFirstRun };
   });
 
@@ -160,13 +160,13 @@ export function handleConfigIPC() {
         configVersion: getAppVersion(),
         apiKeys: {
           dashscope: typeof config?.apiKeys?.dashscope === 'string' ? config.apiKeys.dashscope : '',
-          t2i: typeof config?.apiKeys?.t2i === 'string' ? config.apiKeys.t2i : '',
-          tts: typeof config?.apiKeys?.tts === 'string' ? config.apiKeys.tts : '',
+          zhipu: typeof config?.apiKeys?.zhipu === 'string' ? config.apiKeys.zhipu : '',
         },
         agent: {
           model: typeof config?.agent?.model === 'string' ? config.agent.model : (def.agent.model as string),
           temperature: Number(config?.agent?.temperature) || (def.agent.temperature as number),
           maxTokens: Number(config?.agent?.maxTokens) || (def.agent.maxTokens as number),
+          provider: config?.agent?.provider === 'zhipu' ? 'zhipu' : 'dashscope',
         },
         storage: {
           outputPath: typeof config?.storage?.outputPath === 'string' ? config.storage.outputPath : (def.storage.outputPath as string),

@@ -27,6 +27,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onTodoUpdate: (callback) => {
       ipcRenderer.on('agent:todoUpdate', (_event, data) => callback(data));
     },
+    onStepResult: (callback) => {
+      ipcRenderer.on('agent:stepResult', (_event, data) => callback(data));
+    },
     onConfirmRequest: (callback) => {
       ipcRenderer.on('agent:confirmRequest', (_event, data) => callback(data));
     },
@@ -35,6 +38,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     confirmAction: (ok) => ipcRenderer.send('agent:confirmAction', { ok }),
     stopStream: () => ipcRenderer.invoke('agent:stopStream'),
+  },
+  hitl: {
+    onConfirmRequest: (callback) => {
+      ipcRenderer.on('hitl:confirmRequest', (_event, data) => callback(data));
+    },
+    respond: (requestId, response) =>
+      ipcRenderer.invoke('hitl:respond', requestId, response),
   },
   fs: {
     ls: (sessionId, relativePath) =>

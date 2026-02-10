@@ -4,7 +4,8 @@
 
 @layer base {
   :root {
-    --font-sans: "Nunito", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
+    /* 使用系统字体，避免依赖国外 CDN，国内可正常显示 */
+    --font-sans: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", ui-sans-serif, system-ui, sans-serif;
   }
   * {
     @apply border-border;

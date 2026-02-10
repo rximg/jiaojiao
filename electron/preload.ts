@@ -35,6 +35,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onTodoUpdate: (callback: (data: any) => void) => {
       ipcRenderer.on('agent:todoUpdate', (_event, data) => callback(data));
     },
+    onStepResult: (callback: (data: { threadId: string; messageId: string; stepResults: Array<{ type: 'image' | 'audio' | 'document'; payload: Record<string, unknown> }> }) => void) => {
+      ipcRenderer.on('agent:stepResult', (_event, data) => callback(data));
+    },
     onConfirmRequest: (callback: (data: any) => void) => {
       ipcRenderer.on('agent:confirmRequest', (_event, data) => callback(data));
     },
@@ -43,6 +46,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     confirmAction: (ok: boolean) => ipcRenderer.send('agent:confirmAction', { ok }),
     stopStream: () => ipcRenderer.invoke('agent:stopStream'),
+  },
+  // HITL 人工确认（统一通道）
+  hitl: {
+    onConfirmRequest: (callback: (data: { requestId: string; actionType: string; payload: Record<string, unknown>; timeout: number }) => void) => {
+      ipcRenderer.on('hitl:confirmRequest', (_event, data) => callback(data));
+    },
+    respond: (requestId: string, response: { approved: boolean; reason?: string }) =>
+      ipcRenderer.invoke('hitl:respond', requestId, response),
   },
   // 文件系统相关
   fs: {
@@ -91,10 +102,15 @@ declare global {
         onMessage: (callback: (data: any) => void) => void;
         onToolCall: (callback: (data: any) => void) => void;
         onTodoUpdate: (callback: (data: any) => void) => void;
+        onStepResult: (callback: (data: { threadId: string; messageId: string; stepResults: Array<{ type: 'image' | 'audio' | 'document'; payload: Record<string, unknown> }> }) => void) => void;
         onConfirmRequest: (callback: (data: any) => void) => void;
         onQuotaExceeded: (callback: (data: any) => void) => void;
         confirmAction: (ok: boolean) => void;
         stopStream: () => Promise<void>;
+      };
+      hitl: {
+        onConfirmRequest: (callback: (data: { requestId: string; actionType: string; payload: Record<string, unknown>; timeout: number }) => void) => void;
+        respond: (requestId: string, response: { approved: boolean; reason?: string }) => Promise<{ success: boolean }>;
       };
       fs: {
         ls: (sessionId: string, relativePath?: string) => Promise<{ entries: any[] }>;

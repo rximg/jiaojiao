@@ -4,8 +4,9 @@ description: 根据图片路径用视觉模型生成台词及坐标
 
 service:
   type: vl_script
+  # provider: dashscope | zhipu（智谱多模态用 glm-4v-plus-0111，base_url 见下）
   provider: dashscope
-  
+  # 智谱示例: base_url: https://open.bigmodel.cn/api/paas/v4  model: glm-4v-plus-0111
   base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
   model: qwen3-vl-plus
   

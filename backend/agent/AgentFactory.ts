@@ -6,6 +6,9 @@ import { createDeepAgent, createFilesystemMiddleware, FilesystemBackend, type Su
 import { ConfigLoader, type AgentConfig } from './ConfigLoader.js';
 import { loadConfig } from './config.js';
 import { createLLMCallbacks } from './LLMCallbacks.js';
+import { getAIConfig } from '../ai/config.js';
+import { createLLMFromAIConfig } from '../ai/llm/index.js';
+import type { LLMAIConfig } from '../ai/types.js';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { DEFAULT_SESSION_ID } from '../services/fs.js';
@@ -67,66 +70,26 @@ export class AgentFactory {
   }
 
   /**
-   * 创建LLM实例
+   * 创建LLM实例（通过 ai/llm 统一层，支持 dashscope / zhipu）
    */
   private async createLLM(_sessionId?: string): Promise<ChatOpenAI> {
-    this.appConfig = await loadConfig();
-
-    const yamlLlmConfig = this.agentConfig.agent.llm;
-
-    // 优先使用界面配置（electron-store），YAML配置作为后备
-    const model = this.appConfig.agent.model || yamlLlmConfig.model;
-    const temperature = this.appConfig.agent.temperature ?? yamlLlmConfig.temperature;
-    const maxTokens = this.appConfig.agent.maxTokens ?? yamlLlmConfig.max_tokens;
-
-    return new ChatOpenAI({
-      apiKey: this.appConfig.apiKeys.dashscope,
-      modelName: model,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      configuration: {
-        baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-      },
+    const cfg = (await getAIConfig('llm')) as LLMAIConfig;
+    return createLLMFromAIConfig({
+      ...cfg,
       callbacks: [createLLMCallbacks(this.agentConfig.agent.debug)],
     });
   }
 
   /**
-   * Human-in-the-loop确认
+   * 通过 HITL 请求人工确认（使用 runtime.hitlService）
    */
-  private async requestHumanConfirm(action: 't2i' | 'tts' | 'vl_script', payload: any): Promise<void> {
-    if (process.env.RUN_INTEGRATION_TESTS === 'false' || process.env.NODE_ENV === 'test') return;
-    
-    try {
-      const { BrowserWindow, ipcMain } = await import('electron');
-      const win = BrowserWindow.getAllWindows()[0];
-      if (!win) return;
-
-      win.webContents.send('agent:confirmRequest', { action, payload });
-
-      const result = await new Promise<{ ok: boolean }>((resolve) => {
-        let settled = false;
-        const timer = setTimeout(() => {
-          if (!settled) {
-            settled = true;
-            resolve({ ok: false });
-          }
-        }, 30_000);
-
-        ipcMain.once('agent:confirmAction', (_event: any, data: any) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          resolve(data || { ok: false });
-        });
-      });
-
-      if (!result?.ok) {
-        throw new Error(`${action} cancelled by user`);
-      }
-    } catch (err) {
-      console.error('[confirm] Human confirmation failed:', err);
-      throw new Error(`${action} cancelled by user`);
+  private async requestApprovalViaHITL(actionType: string, payload: Record<string, unknown>): Promise<void> {
+    if (!this.runtime) {
+      throw new Error('Runtime not initialized; cannot request HITL approval');
+    }
+    const approved = await this.runtime.hitlService.requestApproval(actionType, payload);
+    if (!approved) {
+      throw new Error(`${actionType} cancelled by user`);
     }
   }
 
@@ -148,7 +111,7 @@ export class AgentFactory {
     if (serviceType === 't2i') {
           return tool(
         async (params: { prompt?: string; promptFile?: string; size?: string; style?: string; count?: number; model?: string; sessionId?: string }) => {
-          await this.requestHumanConfirm('t2i', params);
+          await this.requestApprovalViaHITL('ai.text2image', params as Record<string, unknown>);
           const { generateImage } = await import('../mcp/t2i.js');
           // 动态从环境变量获取sessionId，优先使用参数传入的sessionId
           const sessionId = params.sessionId || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
@@ -172,7 +135,7 @@ export class AgentFactory {
     } else if (serviceType === 'tts') {
       return tool(
         async (params: { texts: string[]; voice?: string; format?: string; sessionId?: string }) => {
-          await this.requestHumanConfirm('tts', params);
+          await this.requestApprovalViaHITL('ai.text2speech', params as Record<string, unknown>);
           const { synthesizeSpeech } = await import('../mcp/tts.js');
           // 动态从环境变量获取sessionId，优先使用参数传入的sessionId
           const sessionId = params.sessionId || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
@@ -193,7 +156,7 @@ export class AgentFactory {
     } else if (serviceType === 'vl_script') {
       return tool(
         async (params: { imagePath: string; sessionId?: string }) => {
-          await this.requestHumanConfirm('vl_script', params);
+          await this.requestApprovalViaHITL('ai.vl_script', params as Record<string, unknown>);
           const { generateScriptFromImage } = await import('../mcp/vl_script.js');
           const sessionId = params.sessionId || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
           console.log(`[vl_script tool] Using sessionId: ${sessionId} (from params: ${params.sessionId}, env: ${process.env.AGENT_SESSION_ID})`);

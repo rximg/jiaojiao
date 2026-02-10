@@ -4,10 +4,9 @@ description: 语音合成MCP服务
 
 service:
   type: tts
+  # provider: dashscope | zhipu（智谱 TTS 以官方文档为准配置 endpoint/model）
   provider: dashscope
-  
   endpoint: https://dashscope.aliyuncs.com/api/v1/services/audio/tts/synthesis
-  
   model: qwen-tts
   
   default_params:

@@ -95,6 +95,14 @@ export const DEFAULT_HITL_CONFIG: HITLConfig = {
       autoApproveAfter: 30000,
       description: '文本转语音需要确认',
     },
+    {
+      actionType: 'ai.vl_script',
+      enabled: true,
+      priority: 'low',
+      requireApproval: true,
+      autoApproveAfter: 30000,
+      description: '以图生剧本需要确认',
+    },
     
     // 系统操作
     {
