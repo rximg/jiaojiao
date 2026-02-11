@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { callVLDashScope } from '../backend/ai/vl/dashscope';
 import { callVLZhipu } from '../backend/ai/vl/zhipu';
 
-vi.mock('../backend/agent/config', () => ({ loadConfig: vi.fn() }));
+vi.mock('../backend/app-config', () => ({ loadConfig: vi.fn() }));
 
 // 若 parse-util 未抽出，则直接测 parse 逻辑在 index 内，通过 generateScriptFromImage mock fetch 测试
 describe('VL parseAndValidateLines', () => {

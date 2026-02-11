@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getAIConfig } from '../backend/ai/config';
 
-vi.mock('../backend/agent/config', () => ({
+vi.mock('../backend/app-config', () => ({
   loadConfig: vi.fn(),
 }));
 
 async function getLoadConfig() {
-  const { loadConfig } = await import('../backend/agent/config');
+  const { loadConfig } = await import('../backend/app-config');
   return loadConfig as ReturnType<typeof vi.fn>;
 }
 

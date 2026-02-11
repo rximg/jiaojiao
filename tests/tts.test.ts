@@ -1,21 +1,57 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { promises as fs } from 'fs';
-import path from 'path';
 import { synthesizeSpeech } from '../backend/mcp/tts';
-import { loadConfig } from '../backend/agent/config';
+import { loadConfig, lastLoadedConfigPath } from '../backend/app-config';
 
-const hasKey = !!process.env.DASHSCOPE_API_KEY;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 const runIntegration = process.env.RUN_INTEGRATION_TESTS === 'true';
+/** 集成测试时指定只测某方：zhipu | dashscope，未设置时用应用配置的 provider */
+const testProvider = (process.env.TEST_API_PROVIDER === 'zhipu' || process.env.TEST_API_PROVIDER === 'dashscope')
+  ? process.env.TEST_API_PROVIDER
+  : undefined;
+let hasKey = false;
 
 const createdFiles: string[] = [];
+
+function logKeyStatus(apiKeys: { dashscope?: string; zhipu?: string }): string {
+  const ds = apiKeys.dashscope?.trim();
+  const zp = apiKeys.zhipu?.trim();
+  return `dashscope: ${ds ? `已配置(len=${ds.length})` : '未配置'}, zhipu: ${zp ? `已配置(len=${zp.length})` : '未配置'}`;
+}
+
+function debugLog(msg: string): void {
+  // eslint-disable-next-line no-console
+  console.log(msg);
+  try {
+    const fs = require('fs');
+    const logPath = path.join(__dirname, '.integration-debug.log');
+    fs.appendFileSync(logPath, `${new Date().toISOString()} ${msg}\n`);
+  } catch {
+    // ignore
+  }
+}
 
 describe('TTS synthesizeSpeech()', () => {
   const sessionId = 'integration-session';
 
-  beforeAll(() => {
+  beforeAll(async () => {
+    debugLog(`[TTS] RUN_INTEGRATION_TESTS=${runIntegration} TEST_API_PROVIDER=${process.env.TEST_API_PROVIDER ?? '(未设置)'}`);
+    try {
+      const config = await loadConfig();
+      const apiKeys = config.apiKeys as { dashscope?: string; zhipu?: string };
+      const provider = (testProvider ?? config.agent?.provider ?? 'dashscope') as 'dashscope' | 'zhipu';
+      hasKey = !!(apiKeys[provider]?.trim());
+      debugLog(`[TTS] 配置文件路径: ${lastLoadedConfigPath ?? '(未使用文件)'}`);
+      debugLog(`[TTS] config.agent.provider=${config.agent?.provider} -> 使用 provider=${provider} hasKey=${hasKey} | ${logKeyStatus(apiKeys)}`);
+    } catch (err) {
+      hasKey = false;
+      debugLog(`[TTS] loadConfig 失败: ${(err as Error).message}`);
+    }
     if (!hasKey) {
-      // eslint-disable-next-line no-console
-      console.warn('Skipping TTS test: missing DASHSCOPE_API_KEY');
+      debugLog(`[TTS] Skipping (provider=${testProvider ?? 'config'}): 请在应用设置中配置对应 API Key`);
     }
   });
 
@@ -37,7 +73,10 @@ describe('TTS synthesizeSpeech()', () => {
     // }
   });
 
-  it.skipIf(!hasKey || !runIntegration)('should generate audio files', async () => {
+  it('should generate audio files', async (ctx) => {
+    if (!hasKey || !runIntegration) {
+      ctx.skip();
+    }
     const texts = ['你好，世界！', '这是一次 TTS 测试。'];
     const result = await synthesizeSpeech({ texts, format: 'mp3', sessionId });
 
