@@ -25,6 +25,7 @@ const DEFAULTS: Record<string, unknown> = {
   },
   agent: {
     model: 'qwen-plus-2025-12-01',
+    current: '',
     temperature: 0.1,
     maxTokens: 20000,
     provider: 'dashscope',
@@ -164,6 +165,7 @@ export function handleConfigIPC() {
         },
         agent: {
           model: typeof config?.agent?.model === 'string' ? config.agent.model : (def.agent.model as string),
+          current: typeof config?.agent?.current === 'string' ? config.agent.current : '',
           temperature: Number(config?.agent?.temperature) || (def.agent.temperature as number),
           maxTokens: Number(config?.agent?.maxTokens) || (def.agent.maxTokens as number),
           provider: config?.agent?.provider === 'zhipu' ? 'zhipu' : 'dashscope',

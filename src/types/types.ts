@@ -72,10 +72,13 @@ export interface AppConfig {
     zhipu?: string;
   };
   agent: {
+    /** 当前使用的模型 id，为空时使用默认模型（见 ai_models.json） */
     model: string;
+    /** 用户当前选择的模型，首次加载为空则使用默认模型 */
+    current?: string;
     temperature: number;
     maxTokens: number;
-    /** 当前使用的 LLM 供应商：dashscope（通义）| zhipu（智谱） */
+    /** 当前使用的 LLM 供应商：dashscope（阿里百炼）| zhipu（智谱） */
     provider?: 'dashscope' | 'zhipu';
   };
   storage: {

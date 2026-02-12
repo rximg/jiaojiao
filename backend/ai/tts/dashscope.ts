@@ -1,5 +1,6 @@
 /**
- * 通义 TTS：请求返回音频 URL → 下载写入 workspace，支持 429/503 重试
+ * 通义 TTS：使用多模态接口 generation，请求返回音频 URL → 下载写入 workspace，支持 429/503 重试
+ * 文档：https://help.aliyun.com/zh/model-studio/qwen-tts-api
  */
 import type { TTSAIConfig } from '../types.js';
 
@@ -32,7 +33,7 @@ export interface DoOneTtsResult {
 }
 
 export async function doOneTtsDashScope(options: DoOneTtsOptions): Promise<DoOneTtsResult> {
-  const { cfg, text, voice, format, sessionId, relativePath, workspaceFs, backoffBaseMs, maxRetries } = options;
+  const { cfg, text, voice, sessionId, relativePath, workspaceFs, backoffBaseMs, maxRetries } = options;
   const voiceApi = VOICE_MAP[voice] || 'Cherry';
   let lastError: Error | null = null;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -40,6 +41,7 @@ export async function doOneTtsDashScope(options: DoOneTtsOptions): Promise<DoOne
       const waitMs = backoffBaseMs * Math.pow(2, attempt - 1);
       await new Promise((r) => setTimeout(r, waitMs));
     }
+    // 多模态 TTS 接口：input 仅含 text、voice、language_type（无 parameters.format）
     const response = await fetch(cfg.endpoint, {
       method: 'POST',
       headers: {
@@ -48,8 +50,11 @@ export async function doOneTtsDashScope(options: DoOneTtsOptions): Promise<DoOne
       },
       body: JSON.stringify({
         model: cfg.model,
-        input: { text, voice: voiceApi },
-        parameters: { format, sample_rate: 44100 },
+        input: {
+          text,
+          voice: voiceApi,
+          language_type: 'Chinese',
+        },
       }),
     });
     if (response.status === 429 || response.status === 503) {

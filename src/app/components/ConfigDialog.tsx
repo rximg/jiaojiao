@@ -12,6 +12,28 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { AppConfig } from '@/types/types';
 
+/** LLM 模型选项，与 backend/config/ai_models.json 的 llm 保持一致 */
+const LLM_OPTIONS = {
+  dashscope: {
+    default: 'qwen-plus-2025-12-01',
+    models: [
+      { id: 'qwen-plus-2025-12-01', label: '通义 Qwen Plus' },
+      { id: 'qwen-turbo', label: '通义 Qwen Turbo' },
+    ],
+  },
+  zhipu: {
+    default: 'glm-4.7',
+    models: [
+      { id: 'glm-4.5', label: '智谱 GLM-4.5' },
+      { id: 'glm-4.5-flash', label: '智谱 GLM-4.5 Flash' },
+      { id: 'glm-4.6', label: '智谱 GLM-4.6' },
+      { id: 'glm-4.7', label: '智谱 GLM-4.7' },
+    ],
+  },
+} as const;
+
+type Provider = 'dashscope' | 'zhipu';
+
 interface ConfigDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -25,9 +47,11 @@ export default function ConfigDialog({
   onSave,
   initialConfig,
 }: ConfigDialogProps) {
+  const [provider, setProvider] = useState<Provider>('dashscope');
   const [dashscopeApiKey, setDashscopeApiKey] = useState('');
   const [zhipuApiKey, setZhipuApiKey] = useState('');
-  const [model, setModel] = useState('qwen-plus-2025-12-01');
+  /** 当前选中的 LLM 模型（agent.current）；首次为空时在下方赋值为 default，下拉即有显示 */
+  const [model, setModel] = useState('');
   const [temperature, setTemperature] = useState(0.1);
   const [maxTokens, setMaxTokens] = useState(20000);
   const [outputPath, setOutputPath] = useState('./outputs');
@@ -35,19 +59,37 @@ export default function ConfigDialog({
 
   useEffect(() => {
     if (open && initialConfig) {
-      setDashscopeApiKey(initialConfig.apiKeys?.dashscope || '');
-      setZhipuApiKey(initialConfig.apiKeys?.zhipu || '');
-      setModel(initialConfig.agent?.model || 'qwen-plus-2025-12-01');
-      setTemperature(initialConfig.agent?.temperature || 0.1);
-      setMaxTokens(initialConfig.agent?.maxTokens || 20000);
-      setOutputPath(initialConfig.storage?.outputPath || './outputs');
+      const p = (initialConfig.agent?.provider === 'zhipu' ? 'zhipu' : 'dashscope') as Provider;
+      setProvider(p);
+      setDashscopeApiKey(initialConfig.apiKeys?.dashscope ?? '');
+      setZhipuApiKey(initialConfig.apiKeys?.zhipu ?? '');
+      const opts = LLM_OPTIONS[p];
+      const currentRaw = (initialConfig.agent?.current ?? initialConfig.agent?.model ?? '').trim();
+      const currentOrDefault = currentRaw && opts.models.some((m) => m.id === currentRaw)
+        ? currentRaw
+        : opts.default;
+      setModel(currentOrDefault);
+      setTemperature(initialConfig.agent?.temperature ?? 0.1);
+      setMaxTokens(initialConfig.agent?.maxTokens ?? 20000);
+      setOutputPath(initialConfig.storage?.outputPath ?? './outputs');
       setTtsStartNumber(initialConfig.storage?.ttsStartNumber ?? 6000);
     }
   }, [open, initialConfig]);
 
+  useEffect(() => {
+    if (!open) return;
+    const opts = LLM_OPTIONS[provider];
+    const valid = opts.models.some((m) => m.id === model);
+    if (!valid) setModel(opts.default);
+  }, [open, provider]);
+
+  const currentApiKey = provider === 'dashscope' ? dashscopeApiKey : zhipuApiKey;
+  const setCurrentApiKey = provider === 'dashscope' ? setDashscopeApiKey : setZhipuApiKey;
+  const llmOpts = LLM_OPTIONS[provider];
+
   const handleSave = async () => {
     if (!dashscopeApiKey.trim() && !zhipuApiKey.trim()) {
-      alert('请至少填写一个供应商的 API Key（通义或智谱）');
+      alert('请至少填写一个供应商的 API Key');
       return;
     }
 
@@ -58,10 +100,11 @@ export default function ConfigDialog({
           zhipu: zhipuApiKey.trim() || undefined,
         },
         agent: {
-          model,
+          model: model || llmOpts.default,
+          current: model || llmOpts.default,
           temperature,
           maxTokens,
-          provider: initialConfig?.agent?.provider ?? 'dashscope',
+          provider,
         },
         storage: {
           outputPath,
@@ -90,33 +133,40 @@ export default function ConfigDialog({
         </DialogHeader>
         <div className="grid gap-5 py-4">
           <div className="space-y-2">
-            <Label htmlFor="dashscope" className="text-foreground">通义（DashScope）API Key</Label>
-            <Input
-              id="dashscope"
-              type="password"
-              placeholder="sk-...（LLM/VL/TTS/T2I 共用）"
-              value={dashscopeApiKey}
-              onChange={(e) => setDashscopeApiKey(e.target.value)}
-            />
+            <Label htmlFor="provider" className="text-foreground">供应商</Label>
+            <select
+              id="provider"
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              value={provider}
+              onChange={(e) => setProvider(e.target.value as Provider)}
+            >
+              <option value="dashscope">阿里百炼</option>
+              <option value="zhipu">智谱</option>
+            </select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="zhipu" className="text-foreground">智谱（Zhipu）API Key</Label>
+            <Label htmlFor="apikey" className="text-foreground">API Key</Label>
             <Input
-              id="zhipu"
+              id="apikey"
               type="password"
-              placeholder="sk-...（LLM/VL/TTS/T2I 共用）"
-              value={zhipuApiKey}
-              onChange={(e) => setZhipuApiKey(e.target.value)}
+              placeholder={provider === 'dashscope' ? 'sk-...（阿里百炼）' : 'sk-...（智谱）'}
+              value={currentApiKey}
+              onChange={(e) => setCurrentApiKey(e.target.value)}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="model" className="text-foreground">模型</Label>
-              <Input
+              <select
                 id="model"
-                value={model}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={model || llmOpts.default}
                 onChange={(e) => setModel(e.target.value)}
-              />
+              >
+                {llmOpts.models.map((m) => (
+                  <option key={m.id} value={m.id}>{m.label}</option>
+                ))}
+              </select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="temperature" className="text-foreground">温度</Label>

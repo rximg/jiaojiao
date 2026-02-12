@@ -94,9 +94,12 @@ export async function getAIConfig(ability: AIAbility): Promise<AIConfig> {
   const appConfig = await loadConfig();
   const apiKeys = appConfig.apiKeys as { dashscope?: string; zhipu?: string };
   const aiModels = await loadAiModels();
-  const agent = appConfig.agent as { model?: string; provider?: Provider; temperature?: number; maxTokens?: number };
+  const agent = appConfig.agent as { model?: string; current?: string; provider?: Provider; temperature?: number; maxTokens?: number };
   const provider: Provider = resolveProviderForAbility(agent?.provider, ability);
   const abilityConfig = getAbilityConfig(aiModels, provider, ability);
+  /** 用户当前选择的模型（current 优先，空则用 model；空字符串时 resolveModel 使用 ai_models 默认） */
+  const raw = (ability === 'llm' ? (agent?.current ?? agent?.model) : agent?.model)?.trim();
+  const specifiedModelForUser = raw || undefined;
 
   const getApiKey = (p: Provider): string => {
     const key = (apiKeys[p] ?? '').trim();
@@ -110,7 +113,7 @@ export async function getAIConfig(ability: AIAbility): Promise<AIConfig> {
 
   switch (ability) {
     case 'llm': {
-      const model = resolveModel(abilityConfig, agent?.model);
+      const model = resolveModel(abilityConfig, specifiedModelForUser);
       const apiKey = getApiKey(provider);
       const baseURL = provider === 'zhipu' ? DEFAULT_ZHIPU_BASE : (process.env.DASHSCOPE_BASE_URL ?? DEFAULT_DASHSCOPE_BASE);
       const cfg: LLMAIConfig = {
@@ -154,7 +157,7 @@ export async function getAIConfig(ability: AIAbility): Promise<AIConfig> {
           ? `${DEFAULT_ZHIPU_BASE.replace(/\/$/, '')}/audio/speech`
           : (process.env.DASHSCOPE_TTS_ENDPOINT as string) ??
             (service.endpoint as string) ??
-            'https://dashscope.aliyuncs.com/api/v1/services/audio/tts/synthesis';
+            'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
       const batch = (service.batch as { delay?: number }) ?? {};
       const rateLimitMs = Number(process.env.TTS_RATE_LIMIT_MS) || (typeof batch.delay === 'number' ? batch.delay : 2000);
       const cfg: TTSAIConfig = {

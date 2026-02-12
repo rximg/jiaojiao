@@ -94,10 +94,11 @@ export async function loadConfig(): Promise<AppConfig> {
         zhipu: apiKeys.zhipu,
       },
       agent: {
-        model: storedConfig?.agent?.model || process.env.DASHSCOPE_MODEL || 'qwen-plus-2025-12-01',
+        model: storedConfig?.agent?.model ?? 'qwen-plus-2025-12-01',
+        current: storedConfig?.agent?.current ?? '',
         temperature: storedConfig?.agent?.temperature ?? 0.1,
         maxTokens: storedConfig?.agent?.maxTokens ?? 20000,
-        provider: storedConfig?.agent?.provider ?? (process.env.AI_LLM_PROVIDER as 'dashscope' | 'zhipu' | undefined),
+        provider: storedConfig?.agent?.provider ?? 'dashscope',
       },
       storage: {
         outputPath: storedConfig?.storage?.outputPath || './outputs',
