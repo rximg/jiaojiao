@@ -4,7 +4,6 @@ import { ChatProvider } from './providers/ChatProvider';
 import WelcomePage from './app/components/WelcomePage';
 import ChatInterface from './app/components/ChatInterface';
 import ConfigDialog from './app/components/ConfigDialog';
-import { ConfirmDialog } from './app/components/ConfirmDialog';
 import { QuotaErrorDialog } from './app/components/QuotaErrorDialog';
 import { AgentErrorDialog } from './app/components/AgentErrorDialog';
 import type { AppConfig } from './types/types';
@@ -72,7 +71,6 @@ function AppContent() {
     <>
       <ChatProvider>
         <div className="h-screen flex flex-col">
-          <ConfirmDialog />
           <QuotaErrorDialog />
           <AgentErrorDialog />
           {view === 'welcome' ? (

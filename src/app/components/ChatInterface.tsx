@@ -5,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import ChatMessage from './ChatMessage';
 import WelcomeMessage from './WelcomeMessage';
 import QuickOptions from './QuickOptions';
+import HitlConfirmBlock from './HitlConfirmBlock';
 import TodoPanel from './TodoPanel';
 import WorkspacePanel from './WorkspacePanel';
 import { useChat } from '../../providers/ChatProvider';
@@ -23,7 +24,8 @@ export default function ChatInterface({
   const [input, setInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { messages, todos, isLoading, sendMessage, stopStream, currentSessionId, createNewSession, loadSession, resetSession, lastArtifactTime } = useChat();
+  const { messages, todos, isLoading, sendMessage, stopStream, currentSessionId, createNewSession, loadSession, resetSession, lastArtifactTime, pendingHitlRequest, respondConfirm } = useChat();
+  const waitingForConfirmation = Boolean(pendingHitlRequest);
   const [showWelcome, setShowWelcome] = useState(true);
   const [showWorkspace] = useState(true);
   const isCreatingSessionRef = useRef(false);
@@ -71,21 +73,31 @@ export default function ChatInterface({
         e.preventDefault();
       }
       const messageText = input.trim();
+      // 若有待确认的 HITL，发送 = 新消息：先取消确认再发送
+      if (pendingHitlRequest) {
+        await respondConfirm(pendingHitlRequest.requestId, false);
+        if (!messageText) return;
+        if (!currentSessionId) {
+          onBack();
+          return;
+        }
+        setShowWelcome(false);
+        await sendMessage(messageText);
+        setInput('');
+        if (textareaRef.current) textareaRef.current.focus();
+        return;
+      }
       if (!messageText || isLoading) return;
-      // 无 session 时回退到欢迎页，让用户点击案例或历史记录
       if (!currentSessionId) {
         onBack();
         return;
       }
-
       setShowWelcome(false);
       await sendMessage(messageText);
       setInput('');
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-      }
+      if (textareaRef.current) textareaRef.current.focus();
     },
-    [input, isLoading, currentSessionId, sendMessage, onBack]
+    [input, isLoading, currentSessionId, sendMessage, onBack, pendingHitlRequest, respondConfirm]
   );
 
   const handleKeyDown = useCallback(
@@ -100,18 +112,28 @@ export default function ChatInterface({
 
   const handleQuickOptionClick = useCallback(
     (option: string) => {
-      // 无 session 时回退到欢迎页
       if (!currentSessionId) {
         onBack();
         return;
       }
-      // 快捷选项只复用当前 session 发一条消息
       setInput(option);
       setShowWelcome(false);
       setTimeout(() => handleSubmit(), 0);
     },
     [currentSessionId, handleSubmit, onBack]
   );
+
+  const handleHitlContinue = useCallback(() => {
+    if (pendingHitlRequest) {
+      respondConfirm(pendingHitlRequest.requestId, true);
+    }
+  }, [pendingHitlRequest, respondConfirm]);
+
+  const handleHitlCancel = useCallback(() => {
+    if (pendingHitlRequest) {
+      respondConfirm(pendingHitlRequest.requestId, false);
+    }
+  }, [pendingHitlRequest, respondConfirm]);
 
   return (
     <div className="flex h-screen flex-col">
@@ -176,16 +198,38 @@ export default function ChatInterface({
             {messages.map((message) => (
               <ChatMessage key={message.id} message={message} />
             ))}
-            {isLoading && (
+            {pendingHitlRequest && (
+              <HitlConfirmBlock
+                request={pendingHitlRequest}
+                onContinue={handleHitlContinue}
+                onCancel={handleHitlCancel}
+              />
+            )}
+            {isLoading && !waitingForConfirmation && (
               <div className="flex items-center gap-2 text-muted-foreground">
                 <div className="h-2 w-2 bg-current rounded-full animate-pulse" />
                 <span>AI 正在思考...</span>
               </div>
             )}
+            {waitingForConfirmation && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <span>等待您确认</span>
+              </div>
+            )}
           </div>
 
-          {/* 快捷选项 */}
-          {showWelcome && messages.length === 0 && (
+          {/* 快捷选项：等待确认时显示 [继续][取消]，否则欢迎页显示 config 选项 */}
+          {waitingForConfirmation && (
+            <div className="px-6 pb-2 flex flex-wrap gap-2">
+              <Button variant="default" size="sm" onClick={handleHitlContinue} className="rounded-full">
+                继续
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleHitlCancel} className="rounded-full border-border">
+                取消
+              </Button>
+            </div>
+          )}
+          {showWelcome && messages.length === 0 && !waitingForConfirmation && (
             <div className="px-6 pb-2">
               <QuickOptions onOptionClick={handleQuickOptionClick} />
             </div>
@@ -199,26 +243,30 @@ export default function ChatInterface({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={isLoading ? '正在处理...' : '输入消息...'}
+                placeholder={
+                  waitingForConfirmation
+                    ? '输入新消息并发送将取消当前确认并开始新对话'
+                    : isLoading
+                      ? '正在处理...'
+                      : '输入消息...'
+                }
                 className="min-h-[60px] max-h-[200px] resize-none rounded-xl border-border"
                 disabled={isLoading}
               />
               <Button
-                type={isLoading ? 'button' : 'submit'}
-                variant={isLoading ? 'destructive' : 'default'}
-                onClick={isLoading ? stopStream : handleSubmit}
-                disabled={!isLoading && !input.trim()}
+                type={waitingForConfirmation || !isLoading ? 'submit' : 'button'}
+                variant={isLoading && !waitingForConfirmation ? 'destructive' : 'default'}
+                onClick={isLoading && !waitingForConfirmation ? stopStream : handleSubmit}
+                disabled={!waitingForConfirmation && !isLoading && !input.trim()}
                 className="self-end"
               >
-                {isLoading ? (
+                {isLoading && !waitingForConfirmation ? (
                   <>
                     <Square className="h-4 w-4" />
                     停止
                   </>
                 ) : (
                   <>
-
-
                     <ArrowUp className="h-4 w-4" />
                     发送
                   </>

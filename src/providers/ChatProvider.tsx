@@ -155,6 +155,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           role: msg.role || 'assistant',
           content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
           timestamp: new Date(),
+          ...(Array.isArray(msg.stepResults) && msg.stepResults.length > 0 ? { stepResults: msg.stepResults } : {}),
         }));
         
         setMessages((prev) => {
