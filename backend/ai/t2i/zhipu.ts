@@ -61,15 +61,7 @@ export async function pollForImageUrlZhipu(cfg: T2IAIConfig, taskId: string): Pr
       const msg = taskData?.error?.message ?? 'Unknown error';
       throw new Error(`T2I task failed: ${msg}`);
     }
-    const url0 =
-      taskData?.image_result?.[0]?.url ??
-      taskData?.data?.[0]?.url ??
-      taskData?.result?.images?.[0]?.url ??
-      taskData?.result?.data?.[0]?.url ??
-      (typeof taskData?.choices?.[0]?.message?.content === 'string' &&
-       /^https?:\/\//.test(taskData.choices[0].message.content)
-        ? taskData.choices[0].message.content
-        : undefined);
+    const url0 = taskData?.image_result?.[0]?.url;
     if (url0) return url0;
     if (status === 'SUCCESS') {
       throw new Error(

@@ -12,21 +12,85 @@ export type StepResult =
 function extractStepResultsFromContent(content: string): StepResult[] {
   if (!content || typeof content !== 'string') return [];
   const results: StepResult[] = [];
-  const imageMatches = content.match(/(?:图片：|outputs[/\\]images[/\\])[^\n\s]+\.(?:png|jpg|jpeg)/gi);
-  if (imageMatches) {
-    for (const raw of imageMatches) {
-      const path = raw.replace(/^图片：/, '').trim();
-      results.push({ type: 'image', payload: { path } });
+  // 图片：支持多种格式（中文冒号、英文冒号、绝对路径、outputs/...、images/...）
+  const imagePatterns = [
+    /(?:图片[：:]\s*)([^\s\n]+\.(?:png|jpg|jpeg))/gi,
+    /(?:outputs[/\\]workspaces[/\\][^/\\]+[/\\]images[/\\][^\s\n]+\.(?:png|jpg|jpeg))/gi,
+    /(?:outputs[/\\]images[/\\][^\s\n]+\.(?:png|jpg|jpeg))/gi,
+    /(?:images[/\\][^\s\n]+\.(?:png|jpg|jpeg))/gi,
+    /([A-Za-z]:[\\/][^\s\n]+\.(?:png|jpg|jpeg))/g,
+    /(\/[^\s\n]+\.(?:png|jpg|jpeg))/g,
+  ];
+  const seenImages = new Set<string>();
+  for (const re of imagePatterns) {
+    let m;
+    re.lastIndex = 0;
+    while ((m = re.exec(content)) !== null) {
+      const path = (m[1] ?? m[0]).replace(/^图片[：:]\s*/i, '').trim();
+      if (path && !seenImages.has(path)) {
+        seenImages.add(path);
+        results.push({ type: 'image', payload: { path } });
+      }
     }
   }
-  const audioMatches = content.match(/(?:音频：|outputs[/\\]audio[/\\])[^\n\s]+\.(?:mp3|wav)/gi);
-  if (audioMatches) {
-    for (const raw of audioMatches) {
-      const path = raw.replace(/^音频：/, '').trim();
-      results.push({ type: 'audio', payload: { path } });
+  // 音频：同上
+  const audioPatterns = [
+    /(?:音频[：:]\s*)([^\s\n]+\.(?:mp3|wav))/gi,
+    /(?:outputs[/\\]workspaces[/\\][^/\\]+[/\\]audio[/\\][^\s\n]+\.(?:mp3|wav))/gi,
+    /(?:outputs[/\\]audio[/\\][^\s\n]+\.(?:mp3|wav))/gi,
+    /(?:audio[/\\][^\s\n]+\.(?:mp3|wav))/gi,
+    /([A-Za-z]:[\\/][^\s\n]+\.(?:mp3|wav))/g,
+    /(\/[^\s\n]+\.(?:mp3|wav))/g,
+  ];
+  const seenAudio = new Set<string>();
+  for (const re of audioPatterns) {
+    let m;
+    re.lastIndex = 0;
+    while ((m = re.exec(content)) !== null) {
+      const path = (m[1] ?? m[0]).replace(/^音频[：:]\s*/i, '').trim();
+      if (path && !seenAudio.has(path)) {
+        seenAudio.add(path);
+        results.push({ type: 'audio', payload: { path } });
+      }
     }
   }
   return results;
+}
+
+function isAbsolutePath(p: string): boolean {
+  const trimmed = p.trim();
+  if (/^[A-Za-z]:[\\/]/.test(trimmed)) return true;
+  if (trimmed.startsWith('/')) return true;
+  return false;
+}
+
+async function resolveStepResultPaths(
+  stepResults: StepResult[],
+  sessionId: string | undefined
+): Promise<StepResult[]> {
+  if (!sessionId || stepResults.length === 0) return stepResults;
+  try {
+    const path = await import('path');
+    const { loadConfig } = await import('../../backend/app-config.js');
+    const { getWorkspaceFilesystem } = await import('../../backend/services/fs.js');
+    const appConfig = await loadConfig();
+    const outputPath = appConfig?.storage?.outputPath ?? './outputs';
+    const workspaceFs = getWorkspaceFilesystem({ outputPath });
+    const sessionRoot = path.join(workspaceFs.root, sessionId);
+    return stepResults.map((sr) => {
+      if (sr.type === 'image' && sr.payload.path && !isAbsolutePath(sr.payload.path)) {
+        const abs = path.resolve(sessionRoot, sr.payload.path.replace(/^[/\\]+/, ''));
+        return { ...sr, payload: { ...sr.payload, path: abs } };
+      }
+      if (sr.type === 'audio' && sr.payload.path && !isAbsolutePath(sr.payload.path)) {
+        const abs = path.resolve(sessionRoot, sr.payload.path.replace(/^[/\\]+/, ''));
+        return { ...sr, payload: { ...sr.payload, path: abs } };
+      }
+      return sr;
+    });
+  } catch {
+    return stepResults;
+  }
 }
 
 /**
@@ -122,13 +186,14 @@ export function handleAgentIPC() {
 
         // 处理流式响应
         // LangGraph stream chunks are keyed by node/middleware name
+        // 流式期间使用稳定 id，保证 stepResult 能匹配到同一条消息
+        let streamingAssistantId: string | null = null;
         for await (const chunk of stream) {
           if (currentStreamController.signal.aborted) {
             break;
           }
 
           // Extract the actual state from the keyed chunk
-          // Chunks have structure: { "NodeName.step": { messages, todos, ... } }
           const chunkKeys = Object.keys(chunk);
           const nodeKey = chunkKeys[0];
           const state = nodeKey ? (chunk as any)[nodeKey] : chunk;
@@ -144,29 +209,33 @@ export function handleAgentIPC() {
 
           // 发送消息块
           if (state.messages && Array.isArray(state.messages)) {
-            // 修复消息中的工具调用，确保都有 id 字段
             const fixedMessages = fixToolCallsInMessages(state.messages);
             const newMessages = fixedMessages
               .filter((msg: any) => msg.role === 'assistant')
-              .slice(-1); // 只取最后一条助手消息
-            
+              .slice(-1);
+
             if (newMessages.length > 0) {
-              const mapped = newMessages.map((msg: any) => ({
-                id: msg.id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+              const msg = newMessages[0];
+              const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+              const stableId: string = streamingAssistantId ?? (msg.id || `stream-${newThreadId}`);
+              streamingAssistantId = stableId;
+              let stepResults = extractStepResultsFromContent(content);
+              stepResults = await resolveStepResultPaths(stepResults, sessionId);
+              const mapped = [{
+                id: stableId,
                 role: msg.role,
-                content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+                content,
                 timestamp: new Date(),
-              }));
+                ...(stepResults.length > 0 ? { stepResults } : {}),
+              }];
               mainWindow.webContents.send('agent:message', {
                 threadId: newThreadId,
                 messages: mapped,
               });
-              const lastMsg = mapped[mapped.length - 1];
-              const stepResults = extractStepResultsFromContent(lastMsg.content);
               if (stepResults.length > 0) {
                 mainWindow.webContents.send('agent:stepResult', {
                   threadId: newThreadId,
-                  messageId: lastMsg.id,
+                  messageId: stableId,
                   stepResults,
                 });
               }
@@ -242,6 +311,8 @@ export function handleAgentIPC() {
               ? lastMessage.content
               : JSON.stringify(lastMessage.content);
             const msgId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+            let stepResults = extractStepResultsFromContent(content);
+            stepResults = await resolveStepResultPaths(stepResults, sessionId);
             mainWindow.webContents.send('agent:message', {
               threadId: newThreadId,
               messages: [{
@@ -249,9 +320,9 @@ export function handleAgentIPC() {
                 role: lastMessage.role || 'assistant',
                 content,
                 timestamp: new Date(),
+                ...(stepResults.length > 0 ? { stepResults } : {}),
               }],
             });
-            const stepResults = extractStepResultsFromContent(content);
             if (stepResults.length > 0) {
               mainWindow.webContents.send('agent:stepResult', {
                 threadId: newThreadId,

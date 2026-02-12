@@ -30,13 +30,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onStepResult: (callback) => {
       ipcRenderer.on('agent:stepResult', (_event, data) => callback(data));
     },
-    onConfirmRequest: (callback) => {
-      ipcRenderer.on('agent:confirmRequest', (_event, data) => callback(data));
-    },
     onQuotaExceeded: (callback) => {
       ipcRenderer.on('agent:quotaExceeded', (_event, data) => callback(data));
     },
-    confirmAction: (ok) => ipcRenderer.send('agent:confirmAction', { ok }),
     stopStream: () => ipcRenderer.invoke('agent:stopStream'),
   },
   hitl: {

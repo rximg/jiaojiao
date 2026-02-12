@@ -38,13 +38,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onStepResult: (callback: (data: { threadId: string; messageId: string; stepResults: Array<{ type: 'image' | 'audio' | 'document'; payload: Record<string, unknown> }> }) => void) => {
       ipcRenderer.on('agent:stepResult', (_event, data) => callback(data));
     },
-    onConfirmRequest: (callback: (data: any) => void) => {
-      ipcRenderer.on('agent:confirmRequest', (_event, data) => callback(data));
-    },
     onQuotaExceeded: (callback: (data: any) => void) => {
       ipcRenderer.on('agent:quotaExceeded', (_event, data) => callback(data));
     },
-    confirmAction: (ok: boolean) => ipcRenderer.send('agent:confirmAction', { ok }),
     stopStream: () => ipcRenderer.invoke('agent:stopStream'),
   },
   // HITL 人工确认（统一通道）
@@ -103,9 +99,7 @@ declare global {
         onToolCall: (callback: (data: any) => void) => void;
         onTodoUpdate: (callback: (data: any) => void) => void;
         onStepResult: (callback: (data: { threadId: string; messageId: string; stepResults: Array<{ type: 'image' | 'audio' | 'document'; payload: Record<string, unknown> }> }) => void) => void;
-        onConfirmRequest: (callback: (data: any) => void) => void;
         onQuotaExceeded: (callback: (data: any) => void) => void;
-        confirmAction: (ok: boolean) => void;
         stopStream: () => Promise<void>;
       };
       hitl: {
