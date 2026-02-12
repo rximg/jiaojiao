@@ -41,6 +41,16 @@ cd app
 npm install
 ```
 
+**FFmpeg（TTS 智谱 PCM→MP3 必需）**：使用智谱 TTS 并输出 MP3 时，需在系统安装 FFmpeg，否则会提示“请安装 ffmpeg 后重试”。
+
+| 平台 | 安装方式 |
+|------|----------|
+| Windows | `winget install ffmpeg` 或从 [ffmpeg.org](https://ffmpeg.org/download.html) 下载并加入 PATH |
+| macOS | `brew install ffmpeg` |
+| Linux | `sudo apt install ffmpeg`（Debian/Ubuntu）或 `sudo yum install ffmpeg`（CentOS/RHEL） |
+
+> 计划中：支持在应用内自动下载/安装 FFmpeg，见开发说明。
+
 如果遇到依赖冲突，可以使用：
 
 ```bash
@@ -80,26 +90,35 @@ npm run electron:dev
 npm run electron:build
 ```
 
-### 5. 运行测试（含集成测试开关）
+### 5. 运行测试（含集成测试与供应商选择）
 
-默认测试会从 `.env` 加载环境变量；为避免误触发外部 API，已默认跳过集成测试。若要启用：
+API Key 来自应用设置（用户目录配置）。集成测试需设置 `RUN_INTEGRATION_TESTS=true`，并可通过环境变量或脚本选择只测智谱、只测通义或两者都测：
 
 ```bash
-# 在 .env 中设置并填写：
-# DASHSCOPE_API_KEY=你的Key
-# RUN_INTEGRATION_TESTS=true
-
-# 运行全部测试（将调用真实接口）
+# 仅本地单元测试（不调真实 API）
 npm run test:run
 
-# 仅本地快速检查（保持 RUN_INTEGRATION_TESTS=false 会跳过外部API测试）
-npm run test:run
+# 集成测试：只测智谱（Zhipu）接口
+npm run test:integration:zhipu
+
+# 集成测试：只测通义（DashScope）接口
+npm run test:integration:dashscope
+
+# 集成测试：先测智谱再测通义（两轮）
+npm run test:integration:both
 ```
 
+也可用环境变量手动控制（需先在应用设置中配置对应 API Key）：
+
+- `RUN_INTEGRATION_TESTS=true`：启用集成测试
+- `TEST_API_PROVIDER=zhipu`：本次只测智谱
+- `TEST_API_PROVIDER=dashscope`：本次只测通义
+- 不设 `TEST_API_PROVIDER`：使用应用配置中的默认 provider
+
 测试覆盖：
-- LLM：调用 DashScope 兼容端点，校验返回内容非空（`tests/llm.test.ts`）
-- T2I：调用阿里百炼文生图生成图片，校验文件落盘（`tests/t2i.test.ts`）
-- TTS：调用阿里百炼语音合成生成音频，校验文件落盘（`tests/tts.test.ts`）
+- LLM：调用配置的 LLM 端点，校验返回内容非空（`tests/llm.test.ts`）
+- T2I：文生图生成图片，校验文件落盘（`tests/t2i.test.ts`）
+- TTS：语音合成生成音频，校验文件落盘（`tests/tts.test.ts`）
 
 ## 功能特性
 
@@ -184,6 +203,10 @@ const subAgent: SubAgent = {
 
 在 `backend/mcp/` 目录下添加新的 MCP 服务。
 
+### 计划中
+
+- **FFmpeg 的下载与安装**：在应用内或通过脚本实现 FFmpeg 的自动下载与安装，避免用户手动配置 PATH。
+
 ## 注意事项
 
 - 确保已获取阿里百炼 API Key
@@ -201,6 +224,11 @@ const subAgent: SubAgent = {
 ```bash
 npm install --legacy-peer-deps
 ```
+
+### TTS 报错「请安装 ffmpeg 后重试」
+
+- 在终端执行 `ffmpeg -version` 确认是否已安装并在 PATH 中
+- 按上文「快速开始 → 安装依赖」中的表格安装 FFmpeg 并重启应用
 
 ### API 调用失败
 

@@ -93,6 +93,7 @@ export async function generateScriptFromImage(
   }
 
   const { base64, mime } = await readImageAsBase64(absolutePath);
+  /** 本地图无 http URL，用 base64 拼成 Data URL 传给 VL 接口 */
   const dataUrl = `data:${mime};base64,${base64}`;
 
   const content =

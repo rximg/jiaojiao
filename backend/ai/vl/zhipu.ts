@@ -1,10 +1,12 @@
 /**
- * 智谱 VL：chat/completions 多模态（content 中 type: "image", image_url）
+ * 智谱 VL：chat/completions 多模态，与 OpenAI 兼容格式（content 中 type: "image_url", image_url: { url }）。
+ * 本地图片无 http URL，传 base64 时使用 Data URL：dataUrl = `data:image/png;base64,<base64>`，由调用方（如 index.ts）拼好传入。
  */
 import type { VLAIConfig } from '../types.js';
 
 export interface CallVLParams {
   cfg: VLAIConfig;
+  /** 图片 URL 或 Data URL（本地图用 base64：data:image/png;base64,...） */
   dataUrl: string;
   prompt: string;
 }
@@ -19,8 +21,8 @@ export async function callVLZhipu(params: CallVLParams): Promise<string> {
       {
         role: 'user' as const,
         content: [
-          { type: 'image', image_url: dataUrl },
-          { type: 'text', text: prompt },
+          { type: 'image_url' as const, image_url: { url: dataUrl } },
+          { type: 'text' as const, text: prompt },
         ],
       },
     ],
