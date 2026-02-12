@@ -4,7 +4,7 @@
 import path from 'path';
 import { promises as fs } from 'fs';
 import jsyaml from 'js-yaml';
-import { loadConfig } from '../agent/config.js';
+import { loadConfig } from '../app-config.js';
 import type {
   Provider,
   AIAbility,
@@ -74,6 +74,19 @@ function resolveModel(abilityConfig: ProviderAbilityModelsConfig, specifiedModel
 }
 
 /**
+ * 集成测试时可通过环境变量指定只测某一方：TEST_API_PROVIDER=zhipu | dashscope
+ * 未设置时使用应用配置中的 agent.provider。
+ */
+function resolveProviderForAbility(
+  agentProvider: Provider | undefined,
+  ability: AIAbility
+): Provider {
+  const envProvider = process.env.TEST_API_PROVIDER;
+  if (envProvider === 'zhipu' || envProvider === 'dashscope') return envProvider;
+  return (ability === 'llm' ? agentProvider : undefined) ?? 'dashscope';
+}
+
+/**
  * 获取指定能力的 AI 配置（provider、apiKey、endpoint 等）。
  * 一个 provider 对应一个 key，所有能力共用该 key；模型与默认值来自 ai_models.json。
  */
@@ -82,11 +95,18 @@ export async function getAIConfig(ability: AIAbility): Promise<AIConfig> {
   const apiKeys = appConfig.apiKeys as { dashscope?: string; zhipu?: string };
   const aiModels = await loadAiModels();
   const agent = appConfig.agent as { model?: string; provider?: Provider; temperature?: number; maxTokens?: number };
-  const provider: Provider = (ability === 'llm' ? agent?.provider : undefined) ?? 'dashscope';
+  const provider: Provider = resolveProviderForAbility(agent?.provider, ability);
   const abilityConfig = getAbilityConfig(aiModels, provider, ability);
 
-  const getApiKey = (p: Provider): string =>
-    (apiKeys[p] ?? '').trim() || (p === 'zhipu' ? (process.env.ZHIPU_API_KEY ?? '') : (process.env.DASHSCOPE_API_KEY ?? process.env.LLM_API_KEY ?? ''));
+  const getApiKey = (p: Provider): string => {
+    const key = (apiKeys[p] ?? '').trim();
+    if (!key) {
+      throw new Error(
+        `未配置 API Key：请在应用设置中配置${p === 'zhipu' ? '智谱（Zhipu）' : '通义（DashScope）'}的 API Key（用户目录配置）`
+      );
+    }
+    return key;
+  };
 
   switch (ability) {
     case 'llm': {
@@ -97,7 +117,7 @@ export async function getAIConfig(ability: AIAbility): Promise<AIConfig> {
         provider,
         apiKey,
         baseURL: baseURL.replace(/\/$/, ''),
-        model: process.env.DASHSCOPE_MODEL || model,
+        model,
         temperature: agent?.temperature ?? 0.1,
         maxTokens: agent?.maxTokens ?? 20000,
       };
@@ -119,7 +139,7 @@ export async function getAIConfig(ability: AIAbility): Promise<AIConfig> {
         provider,
         apiKey,
         baseUrl: baseUrl.replace(/\/$/, ''),
-        model: (process.env.DASHSCOPE_VL_MODEL as string) || model,
+        model,
         prompt,
       };
       return cfg;
@@ -141,7 +161,7 @@ export async function getAIConfig(ability: AIAbility): Promise<AIConfig> {
         provider,
         apiKey,
         endpoint,
-        model: (process.env.DASHSCOPE_TTS_MODEL as string) || model,
+        model,
         rateLimitMs,
       };
       return cfg;
@@ -157,14 +177,14 @@ export async function getAIConfig(ability: AIAbility): Promise<AIConfig> {
           : (process.env.DASHSCOPE_T2I_ENDPOINT as string) ?? (service.endpoint as string) ?? 'https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation';
       const taskEndpoint =
         provider === 'zhipu'
-          ? `${DEFAULT_ZHIPU_BASE.replace(/\/$/, '')}/async/tasks`
+          ? `${DEFAULT_ZHIPU_BASE.replace(/\/$/, '')}/async-result`
           : (process.env.DASHSCOPE_T2I_RESULT_ENDPOINT as string) ?? (service.task_endpoint as string) ?? 'https://dashscope.aliyuncs.com/api/v1/tasks';
       const cfg: T2IAIConfig = {
         provider,
         apiKey,
         endpoint,
         taskEndpoint: taskEndpoint.replace(/\/$/, ''),
-        model: (process.env.DASHSCOPE_T2I_MODEL as string) || model,
+        model,
       };
       return cfg;
     }

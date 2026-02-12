@@ -35,7 +35,7 @@ function debugLog(msg: string): void {
 }
 
 describe('TTS synthesizeSpeech()', () => {
-  const sessionId = 'integration-session';
+  const sessionId = 'default';
 
   beforeAll(async () => {
     debugLog(`[TTS] RUN_INTEGRATION_TESTS=${runIntegration} TEST_API_PROVIDER=${process.env.TEST_API_PROVIDER ?? '(未设置)'}`);

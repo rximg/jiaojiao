@@ -39,9 +39,10 @@ export async function synthesizeSpeech(params: SynthesizeSpeechParams): Promise<
 }
 
 async function synthesizeSpeechSequential(params: SynthesizeSpeechParams): Promise<SynthesizeSpeechResult> {
-  const { loadConfig } = await import('../../agent/config.js');
+  const { loadConfig } = await import('../../app-config.js');
   const config = await loadConfig();
   const cfg = (await getAIConfig('tts')) as TTSAIConfig;
+  console.log('cfg', JSON.stringify(cfg, null, 2));
   const { texts, voice = 'chinese_female', format = 'mp3', sessionId = DEFAULT_SESSION_ID } = params;
   const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
   const outputPath = config.storage.outputPath;

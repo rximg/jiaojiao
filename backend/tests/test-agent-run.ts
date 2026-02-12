@@ -1,43 +1,33 @@
 /**
  * 测试脚本：实际运行Agent进行一次完整的调用
  * 运行方式: tsx backend/tests/test-agent-run.ts
- * 注意：这会调用实际的LLM API，需要配置DASHSCOPE_API_KEY环境变量
+ * 注意：会调用实际 LLM API，需在应用设置（用户目录配置）中配置 API Key
  */
 
 import { AgentFactory } from '../agent/AgentFactory.js';
 import { initializeServices } from '../services/service-initializer.js';
 import { loadConfig } from '../agent/config.js';
 import { initLangSmithEnv } from '../agent/langsmith.js';
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// 加载环境变量
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 async function testAgentRun() {
   console.log('\n[初始化服务]');
   initLangSmithEnv();
   const config = await loadConfig();
+  const provider = (config.agent?.provider ?? 'dashscope') as 'dashscope' | 'zhipu';
+  const apiKey = (config.apiKeys as { dashscope?: string; zhipu?: string })?.[provider]?.trim();
+  if (!apiKey) {
+    console.error('❌ 未配置 API Key');
+    console.log('请在应用设置（用户目录配置）中配置当前供应商的 API Key 后再运行');
+    process.exit(1);
+  }
   await initializeServices({ outputPath: config.storage?.outputPath });
   console.log('✅ 服务初始化完成');
+  console.log('✅ API Key 已从用户目录配置加载');
   console.log('='.repeat(60));
   console.log('测试 Agent 实际运行');
   console.log('='.repeat(60));
 
   try {
-    // 检查API密钥
-    if (!process.env.DASHSCOPE_API_KEY) {
-      console.error('❌ 缺少 DASHSCOPE_API_KEY 环境变量');
-      console.log('请在 .env 文件中设置 DASHSCOPE_API_KEY');
-      process.exit(1);
-    }
-
-    console.log('✅ API密钥已配置');
-    console.log('API密钥:', process.env.DASHSCOPE_API_KEY?.slice(0, 10) + '...');
 
     // 创建Agent
     console.log('\n[创建Agent]');

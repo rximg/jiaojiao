@@ -1,5 +1,5 @@
 /**
- * 智谱 T2I：POST .../async/images/generations，轮询 .../async/tasks/<task_id>，从 result.images[0].url 取 URL
+ * 智谱 T2I：POST .../async/images/generations，轮询 GET .../async-result/<id>，从 data[0].url 或 result.images[0].url 取 URL
  */
 import type { T2IAIConfig } from '../types.js';
 
@@ -33,6 +33,8 @@ export async function submitTaskZhipu(
   }
   const data = (await res.json()) as { id?: string };
   const taskId = data?.id;
+  console.log('body', JSON.stringify(body, null, 2));
+  console.log('data', JSON.stringify(data, null, 2));
   if (!taskId) throw new Error('T2I submit did not return task id');
   return taskId;
 }
@@ -48,7 +50,10 @@ export async function pollForImageUrlZhipu(cfg: T2IAIConfig, taskId: string): Pr
     if (!res.ok) throw new Error(`T2I poll failed: ${res.status}`);
     const taskData = (await res.json()) as {
       task_status?: string;
-      result?: { images?: Array<{ url?: string }> };
+      image_result?: Array<{ url?: string }>;
+      result?: { images?: Array<{ url?: string }>; data?: Array<{ url?: string }> };
+      data?: Array<{ url?: string }>;
+      choices?: Array<{ message?: { content?: string } }>;
       error?: { message?: string };
     };
     const status = taskData?.task_status;
@@ -56,10 +61,21 @@ export async function pollForImageUrlZhipu(cfg: T2IAIConfig, taskId: string): Pr
       const msg = taskData?.error?.message ?? 'Unknown error';
       throw new Error(`T2I task failed: ${msg}`);
     }
+    const url0 =
+      taskData?.image_result?.[0]?.url ??
+      taskData?.data?.[0]?.url ??
+      taskData?.result?.images?.[0]?.url ??
+      taskData?.result?.data?.[0]?.url ??
+      (typeof taskData?.choices?.[0]?.message?.content === 'string' &&
+       /^https?:\/\//.test(taskData.choices[0].message.content)
+        ? taskData.choices[0].message.content
+        : undefined);
+    if (url0) return url0;
     if (status === 'SUCCESS') {
-      const url0 = taskData?.result?.images?.[0]?.url;
-      if (url0) return url0;
-      throw new Error('T2I task succeeded but no image URL in response');
+      throw new Error(
+        'T2I task succeeded but no image URL in response. Response keys: ' +
+          Object.keys(taskData).join(', ')
+      );
     }
   }
   throw new Error(`T2I task timeout after ${MAX_ATTEMPTS} attempts`);

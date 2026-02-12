@@ -64,6 +64,7 @@ describe('LLM (用户目录配置的 API Key)', () => {
       ctx.skip();
     }
     const cfg = (await getAIConfig('llm')) as LLMAIConfig;
+    console.log('cfg', cfg);
     const llm = createLLMFromAIConfig(cfg);
 
     const res = await llm.invoke('用一句话介绍你自己');

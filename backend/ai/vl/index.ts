@@ -76,7 +76,7 @@ export async function generateScriptFromImage(
 ): Promise<GenerateScriptFromImageResult> {
   const cfg = (await getAIConfig('vl')) as VLAIConfig;
   const sessionId = params.sessionId ?? DEFAULT_SESSION_ID;
-  const { loadConfig } = await import('../../agent/config.js');
+  const { loadConfig } = await import('../../app-config.js');
   const appConfig = await loadConfig();
   const workspaceFs2 = getWorkspaceFilesystem({ outputPath: appConfig.storage.outputPath });
   const workspaceRoot = workspaceFs2.root;

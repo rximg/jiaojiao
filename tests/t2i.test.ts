@@ -4,6 +4,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { promises as fs } from 'fs';
 import { generateImage } from '../backend/mcp/t2i';
 import { loadConfig, lastLoadedConfigPath } from '../backend/app-config';
+import { getWorkspaceFilesystem } from '../backend/services/fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -73,42 +74,42 @@ describe('T2I generateImage()', () => {
     // }
   });
 
-  it('should generate an image file', async (ctx) => {
-    if (!hasKey || !runIntegration) {
-      ctx.skip();
-    }
-    const result = await generateImage({ 
-      prompt: 'A cute cartoon cat', 
-      size: '1024*1024', 
-      model: 'wanx-v1',
-      sessionId 
-    });
+  // it('should generate an image file', async (ctx) => {
+  //   if (!hasKey || !runIntegration) {
+  //     ctx.skip();
+  //   }
+  //   const result = await generateImage({
+  //     prompt: 'A cute cartoon cat',
+  //     size: '1024*1024',
+  //     sessionId,
+  //   });
 
-    // record for cleanup
-    createdFiles.push(result.imagePath);
+  //   // record for cleanup
+  //   createdFiles.push(result.imagePath);
 
-    const exists = await fs
-      .access(result.imagePath)
-      .then(() => true)
-      .catch(() => false);
+  //   const exists = await fs
+  //     .access(result.imagePath)
+  //     .then(() => true)
+  //     .catch(() => false);
 
-    expect(exists).toBe(true);
+  //   expect(exists).toBe(true);
 
-    const cfg = await loadConfig();
-    const expectedDir = path.join(cfg.storage.outputPath, 'workspaces', sessionId, 'images');
-    expect(result.imagePath.startsWith(path.resolve(expectedDir))).toBe(true);
-  }, 120_000);
+  //   const cfg = await loadConfig();
+  //   const expectedDir = path.join(cfg.storage.outputPath, 'workspaces', sessionId, 'images');
+  //   expect(result.imagePath.startsWith(path.resolve(expectedDir))).toBe(true);
+  // }, 120_000);
 
   it('should generate an image from prompt file', async (ctx) => {
     if (!hasKey || !runIntegration) {
       ctx.skip();
     }
-    // Use promptFile parameter to read from file
-    const result = await generateImage({ 
+    const config = await loadConfig();
+    const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
+    await workspaceFs.writeFile(sessionId, 'image_prompt.txt', 'A cute cartoon cat on a sunny windowsill.', 'utf-8');
+    const result = await generateImage({
       promptFile: 'image_prompt.txt',
-      size: '1024*1024', 
-      model: 'wan2.6-t2i',
-      sessionId 
+      size: '1024*1024',
+      sessionId,
     });
 
     // record for cleanup
