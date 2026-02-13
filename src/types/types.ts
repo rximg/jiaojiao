@@ -32,6 +32,14 @@ export type StepResult =
   | { type: 'audio'; payload: { path: string; text?: string } }
   | { type: 'document'; payload: { pathOrContent: string; title?: string } };
 
+/** 已结束的 HITL 确认记录，用于在聊天历史中保留确认块 */
+export interface HitlBlockRecord {
+  requestId: string;
+  actionType: string;
+  payload: Record<string, unknown>;
+  approved: boolean;
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant" | "system";
@@ -40,6 +48,8 @@ export interface Message {
   toolCalls?: ToolCall[];
   /** 与该条消息关联的步骤结果（文档/图片/音频），由 agent:stepResult 写入 */
   stepResults?: StepResult[];
+  /** 已结束的 HITL 确认块，用于在历史中显示并保留「继续/取消」结果 */
+  hitlBlock?: HitlBlockRecord;
 }
 
 export interface Book {

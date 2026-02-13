@@ -43,10 +43,25 @@ async function synthesizeSpeechSequential(params: SynthesizeSpeechParams): Promi
   const config = await loadConfig();
   const cfg = (await getAIConfig('tts')) as TTSAIConfig;
   console.log('cfg', JSON.stringify(cfg, null, 2));
-  const { texts, voice = 'chinese_female', format = 'mp3', sessionId = DEFAULT_SESSION_ID } = params;
+  const { texts: paramTexts, scriptFile, voice = 'chinese_female', format = 'mp3', sessionId = DEFAULT_SESSION_ID } = params;
   const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
   const outputPath = config.storage.outputPath;
   const ttsStartNumber = config.storage.ttsStartNumber ?? 6000;
+
+  // 优先从文件读取：用户确认后的台词文件，保证 TTS 使用编辑后的内容
+  let texts: string[];
+  if (scriptFile && sessionId) {
+    const absPath = workspaceFs.sessionPath(sessionId, scriptFile);
+    const { promises: fs } = await import('node:fs');
+    const raw = await fs.readFile(absPath, 'utf-8');
+    const parsed = JSON.parse(raw) as unknown;
+    texts = Array.isArray(parsed) ? parsed.map(String) : [];
+    console.log(`[tts] Reading ${raw.length} chars from ${scriptFile}, got ${texts.length} texts`);
+  } else if (paramTexts && paramTexts.length > 0) {
+    texts = paramTexts;
+  } else {
+    throw new Error('synthesize_speech 需要 texts 或 scriptFile 参数');
+  }
 
   const { nextNumber } = await readLineNumbers(outputPath, ttsStartNumber);
   const planned: { num: number; relativePath: string; text: string }[] = texts.map((text, i) => {

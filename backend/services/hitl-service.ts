@@ -26,6 +26,8 @@ export interface HITLRequest {
 export interface HITLResponse {
   approved: boolean;
   reason?: string;
+  /** 用户编辑后的 payload 覆盖（仅 approved 时有效） */
+  payload?: Record<string, unknown>;
 }
 
 /**
@@ -44,15 +46,17 @@ export class HITLService {
   }
   
   /**
-   * 请求人工确认
+   * 请求人工确认。调用方必须在收到批准且拿到返回值后，仅使用返回的 merged 执行后续操作，
+   * 不得使用原始 payload，以保证所有编辑修改都能正确传入下一步。
+   * @returns 批准时返回合并后的 payload（原 payload + response.payload 用户编辑），拒绝/超时返回 null
    */
   async requestApproval(
     actionType: string,
     payload: Record<string, any>
-  ): Promise<boolean> {
+  ): Promise<Record<string, unknown> | null> {
     // 检查是否需要确认
     if (!requiresApproval(actionType, this.config)) {
-      return true;
+      return { ...payload };
     }
     
     const rule = getHITLRule(actionType, this.config);
@@ -97,7 +101,9 @@ export class HITLService {
         });
       }
       
-      return response.approved;
+      if (!response.approved) return null;
+      const merged = { ...payload, ...(response.payload ?? {}) };
+      return merged as Record<string, unknown>;
     } catch (error) {
       // 超时或错误
       request.status = 'timeout';
@@ -111,10 +117,10 @@ export class HITLService {
       
       // 根据配置决定是否自动批准
       if (rule?.autoApproveAfter) {
-        return true;
+        return { ...payload } as Record<string, unknown>;
       }
       
-      return false;
+      return null;
     } finally {
       this.pendingRequests.delete(request.requestId);
     }
@@ -130,7 +136,8 @@ export class HITLService {
     }
     
     try {
-      const { BrowserWindow, ipcMain } = await import('electron');
+      const { BrowserWindow } = await import('electron');
+      const { registerHitlResponseWaiter } = await import('../../electron/ipc/hitl-response-bridge.js');
       
       const win = BrowserWindow.getAllWindows()[0];
       if (!win) {
@@ -146,7 +153,7 @@ export class HITLService {
         timeout: request.timeout,
       });
       
-      // 等待用户响应
+      // 等待用户响应（通过 hitl-response-bridge，由 hitl:respond handler 触发）
       return await new Promise<HITLResponse>((resolve, reject) => {
         let settled = false;
         
@@ -157,14 +164,14 @@ export class HITLService {
           }
         }, request.timeout);
         
-        ipcMain.once(`hitl:confirmResponse:${request.requestId}`, (_event, data) => {
+        registerHitlResponseWaiter(request.requestId, (data) => {
           if (settled) return;
           settled = true;
           clearTimeout(timer);
-          
           resolve({
-            approved: data?.approved || false,
-            reason: data?.reason,
+            approved: data.approved,
+            reason: data.reason,
+            payload: data.payload,
           });
         });
       });
@@ -203,7 +210,7 @@ export async function confirmFileDelete(
   hitlService: HITLService,
   filePath: string
 ): Promise<boolean> {
-  return hitlService.requestApproval('file.delete', { filePath });
+  return (await hitlService.requestApproval('file.delete', { filePath })) !== null;
 }
 
 /**
@@ -214,7 +221,7 @@ export async function confirmFileExecute(
   filePath: string,
   command: string
 ): Promise<boolean> {
-  return hitlService.requestApproval('file.execute', { filePath, command });
+  return (await hitlService.requestApproval('file.execute', { filePath, command })) !== null;
 }
 
 /**
@@ -225,7 +232,7 @@ export async function confirmNetworkRequest(
   url: string,
   method: string
 ): Promise<boolean> {
-  return hitlService.requestApproval('network.http', { url, method });
+  return (await hitlService.requestApproval('network.http', { url, method })) !== null;
 }
 
 /**
@@ -236,5 +243,5 @@ export async function confirmSystemCommand(
   command: string,
   args?: string[]
 ): Promise<boolean> {
-  return hitlService.requestApproval('system.command', { command, args });
+  return (await hitlService.requestApproval('system.command', { command, args })) !== null;
 }

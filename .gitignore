@@ -9,6 +9,9 @@ dist-electron/
 .env
 .env.local
 
+# Planning-with-files working dir (temporary; delete when task complete)
+.planning/
+
 # IDE
 .vscode/
 .idea/
@@ -36,3 +39,4 @@ release/*
 logs/audit/*
 .claude/skills/*
 outputs2/*
+logs/*

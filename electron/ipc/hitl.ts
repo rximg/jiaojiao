@@ -4,19 +4,20 @@
  */
 
 import { ipcMain } from 'electron';
+import { resolveHitlResponse } from './hitl-response-bridge.js';
 
 export function handleHITLIPC() {
   // 用户响应确认请求
-  ipcMain.handle('hitl:respond', async (_event, requestId: string, response: { approved: boolean; reason?: string }) => {
+  ipcMain.handle('hitl:respond', async (_event, requestId: string, response: { approved: boolean; reason?: string; payload?: Record<string, unknown> }) => {
     try {
-      // 发送响应事件（由 HITLService 监听）
+      // 通知 hitl-service 的等待 Promise（通过 bridge）
+      resolveHitlResponse(requestId, response);
+      // 同时发送给 renderer（若有监听）
       const { BrowserWindow } = await import('electron');
       const win = BrowserWindow.getAllWindows()[0];
-      
       if (win) {
         win.webContents.send(`hitl:confirmResponse:${requestId}`, response);
       }
-      
       return { success: true };
     } catch (error) {
       console.error('[HITL IPC] Failed to respond:', error);

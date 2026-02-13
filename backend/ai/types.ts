@@ -42,7 +42,9 @@ export interface GenerateScriptFromImageResult {
 // ---------------------------------------------------------------------------
 
 export interface SynthesizeSpeechParams {
-  texts: string[];
+  texts?: string[];
+  /** 台词文件路径（相对 session），确认后写入，TTS 优先从此文件读取以保证使用用户确认的台词 */
+  scriptFile?: string;
   voice?: string;
   format?: string;
   sessionId?: string;

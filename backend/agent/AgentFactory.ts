@@ -81,16 +81,20 @@ export class AgentFactory {
   }
 
   /**
-   * 通过 HITL 请求人工确认（使用 runtime.hitlService）
+   * 通过 HITL 请求人工确认（使用 runtime.hitlService）。
+   * 约定：所有需要 HITL 的操作必须在此返回后才执行实际逻辑，且必须使用返回的 merged
+   * 作为唯一数据源（原 payload + 用户编辑），确保「仅在用户确认后执行」且「编辑内容传入下一步」。
+   * @returns 合并后的 payload（含用户编辑），拒绝/取消时抛出
    */
-  private async requestApprovalViaHITL(actionType: string, payload: Record<string, unknown>): Promise<void> {
+  private async requestApprovalViaHITL(actionType: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
     if (!this.runtime) {
       throw new Error('Runtime not initialized; cannot request HITL approval');
     }
-    const approved = await this.runtime.hitlService.requestApproval(actionType, payload);
-    if (!approved) {
+    const merged = await this.runtime.hitlService.requestApproval(actionType, payload);
+    if (!merged) {
       throw new Error(`${actionType} cancelled by user`);
     }
+    return merged;
   }
 
   /**
@@ -111,12 +115,12 @@ export class AgentFactory {
     if (serviceType === 't2i') {
           return tool(
         async (params: { prompt?: string; promptFile?: string; size?: string; style?: string; count?: number; model?: string; sessionId?: string }) => {
-          await this.requestApprovalViaHITL('ai.text2image', params as Record<string, unknown>);
+          // HITL：仅用户确认后执行，下文仅使用 merged（含用户编辑的 prompt）
+          const merged = await this.requestApprovalViaHITL('ai.text2image', params as Record<string, unknown>);
           const { generateImage } = await import('../mcp/t2i.js');
-          // 动态从环境变量获取sessionId，优先使用参数传入的sessionId
-          const sessionId = params.sessionId || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
+          const sessionId = (merged.sessionId as string) || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
           console.log(`[t2i tool] Using sessionId: ${sessionId} (from params: ${params.sessionId}, env: ${process.env.AGENT_SESSION_ID})`);
-          return await generateImage({ ...params, sessionId });
+          return await generateImage({ ...merged, sessionId });
         },
         {
           name: toolName,
@@ -135,12 +139,24 @@ export class AgentFactory {
     } else if (serviceType === 'tts') {
       return tool(
         async (params: { texts: string[]; voice?: string; format?: string; sessionId?: string }) => {
-          await this.requestApprovalViaHITL('ai.text2speech', params as Record<string, unknown>);
+          // HITL：仅用户确认后执行，仅使用 merged（含用户编辑的 texts），写入文件后 TTS 从文件读
+          const merged = await this.requestApprovalViaHITL('ai.text2speech', params as Record<string, unknown>);
+          const sessionId = (merged.sessionId as string) || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
+          const texts = Array.isArray(merged.texts) ? merged.texts : [];
+          // 将用户确认后的台词写入文件，TTS 从文件读取，保证使用编辑后的内容
+          const config = await loadConfig();
+          const { getWorkspaceFilesystem } = await import('../services/fs.js');
+          const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
+          const scriptRelPath = 'lines/tts_confirmed.json';
+          await workspaceFs.writeFile(sessionId, scriptRelPath, JSON.stringify(texts, null, 2), 'utf-8');
+          console.log(`[tts tool] Wrote ${texts.length} texts to ${scriptRelPath}, sessionId: ${sessionId}`);
           const { synthesizeSpeech } = await import('../mcp/tts.js');
-          // 动态从环境变量获取sessionId，优先使用参数传入的sessionId
-          const sessionId = params.sessionId || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
-          console.log(`[tts tool] Using sessionId: ${sessionId} (from params: ${params.sessionId}, env: ${process.env.AGENT_SESSION_ID})`);
-          return await synthesizeSpeech({ ...params, sessionId });
+          return await synthesizeSpeech({
+            scriptFile: scriptRelPath,
+            voice: (merged.voice as string) ?? mcpConfig.service.default_params?.voice ?? 'chinese_female',
+            format: (merged.format as string) ?? mcpConfig.service.default_params?.format ?? 'mp3',
+            sessionId,
+          });
         },
         {
           name: toolName,
@@ -156,11 +172,12 @@ export class AgentFactory {
     } else if (serviceType === 'vl_script') {
       return tool(
         async (params: { imagePath: string; sessionId?: string }) => {
-          await this.requestApprovalViaHITL('ai.vl_script', params as Record<string, unknown>);
+          // HITL：仅用户确认后执行，下文仅使用 merged
+          const merged = await this.requestApprovalViaHITL('ai.vl_script', params as Record<string, unknown>);
           const { generateScriptFromImage } = await import('../mcp/vl_script.js');
-          const sessionId = params.sessionId || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
+          const sessionId = (merged.sessionId as string) || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
           console.log(`[vl_script tool] Using sessionId: ${sessionId} (from params: ${params.sessionId}, env: ${process.env.AGENT_SESSION_ID})`);
-          return await generateScriptFromImage({ ...params, sessionId });
+          return await generateScriptFromImage({ ...merged, sessionId } as { imagePath: string; sessionId?: string });
         },
         {
           name: toolName,
@@ -281,6 +298,7 @@ export class AgentFactory {
 
   /**
    * 创建 annotate_image_numbers 工具（按坐标在图上画白底数字标签并保存新图）
+   * 执行前会触发 ai.image_label_order HITL，用户可移动/修改序号
    */
   private createAnnotateImageNumbersTool(): any {
     return tool(
@@ -296,13 +314,10 @@ export class AgentFactory {
         if (input.annotations && input.annotations.length > 0) {
           annotations = input.annotations;
         } else if (input.lines && input.lines.length > 0) {
-          // 优先使用传入的 numbers（来自 TTS 返回），否则从 audio_record.json 读取
           let numbers: number[];
           if (input.numbers && input.numbers.length === input.lines.length) {
-            // 使用传入的 numbers（与 lines 按索引对应）
             numbers = input.numbers;
           } else {
-            // 从 audio_record.json 读取当前 session 的 number（向后兼容）
             const config = await loadConfig();
             const { entries } = await readLineNumbers(config.storage.outputPath);
             const sessionEntries = entries.filter((e) => e.sessionId === sessionId);
@@ -318,10 +333,44 @@ export class AgentFactory {
         } else {
           throw new Error('annotate_image_numbers 需要 annotations 或 lines 参数');
         }
+
+        // HITL：用户可移动/修改序号
+        let imageWidth: number | undefined;
+        let imageHeight: number | undefined;
+        try {
+          const config = await loadConfig();
+          const { getWorkspaceFilesystem } = await import('../services/fs.js');
+          const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
+          const normalized = input.imagePath.replace(/\\/g, '/');
+          const workspacesMatch = normalized.match(/workspaces\/([^/]+)\/(.+)$/);
+          const relPath = workspacesMatch ? workspacesMatch[2] : normalized.replace(/^[^/]+[/\\]/, '');
+          const absPath = workspaceFs.sessionPath(sessionId, relPath);
+          const sharp = (await import('sharp')).default;
+          const meta = await sharp(absPath).metadata();
+          imageWidth = meta.width ?? undefined;
+          imageHeight = meta.height ?? undefined;
+        } catch {
+          // 忽略尺寸获取失败
+        }
+
+        const hitlPayload: Record<string, unknown> = {
+          imagePath: input.imagePath,
+          annotations,
+          lines: input.lines,
+          numbers: input.numbers,
+          sessionId,
+        };
+        if (imageWidth != null) hitlPayload.imageWidth = imageWidth;
+        if (imageHeight != null) hitlPayload.imageHeight = imageHeight;
+
+        // HITL：仅用户确认后执行，仅使用 merged.annotations（含用户移动/编辑的序号）
+        const merged = await this.requestApprovalViaHITL('ai.image_label_order', hitlPayload);
+        const finalAnnotations = (merged.annotations as Array<{ number: number; x: number; y: number }>) ?? annotations;
+
         const { annotateImageNumbers } = await import('../mcp/annotate_numbers.js');
         return await annotateImageNumbers({
           imagePath: input.imagePath,
-          annotations,
+          annotations: finalAnnotations,
           sessionId,
         });
       },
@@ -547,10 +596,83 @@ export class AgentFactory {
         return this.createFinalizeWorkflowTool();
       case 'annotate_image_numbers':
         return this.createAnnotateImageNumbersTool();
+      case 'delete_artifacts':
+        return this.createDeleteArtifactsTool();
       default:
         return null;
     }
   }
+
+  /**
+   * 创建 delete_artifacts 工具：删除 session 下的图片/音频等产物，重新生成前需先删除
+   * 执行前 HITL 列出待删文件，用户确认后执行
+   */
+  private createDeleteArtifactsTool(): any {
+    return tool(
+      async (input: {
+        sessionId?: string;
+        category?: 'images' | 'audio' | 'both';
+        paths?: string[];
+      }) => {
+        const sessionId = input.sessionId || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
+        let pathsToDelete: string[] = [];
+
+        if (input.paths && input.paths.length > 0) {
+          pathsToDelete = input.paths.map((p) => p.replace(/\\/g, '/').replace(/^[^/]+[/\\]/, ''));
+        } else {
+          const config = await loadConfig();
+          const { getWorkspaceFilesystem } = await import('../services/fs.js');
+          const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
+          const category = input.category || 'both';
+          if (category === 'images' || category === 'both') {
+            const imgEntries = await workspaceFs.ls(sessionId, 'images');
+            pathsToDelete.push(...imgEntries.filter((e) => !e.isDir).map((e) => `images/${e.name}`));
+          }
+          if (category === 'audio' || category === 'both') {
+            const audioEntries = await workspaceFs.ls(sessionId, 'audio');
+            pathsToDelete.push(...audioEntries.filter((e) => !e.isDir).map((e) => `audio/${e.name}`));
+          }
+        }
+
+        if (pathsToDelete.length === 0) {
+          return { success: true, deleted: 0, message: '无待删除文件' };
+        }
+
+        const hitlPayload: Record<string, unknown> = { sessionId, paths: pathsToDelete };
+        // HITL：仅用户确认后执行，仅使用 merged.paths（若前端支持编辑列表则含用户修改）
+        const merged = await this.requestApprovalViaHITL('artifacts.delete', hitlPayload);
+        const confirmedPaths = (merged.paths as string[]) ?? [];
+
+        if (confirmedPaths.length === 0) {
+          return { success: true, deleted: 0, message: '用户取消删除' };
+        }
+
+        const config = await loadConfig();
+        const { getWorkspaceFilesystem } = await import('../services/fs.js');
+        const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
+        let deleted = 0;
+        for (const relPath of confirmedPaths) {
+          try {
+            await workspaceFs.rm(sessionId, relPath);
+            deleted++;
+          } catch (err) {
+            console.warn(`[delete_artifacts] Failed to delete ${relPath}:`, err);
+          }
+        }
+        return { success: true, deleted, message: `已删除 ${deleted} 个文件` };
+      },
+      {
+        name: 'delete_artifacts',
+        description: '删除当前 session 下的产物（图片、音频等）。重新生成前需先调用此工具删除旧产物。category 为 images|audio|both；也可直接传 paths 数组。',
+        schema: z.object({
+          sessionId: z.string().optional().describe('会话ID（留空使用当前会话）'),
+          category: z.enum(['images', 'audio', 'both']).optional().default('both').describe('要删除的类别'),
+          paths: z.array(z.string()).optional().describe('指定要删除的路径（相对 session），若提供则忽略 category'),
+        }),
+      }
+    );
+  }
+
 
   /**
    * 创建主Agent

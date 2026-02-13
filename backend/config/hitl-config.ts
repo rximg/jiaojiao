@@ -103,6 +103,14 @@ export const DEFAULT_HITL_CONFIG: HITLConfig = {
       autoApproveAfter: 30000,
       description: '以图生剧本需要确认',
     },
+    {
+      actionType: 'ai.image_label_order',
+      enabled: true,
+      priority: 'low',
+      requireApproval: true,
+      autoApproveAfter: 60000,
+      description: '图片序号标注需确认（可移动、修改序号）',
+    },
     
     // 系统操作
     {
@@ -134,6 +142,13 @@ export const DEFAULT_HITL_CONFIG: HITLConfig = {
       priority: 'high',
       requireApproval: true,
       description: '批量删除数据需要确认',
+    },
+    {
+      actionType: 'artifacts.delete',
+      enabled: true,
+      priority: 'high',
+      requireApproval: true,
+      description: '删除产物（图片/音频等）需确认',
     },
   ],
   

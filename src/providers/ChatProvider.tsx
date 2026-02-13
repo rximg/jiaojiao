@@ -18,7 +18,7 @@ interface ChatContextType {
   currentSessionId: string | null;
   lastArtifactTime: number; // 最后一次生成产物的时间戳，用于触发刷新
   sendMessage: (text: string, threadId?: string) => Promise<void>;
-  respondConfirm: (requestId: string, approved: boolean) => Promise<void>;
+  respondConfirm: (requestId: string, approved: boolean, editedPayload?: Record<string, unknown>) => Promise<void>;
   dismissQuotaError: () => void;
   dismissAgentError: () => void;
   stopStream: () => Promise<void>;
@@ -42,10 +42,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [lastArtifactTime, setLastArtifactTime] = useState<number>(0);
   const threadRef = useRef<string | null>(null);
   const allMessagesRef = useRef<Message[]>([]);
+  const pendingHitlRequestRef = useRef<typeof pendingHitlRequest>(null);
 
   useEffect(() => {
     threadRef.current = currentThreadId;
   }, [currentThreadId]);
+
+  useEffect(() => {
+    pendingHitlRequestRef.current = pendingHitlRequest;
+  }, [pendingHitlRequest]);
 
   // 自动保存消息和todos到session
   useEffect(() => {
@@ -246,14 +251,36 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
   }, [attachArtifactsToTodos]);
 
-  const respondConfirm = useCallback(async (requestId: string, approved: boolean) => {
-    console.log('[renderer] responding to HITL with:', requestId, approved);
+  const respondConfirm = useCallback(async (requestId: string, approved: boolean, editedPayload?: Record<string, unknown>) => {
+    const pending = pendingHitlRequestRef.current;
+    const finalPayload = approved && editedPayload ? { ...pending?.payload, ...editedPayload } : pending?.payload ?? {};
+    if (pending && pending.requestId === requestId) {
+      const hitlMessage: Message = {
+        id: `hitl-${requestId}`,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date(),
+        hitlBlock: {
+          requestId: pending.requestId,
+          actionType: pending.actionType,
+          payload: finalPayload,
+          approved,
+        },
+      };
+      setMessages((prev) => [...prev, hitlMessage]);
+      allMessagesRef.current = [...allMessagesRef.current, hitlMessage];
+    }
+    setPendingHitlRequest(null);
+    console.log('[renderer] responding to HITL with:', requestId, approved, editedPayload ? '(with edited payload)' : '');
     if (typeof window.electronAPI.hitl?.respond === 'function') {
-      await window.electronAPI.hitl.respond(requestId, { approved });
+      const response: { approved: boolean; payload?: Record<string, unknown> } = { approved };
+      if (approved && editedPayload && Object.keys(editedPayload).length > 0) {
+        response.payload = editedPayload;
+      }
+      await window.electronAPI.hitl.respond(requestId, response);
     } else {
       console.warn('[hitl] respond not available in preload');
     }
-    setPendingHitlRequest(null);
   }, []);
 
   const dismissQuotaError = useCallback(() => {
@@ -352,10 +379,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const sessionData = await window.electronAPI.session.get(sessionId);
       console.log('[ChatProvider] Loaded session data:', sessionData);
       
-      // 加载消息
+      // 加载消息（保留 hitlBlock，标准化 timestamp 为 Date）
       if (sessionData.messages && Array.isArray(sessionData.messages)) {
-        setMessages(sessionData.messages);
-        allMessagesRef.current = sessionData.messages;
+        const normalized = sessionData.messages.map((m: Message & { timestamp?: Date | string }) => ({
+          ...m,
+          timestamp: m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp || Date.now()),
+        }));
+        setMessages(normalized);
+        allMessagesRef.current = normalized;
       } else {
         setMessages([]);
         allMessagesRef.current = [];

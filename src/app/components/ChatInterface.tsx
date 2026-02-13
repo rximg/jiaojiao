@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, FormEvent, useEffect } from 'react';
+import React, { useState, useRef, useCallback, FormEvent, useEffect } from 'react';
 import { ArrowUp, Square, Settings, ArrowLeft, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -123,11 +123,14 @@ export default function ChatInterface({
     [currentSessionId, handleSubmit, onBack]
   );
 
-  const handleHitlContinue = useCallback(() => {
-    if (pendingHitlRequest) {
-      respondConfirm(pendingHitlRequest.requestId, true);
-    }
-  }, [pendingHitlRequest, respondConfirm]);
+  const handleHitlContinue = useCallback(
+    (editedPayload?: Record<string, unknown>) => {
+      if (pendingHitlRequest) {
+        respondConfirm(pendingHitlRequest.requestId, true, editedPayload);
+      }
+    },
+    [pendingHitlRequest, respondConfirm]
+  );
 
   const handleHitlCancel = useCallback(() => {
     if (pendingHitlRequest) {
@@ -196,11 +199,21 @@ export default function ChatInterface({
               <WelcomeMessage />
             )}
             {messages.map((message) => (
-              <ChatMessage key={message.id} message={message} />
+              <React.Fragment key={message.id}>
+                {message.hitlBlock && !message.content ? (
+                  <HitlConfirmBlock request={message.hitlBlock} />
+                ) : (
+                  <>
+                    <ChatMessage message={message} />
+                    {message.hitlBlock && <HitlConfirmBlock request={message.hitlBlock} />}
+                  </>
+                )}
+              </React.Fragment>
             ))}
             {pendingHitlRequest && (
               <HitlConfirmBlock
                 request={pendingHitlRequest}
+                sessionId={currentSessionId}
                 onContinue={handleHitlContinue}
                 onCancel={handleHitlCancel}
               />
@@ -221,7 +234,7 @@ export default function ChatInterface({
           {/* 快捷选项：等待确认时显示 [继续][取消]，否则欢迎页显示 config 选项 */}
           {waitingForConfirmation && (
             <div className="px-6 pb-2 flex flex-wrap gap-2">
-              <Button variant="default" size="sm" onClick={handleHitlContinue} className="rounded-full">
+              <Button variant="default" size="sm" onClick={() => handleHitlContinue()} className="rounded-full">
                 继续
               </Button>
               <Button variant="outline" size="sm" onClick={handleHitlCancel} className="rounded-full border-border">
