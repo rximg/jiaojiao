@@ -1,5 +1,9 @@
+import path from 'path';
 import { ipcMain, BrowserWindow, type WebContents } from 'electron';
 import { getBackendConfigDir } from './config.js';
+import { loadConfig } from '../../backend/app-config.js';
+import { getWorkspaceFilesystem } from '../../backend/services/fs.js';
+import { getSessionMessages } from './session.js';
 
 let currentStreamController: AbortController | null = null;
 
@@ -70,9 +74,6 @@ async function resolveStepResultPaths(
 ): Promise<StepResult[]> {
   if (!sessionId || stepResults.length === 0) return stepResults;
   try {
-    const path = await import('path');
-    const { loadConfig } = await import('../../backend/app-config.js');
-    const { getWorkspaceFilesystem } = await import('../../backend/services/fs.js');
     const appConfig = await loadConfig();
     const outputPath = appConfig?.storage?.outputPath ?? './outputs';
     const workspaceFs = getWorkspaceFilesystem({ outputPath });
@@ -194,7 +195,6 @@ async function sendAgentMessage(
 
     let inputMessages: any[];
     if (sessionId) {
-      const { getSessionMessages } = await import('./session.js');
       const history = await getSessionMessages(sessionId);
       const maxHistory = 30;
       const recent = history.slice(-maxHistory);

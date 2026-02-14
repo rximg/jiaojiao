@@ -3,6 +3,7 @@
  */
 import path from 'path';
 import { getAIConfig } from '../config.js';
+import { loadConfig } from '../../app-config.js';
 import { getWorkspaceFilesystem } from '../../services/fs.js';
 import { readLineNumbers, appendEntries, type LineNumberEntry } from '../../mcp/line-numbers.js';
 import { traceAiRun } from '../../agent/langsmith-trace.js';
@@ -33,12 +34,16 @@ export async function synthesizeSpeech(params: SynthesizeSpeechParams): Promise<
   });
   await previous;
   try {
+    const cfg = (await getAIConfig('tts')) as TTSAIConfig;
     const inputs = {
       scriptFile: params.scriptFile,
       textsCount: params.texts?.length,
       voice: params.voice,
       format: params.format,
       sessionId: params.sessionId,
+      provider: cfg.provider,
+      model: cfg.model,
+      url: cfg.endpoint,
     };
     return await traceAiRun(
       'ai.tts',
@@ -59,7 +64,6 @@ export async function synthesizeSpeech(params: SynthesizeSpeechParams): Promise<
 }
 
 async function synthesizeSpeechSequential(params: SynthesizeSpeechParams): Promise<SynthesizeSpeechResult> {
-  const { loadConfig } = await import('../../app-config.js');
   const config = await loadConfig();
   const cfg = (await getAIConfig('tts')) as TTSAIConfig;
   console.log('cfg', JSON.stringify(cfg, null, 2));

@@ -13,6 +13,8 @@ service:
   default_params:
     size: "1472*1104"
     count: 1
+    # 负面提示词：传入模型以尽量避免模糊文字、冗余元素等
+    negative_prompt: "模糊文字, 模糊字体, 文字模糊, 多余元素, 杂乱背景, 水印, 低质量, 变形, 扭曲, 模糊, 噪点"
   
   timeout:
     initial: 120000  # 2分钟

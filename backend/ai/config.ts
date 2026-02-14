@@ -75,15 +75,20 @@ function resolveModel(abilityConfig: ProviderAbilityModelsConfig, specifiedModel
 
 /**
  * 集成测试时可通过环境变量指定只测某一方：TEST_API_PROVIDER=zhipu | dashscope
- * 未设置时使用应用配置中的 agent.provider。
+ * 未设置时使用应用配置中的 agent.provider；未配置则抛异常，不回退默认值。
  */
 function resolveProviderForAbility(
   agentProvider: Provider | undefined,
-  ability: AIAbility
+  _ability: AIAbility
 ): Provider {
   const envProvider = process.env.TEST_API_PROVIDER;
   if (envProvider === 'zhipu' || envProvider === 'dashscope') return envProvider;
-  return (ability === 'llm' ? agentProvider : undefined) ?? 'dashscope';
+  if (agentProvider !== 'zhipu' && agentProvider !== 'dashscope') {
+    throw new Error(
+      '未配置 AI 供应商（agent.provider）：请在应用设置中选择通义（dashscope）或智谱（zhipu）后再使用'
+    );
+  }
+  return agentProvider;
 }
 
 /**
@@ -172,6 +177,7 @@ export async function getAIConfig(ability: AIAbility): Promise<AIConfig> {
     case 't2i': {
       const yaml = await loadYaml('t2i_config.yaml');
       const service = (yaml.service as Record<string, unknown>) ?? {};
+      const defaultParams = (service.default_params as Record<string, unknown>) ?? {};
       const model = resolveModel(abilityConfig);
       const apiKey = getApiKey(provider);
       const endpoint =
@@ -182,12 +188,19 @@ export async function getAIConfig(ability: AIAbility): Promise<AIConfig> {
         provider === 'zhipu'
           ? `${DEFAULT_ZHIPU_BASE.replace(/\/$/, '')}/async-result`
           : (process.env.DASHSCOPE_T2I_RESULT_ENDPOINT as string) ?? (service.task_endpoint as string) ?? 'https://dashscope.aliyuncs.com/api/v1/tasks';
+      const negativePrompt =
+        typeof defaultParams.negative_prompt === 'string'
+          ? defaultParams.negative_prompt
+          : typeof service.negative_prompt === 'string'
+            ? service.negative_prompt
+            : undefined;
       const cfg: T2IAIConfig = {
         provider,
         apiKey,
         endpoint,
         taskEndpoint: taskEndpoint.replace(/\/$/, ''),
         model,
+        ...(negativePrompt ? { negativePrompt } : {}),
       };
       return cfg;
     }

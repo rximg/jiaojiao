@@ -6,6 +6,7 @@
 import { randomUUID } from 'crypto';
 import { getHITLRule, requiresApproval, getTimeout, type HITLConfig, DEFAULT_HITL_CONFIG } from '../config/hitl-config.js';
 import type { LogManager } from './log-manager.js';
+import { registerHitlResponseWaiter } from '../../electron/ipc/hitl-response-bridge.js';
 
 export interface HITLRequest {
   requestId: string;
@@ -137,15 +138,9 @@ export class HITLService {
    * 发送确认请求到前端
    */
   private async sendConfirmationRequest(request: HITLRequest): Promise<HITLResponse> {
-    // 仅在明确为集成测试或单元测试时跳过确认（无 UI）；正常运行时必须等待用户点击确认
-    if (process.env.RUN_INTEGRATION_TESTS === 'true' || process.env.NODE_ENV === 'test') {
-      return { approved: true };
-    }
-    
     try {
       const { BrowserWindow } = await import('electron');
-      const { registerHitlResponseWaiter } = await import('../../electron/ipc/hitl-response-bridge.js');
-      
+
       const win = BrowserWindow.getAllWindows()[0];
       if (!win) {
         throw new Error('Main window not found');

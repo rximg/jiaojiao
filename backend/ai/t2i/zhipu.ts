@@ -9,23 +9,26 @@ const MAX_ATTEMPTS = 60;
 export async function submitTaskZhipu(
   cfg: T2IAIConfig,
   prompt: string,
-  parameters: { size?: string; quality?: string }
+  parameters: { size?: string; quality?: string; negative_prompt?: string }
 ): Promise<string> {
   const size = parameters.size ?? '1280x1280';
-  const body = {
+  const body: Record<string, unknown> = {
     model: cfg.model,
     prompt,
     size: size.includes('*') ? size.replace('*', 'x') : size,
     quality: parameters.quality ?? 'hd',
     watermark_enabled: true,
   };
+  if (parameters.negative_prompt?.trim()) {
+    body.negative_prompt = parameters.negative_prompt.trim();
+  }
   const res = await fetch(cfg.endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${cfg.apiKey}`,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(body as Record<string, unknown>),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');

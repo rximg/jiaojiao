@@ -4,6 +4,7 @@
 import path from 'path';
 import { promises as fs } from 'fs';
 import { getAIConfig } from '../config.js';
+import { loadConfig } from '../../app-config.js';
 import { getWorkspaceFilesystem } from '../../services/fs.js';
 import { traceAiRun } from '../../agent/langsmith-trace.js';
 import type {
@@ -48,6 +49,7 @@ export type { GenerateImageParams, GenerateImageResult };
 
 export async function generateImage(params: GenerateImageParams): Promise<GenerateImageResult> {
   const { size = '1024*1024', style, count = 1, sessionId = DEFAULT_SESSION_ID } = params;
+  const cfg = (await getAIConfig('t2i')) as T2IAIConfig;
   const inputs = {
     prompt: params.prompt,
     promptFile: params.promptFile,
@@ -55,6 +57,9 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
     style,
     count,
     sessionId,
+    provider: cfg.provider,
+    model: cfg.model,
+    url: cfg.endpoint,
   };
 
   return traceAiRun(
@@ -73,7 +78,6 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
 }
 
 async function generateImageImpl(params: GenerateImageParams): Promise<GenerateImageResult> {
-  const { loadConfig } = await import('../../app-config.js');
   const appConfig = await loadConfig();
   const cfg = (await getAIConfig('t2i')) as T2IAIConfig;
   const { size = '1024*1024', style, count = 1, sessionId = DEFAULT_SESSION_ID } = params;
@@ -83,11 +87,14 @@ async function generateImageImpl(params: GenerateImageParams): Promise<GenerateI
   const workspaceFs = getWorkspaceFilesystem({ outputPath: appConfig.storage.outputPath });
   const prompt = await resolvePrompt(params, sessionId, appConfig.storage.outputPath);
 
+  const negativePrompt = [cfg.negativePrompt, style].filter(Boolean).join(', ') || undefined;
+
   let imageUrl: string;
   if (cfg.provider === 'zhipu') {
     const taskId = await submitTaskZhipu(cfg, prompt, {
       size: size.replace(/\*/g, 'x'),
       quality: 'hd',
+      negative_prompt: negativePrompt,
     });
     imageUrl = await pollForImageUrlZhipu(cfg, taskId);
   } else {
@@ -96,7 +103,7 @@ async function generateImageImpl(params: GenerateImageParams): Promise<GenerateI
       max_images: count,
       enable_interleave: true,
     };
-    if (style) parameters.negative_prompt = style;
+    if (negativePrompt) parameters.negative_prompt = negativePrompt;
     const taskId = await submitTaskDashScope(cfg, prompt, parameters);
     imageUrl = await pollForImageUrlDashScope(cfg, taskId);
   }

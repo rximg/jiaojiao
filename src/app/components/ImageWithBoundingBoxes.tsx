@@ -176,7 +176,14 @@ export default function ImageWithBoundingBoxes({
                 />
               ) : (
                 <span
-                  className="text-xs font-bold text-foreground px-1 pointer-events-none select-none"
+                  role="button"
+                  tabIndex={0}
+                  className="text-xs font-bold text-foreground px-1 cursor-pointer select-none"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleNumberClick(index);
+                  }}
+                  onKeyDown={(e) => e.key === 'Enter' && handleNumberClick(index)}
                 >
                   {ann.number}
                 </span>

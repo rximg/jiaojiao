@@ -24,6 +24,17 @@ export default function ChatInterface({
   const [input, setInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  /** 单行高度，多行时随内容扩展（不超过 max） */
+  const adjustTextareaHeight = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 52), 200)}px`;
+  }, []);
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [input, adjustTextareaHeight]);
   const { messages, todos, isLoading, sendMessage, stopStream, currentSessionId, createNewSession, loadSession, resetSession, lastArtifactTime, pendingHitlRequest, respondConfirm } = useChat();
   const waitingForConfirmation = Boolean(pendingHitlRequest);
   const [showWelcome, setShowWelcome] = useState(true);
@@ -240,7 +251,7 @@ export default function ChatInterface({
               <Button variant="default" size="sm" onClick={() => handleHitlContinue()} className="rounded-full">
                 继续
               </Button>
-              <Button variant="outline" size="sm" onClick={handleHitlCancel} className="rounded-full border-border">
+              <Button variant="outline" size="sm" onClick={() => handleHitlCancel()} className="rounded-full border-border">
                 取消
               </Button>
             </div>
@@ -266,7 +277,8 @@ export default function ChatInterface({
                       ? '正在处理...'
                       : '输入消息...'
                 }
-                className="min-h-[60px] max-h-[200px] resize-none rounded-xl border-border"
+                rows={1}
+                className="min-h-[52px] max-h-[200px] resize-none overflow-y-auto rounded-xl border-border py-3 leading-normal"
                 disabled={isLoading}
               />
               <Button
@@ -274,7 +286,7 @@ export default function ChatInterface({
                 variant={isLoading && !waitingForConfirmation ? 'destructive' : 'default'}
                 onClick={isLoading && !waitingForConfirmation ? stopStream : handleSubmit}
                 disabled={!waitingForConfirmation && !isLoading && !input.trim()}
-                className="self-end"
+                className="shrink-0 h-[52px] min-h-[52px] px-4 rounded-xl"
               >
                 {isLoading && !waitingForConfirmation ? (
                   <>

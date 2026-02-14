@@ -4,6 +4,7 @@
 import path from 'path';
 import { promises as fs } from 'fs';
 import { getAIConfig } from '../config.js';
+import { loadConfig } from '../../app-config.js';
 import { getWorkspaceFilesystem } from '../../services/fs.js';
 import { traceAiRun } from '../../agent/langsmith-trace.js';
 import type {
@@ -76,7 +77,14 @@ export async function generateScriptFromImage(
   params: GenerateScriptFromImageParams
 ): Promise<GenerateScriptFromImageResult> {
   const sessionId = params.sessionId ?? DEFAULT_SESSION_ID;
-  const inputs = { imagePath: params.imagePath, sessionId };
+  const cfg = (await getAIConfig('vl')) as VLAIConfig;
+  const inputs = {
+    imagePath: params.imagePath,
+    sessionId,
+    provider: cfg.provider,
+    model: cfg.model,
+    url: cfg.baseUrl,
+  };
 
   return traceAiRun(
     'ai.vl',
@@ -97,7 +105,6 @@ async function generateScriptFromImageImpl(
 ): Promise<GenerateScriptFromImageResult> {
   const cfg = (await getAIConfig('vl')) as VLAIConfig;
   const sessionId = params.sessionId ?? DEFAULT_SESSION_ID;
-  const { loadConfig } = await import('../../app-config.js');
   const appConfig = await loadConfig();
   const workspaceFs2 = getWorkspaceFilesystem({ outputPath: appConfig.storage.outputPath });
   const workspaceRoot = workspaceFs2.root;

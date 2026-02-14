@@ -114,6 +114,8 @@ export interface T2IAIConfig extends AIConfigBase {
   endpoint: string;
   taskEndpoint: string;
   model: string;
+  /** 负面提示词，传入模型以尽量避免模糊文字、冗余元素等 */
+  negativePrompt?: string;
 }
 
 export type AIConfig = LLMAIConfig | VLAIConfig | TTSAIConfig | T2IAIConfig;

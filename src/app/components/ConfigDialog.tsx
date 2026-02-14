@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import {
   Dialog,
   DialogContent,
@@ -11,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { AppConfig } from '@/types/types';
+import { DASHSCOPE_APPLY_STEPS, ZHIPU_APPLY_STEPS } from '@/data/api-key-apply-steps';
 
 /** LLM 模型选项，与 backend/config/ai_models.json 的 llm 保持一致 */
 const LLM_OPTIONS = {
@@ -56,6 +58,7 @@ export default function ConfigDialog({
   const [maxTokens, setMaxTokens] = useState(20000);
   const [outputPath, setOutputPath] = useState('./outputs');
   const [ttsStartNumber, setTtsStartNumber] = useState(6000);
+  const [applyStepsOpen, setApplyStepsOpen] = useState(false);
 
   useEffect(() => {
     if (open && initialConfig) {
@@ -123,6 +126,7 @@ export default function ConfigDialog({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
@@ -134,15 +138,26 @@ export default function ConfigDialog({
         <div className="grid gap-5 py-4">
           <div className="space-y-2">
             <Label htmlFor="provider" className="text-foreground">供应商</Label>
-            <select
-              id="provider"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              value={provider}
-              onChange={(e) => setProvider(e.target.value as Provider)}
-            >
-              <option value="dashscope">阿里百炼</option>
-              <option value="zhipu">智谱</option>
-            </select>
+            <div className="flex gap-2">
+              <select
+                id="provider"
+                className="flex h-9 flex-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={provider}
+                onChange={(e) => setProvider(e.target.value as Provider)}
+              >
+                <option value="dashscope">阿里百炼</option>
+                <option value="zhipu">智谱</option>
+              </select>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0 rounded-md"
+                onClick={() => setApplyStepsOpen(true)}
+              >
+                申请
+              </Button>
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="apikey" className="text-foreground">API Key</Label>
@@ -217,5 +232,36 @@ export default function ConfigDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* 申请步骤弹窗：按当前供应商显示对应 Markdown 文档 */}
+    <Dialog open={applyStepsOpen} onOpenChange={setApplyStepsOpen}>
+      <DialogContent className="sm:max-w-[560px] max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>
+            {provider === 'dashscope' ? '阿里百炼' : '智谱'} API Key 申请步骤
+          </DialogTitle>
+          <DialogDescription>按以下步骤申请并获取 API Key，填入上方输入框后保存。</DialogDescription>
+        </DialogHeader>
+        <div className="flex-1 min-h-0 overflow-y-auto pr-2 -mr-2 border-t border-border pt-4 mt-1 text-foreground text-sm [&_h1]:text-lg [&_h1]:font-bold [&_h1]:mt-4 [&_h1]:mb-2 [&_h1:first-child]:mt-0 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:mt-3 [&_h2]:mb-1.5 [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:ml-4 [&_li]:list-disc [&_blockquote]:border-l-2 [&_blockquote]:border-muted-foreground [&_blockquote]:pl-3 [&_blockquote]:italic [&_strong]:font-semibold">
+          <ReactMarkdown
+            components={{
+              a: ({ href, children }) => (
+                <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                  {children}
+                </a>
+              ),
+            }}
+          >
+            {provider === 'dashscope' ? DASHSCOPE_APPLY_STEPS : ZHIPU_APPLY_STEPS}
+          </ReactMarkdown>
+        </div>
+        <DialogFooter className="shrink-0 pt-4">
+          <Button variant="outline" onClick={() => setApplyStepsOpen(false)} className="rounded-lg">
+            关闭
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </>
   );
 }

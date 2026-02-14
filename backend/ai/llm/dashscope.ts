@@ -3,8 +3,6 @@
  */
 import { ChatOpenAI } from '@langchain/openai';
 import type { LLMAIConfig } from '../types.js';
-import type { BaseMessage, BaseChatMessage } from '@langchain/core/messages';
-
 export interface CreateLLMOptions {
   apiKey: string;
   baseURL: string;

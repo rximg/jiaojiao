@@ -11,7 +11,7 @@ import { createLLMFromAIConfig } from '../ai/llm/index.js';
 import type { LLMAIConfig } from '../ai/types.js';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { DEFAULT_SESSION_ID } from '../services/fs.js';
+import { DEFAULT_SESSION_ID, getWorkspaceFilesystem, resolveWorkspaceRoot } from '../services/fs.js';
 import { createAgentRuntime, type AgentRuntime } from '../services/runtime-manager.js';
 import { readLineNumbers } from '../mcp/line-numbers.js';
 
@@ -21,7 +21,6 @@ const __dirname = path.dirname(__filename);
 export class AgentFactory {
   private configLoader: ConfigLoader;
   private agentConfig: AgentConfig;
-  private appConfig: any;
   private projectRoot: string;
   private runtime?: AgentRuntime;  // 新增：Runtime 实例
 
@@ -90,7 +89,11 @@ export class AgentFactory {
     if (!this.runtime) {
       throw new Error('Runtime not initialized; cannot request HITL approval');
     }
-    return await this.runtime.hitlService.requestApproval(actionType, payload);
+    const result = await this.runtime.hitlService.requestApproval(actionType, payload);
+    if (result === null) {
+      throw new Error(`${actionType} was rejected or cancelled`);
+    }
+    return result;
   }
 
   /**
@@ -141,7 +144,6 @@ export class AgentFactory {
           const texts = Array.isArray(merged.texts) ? merged.texts : [];
           // 将用户确认后的台词写入文件，TTS 从文件读取，保证使用编辑后的内容
           const config = await loadConfig();
-          const { getWorkspaceFilesystem } = await import('../services/fs.js');
           const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
           const scriptRelPath = 'lines/tts_confirmed.json';
           await workspaceFs.writeFile(sessionId, scriptRelPath, JSON.stringify(texts, null, 2), 'utf-8');
@@ -198,7 +200,6 @@ export class AgentFactory {
     return tool(
       async (input: { imagePath?: string; audioPath?: string; scriptText?: string; sessionId?: string }) => {
         const { imagePath, audioPath, scriptText, sessionId = process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID } = input;
-        const { getWorkspaceFilesystem } = await import('../services/fs.js');
         const config = await loadConfig();
         const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
         
@@ -336,7 +337,6 @@ export class AgentFactory {
         let imageHeight: number | undefined;
         try {
           const config = await loadConfig();
-          const { getWorkspaceFilesystem } = await import('../services/fs.js');
           const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
           const normalized = input.imagePath.replace(/\\/g, '/');
           const workspacesMatch = normalized.match(/workspaces\/([^/]+)\/(.+)$/);
@@ -388,65 +388,6 @@ export class AgentFactory {
             .array(z.number())
             .optional()
             .describe('可选的 number 列表（来自 TTS 返回的 numbers），与 lines 按索引一一对应；如果提供则优先使用，否则从 audio_record.json 读取'),
-          sessionId: z.string().optional().describe('会话ID（留空使用当前会话）'),
-        }),
-      }
-    );
-  }
-
-  /**
-   * 创建 write_prompt_file 工具（保存提示词到文件）。
-   * 保留实现供日后使用；当前 prompt_generator 使用 FilesystemMiddleware 的 write_file。
-   */
-  private createWritePromptFileTool(): any {
-    return tool(
-      async (input: { content: string; filename?: string; sessionId?: string }) => {
-        // Capture sessionId at execution time
-        const capturedSessionId = input.sessionId || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
-        const { content, filename = 'image_prompt.txt' } = input;
-        
-        console.log(`[write_prompt_file] Tool invoked with:`);
-        console.log(`  - input.sessionId: ${input.sessionId}`);
-        console.log(`  - process.env.AGENT_SESSION_ID: ${process.env.AGENT_SESSION_ID}`);
-        console.log(`  - Using sessionId: ${capturedSessionId}`);
-        console.log(`  - filename: ${filename}`);
-        
-        const { getWorkspaceFilesystem } = await import('../services/fs.js');
-        const config = await loadConfig();
-        const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
-        
-        try {
-          const filePath = await workspaceFs.writeFile(capturedSessionId, filename, content, 'utf-8');
-          console.log(`[write_prompt_file] Successfully saved prompt to: ${filePath}`);
-          console.log(`[write_prompt_file] Content length: ${content.length} bytes`);
-          
-          // Verify the file was written
-          const verifyContent = await workspaceFs.readFile(capturedSessionId, filename, 'utf-8');
-          if (typeof verifyContent === 'string' && verifyContent === content) {
-            console.log(`[write_prompt_file] Verification successful`);
-          } else {
-            console.warn(`[write_prompt_file] Warning: File content verification failed`);
-          }
-          
-          return {
-            success: true,
-            filename: filename,
-            path: filePath,
-            sessionId: capturedSessionId,
-            message: `提示词已保存到文件: ${filename} (session: ${capturedSessionId})`
-          };
-        } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          console.error(`[write_prompt_file] Failed to save file:`, errorMsg);
-          throw new Error(`Failed to save prompt file: ${errorMsg}`);
-        }
-      },
-      {
-        name: 'write_prompt_file',
-        description: '将生成的提示词保存到workspace文件中，避免长文本占用上下文',
-        schema: z.object({
-          content: z.string().describe('要保存的提示词内容'),
-          filename: z.string().optional().default('image_prompt.txt').describe('文件名（默认: image_prompt.txt）'),
           sessionId: z.string().optional().describe('会话ID（留空使用当前会话）'),
         }),
       }
@@ -522,7 +463,6 @@ export class AgentFactory {
       if (useFilesystemMiddleware) {
         // 获取 workspace 根目录路径，使用 sessionId 作为子目录
         const config = await loadConfig();
-        const { resolveWorkspaceRoot } = await import('../services/fs.js');
         const workspaceRoot = resolveWorkspaceRoot(config.storage.outputPath);
         const sessionWorkspaceRoot = path.join(workspaceRoot, sessionId);
         
@@ -618,7 +558,6 @@ export class AgentFactory {
           pathsToDelete = input.paths.map((p) => p.replace(/\\/g, '/').replace(/^[^/]+[/\\]/, ''));
         } else {
           const config = await loadConfig();
-          const { getWorkspaceFilesystem } = await import('../services/fs.js');
           const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
           const category = input.category || 'both';
           if (category === 'images' || category === 'both') {
@@ -645,7 +584,6 @@ export class AgentFactory {
         }
 
         const config = await loadConfig();
-        const { getWorkspaceFilesystem } = await import('../services/fs.js');
         const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
         let deleted = 0;
         for (const relPath of confirmedPaths) {
@@ -734,7 +672,6 @@ export class AgentFactory {
     let checkpointer: InstanceType<typeof import('../services/workspace-checkpoint-saver.js').WorkspaceCheckpointSaver> | undefined;
     if (sessionId) {
       const config = await loadConfig();
-      const { getWorkspaceFilesystem } = await import('../services/fs.js');
       const workspace = getWorkspaceFilesystem({ outputPath: config.storage?.outputPath ?? './outputs' });
       const { WorkspaceCheckpointSaver } = await import('../services/workspace-checkpoint-saver.js');
       checkpointer = new WorkspaceCheckpointSaver(workspace);
