@@ -85,7 +85,8 @@ If catchup report shows unsynced context:
 | Location | What Goes There |
 |----------|-----------------|
 | Skill directory (`.cursor/skills/planning-with-files/`) | Templates, scripts, reference docs |
-| Project `.planning/` folder | `task_plan.md`, `findings.md`, `progress.md` (all in one place) |
+| Project `.planning/` folder | 当前任务的 `task_plan.md`, `findings.md`, `progress.md`（同一目录） |
+| Project `.planning/recycle/<任务名>/` | 已完成任务的归档：将当次任务的 task_plan.md、progress.md、findings.md 移入此处（见下方「回收」） |
 
 ## Quick Start
 
@@ -98,7 +99,7 @@ Before ANY complex task:
 5. **Re-read plan before decisions** — Refreshes goals in attention window
 6. **Update after each phase** — Mark complete, log errors
 
-> **Note:** All planning files live under `.planning/` so the project root stays clean. When all phases are complete, delete the `.planning/` folder (see "When All Phases Complete: Cleanup" below).
+> **Note:** All planning files live under `.planning/` so the project root stays clean. When all phases are complete, move them into `.planning/recycle/<任务名>/` (see "When All Phases Complete: Cleanup" below).
 
 ## The Core Pattern
 
@@ -201,27 +202,35 @@ If you can answer these, your context management is solid:
 | What have I learned? | `.planning/findings.md` |
 | What have I done? | `.planning/progress.md` |
 
-## When All Phases Complete: Cleanup
+## When All Phases Complete: Cleanup（回收）
 
-**When every phase in `.planning/task_plan.md` is marked `complete`:**
+**当 `.planning/task_plan.md` 中所有 phase 均标记为 `complete` 时，执行回收：**
 
-1. **按名称命名**：从 `.planning/task_plan.md` 的 Goal 取简短名称（或使用日期），将 `.planning` 重命名为可识别的文件夹名，例如：
-   - `planning-<任务简述>-YYYY-MM-DD`（如 `planning-hitl-chat-2025-02-13`）
+1. **确保 `.planning/recycle/` 存在**  
+   若不存在，先创建目录 `.planning/recycle/`。
+
+2. **确定任务名**  
+   从 `.planning/task_plan.md` 的 **Goal** 取简短名称（或使用日期），格式为：
+   - `planning-<任务简述>-YYYY-MM-DD`  
+   - 例如：`planning-hitl-chat-2026-02-10`、`planning-hitl-enhance-2026-02-13`  
    - 名称中避免空格和特殊字符，用 `-` 连接。
-2. **移动到回收站**（不要永久删除），便于需要时恢复：
-   - **Windows (PowerShell)**：先重命名再移到回收站（文件夹用 `DeleteDirectory`）：
-     ```powershell
-     $name = "planning-你的任务名-$(Get-Date -Format 'yyyy-MM-dd')"
-     Rename-Item -Path ".planning" -NewName $name -ErrorAction SilentlyContinue
-     $fullPath = (Resolve-Path $name).Path
-     Add-Type -AssemblyName Microsoft.VisualBasic
-     [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($fullPath, 'OnlyErrorDialogs', 'SendToRecycleBin')
-     ```
-   - **macOS**：`mv "$(pwd)/.planning" ~/.Trash/planning-任务名-$(date +%Y-%m-%d)`
-   - **Linux**：先重命名后 `mv` 到 `~/.local/share/Trash/files/`。
-3. 项目根目录下不再保留 `.planning/` 或未命名的规划文件夹。
 
-Do not leave `.planning/` in the project root after the task is done; always rename and move to recycle bin (or Trash).
+3. **在 recycle 下按任务名建子文件夹**  
+   创建 `.planning/recycle/<任务名>/`（如 `.planning/recycle/planning-hitl-chat-2026-02-10/`）。
+
+4. **移动规划文件到该子文件夹**  
+   将以下文件从 `.planning/` 根下**移动**到 `.planning/recycle/<任务名>/`：
+   - `task_plan.md`
+   - `progress.md`
+   - `findings.md`（若存在）
+
+5. **验证**  
+   用 `Glob` 或 `list_dir` 查看：
+   - `.planning/` 下应只剩 `recycle` 目录（当前任务的 task_plan、progress、findings 已移走）；
+   - `.planning/recycle/<任务名>/` 下应包含 `task_plan.md`、`progress.md`，以及若有则 `findings.md`。
+
+6. **结果**  
+   完成后，`.planning/` 可空或仅含 `recycle`，便于下次任务在 `.planning/` 根下新建 `task_plan.md`、`progress.md`、`findings.md`。历史规划均按任务名归档在 `.planning/recycle/<任务名>/` 下，便于恢复或查阅。
 
 ## When to Use This Pattern
 
@@ -269,4 +278,4 @@ Helper scripts for automation:
 | Start executing immediately | Create plan file FIRST in `.planning/` |
 | Repeat failed actions | Track attempts, mutate approach |
 | Create files in skill directory | Create files in `.planning/` in your project |
-| Leave `.planning/` after task is complete | Delete `.planning/` when all phases are complete |
+| Leave `.planning/` after task is complete | Move `task_plan.md`, `progress.md`, `findings.md` to `.planning/recycle/<任务名>/` when all phases complete |
