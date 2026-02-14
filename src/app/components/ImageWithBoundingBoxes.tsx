@@ -55,11 +55,11 @@ export default function ImageWithBoundingBoxes({
       const startX = e.clientX;
       const startY = e.clientY;
       const startAnn = localAnnotations[index];
+      const DRAG_THRESHOLD_PX = 5;
 
       const onMove = (moveEvent: MouseEvent) => {
         const imgEl = imgRef.current;
-        const container = containerRef.current;
-        if (!imgEl || !container) return;
+        if (!imgEl) return;
         const rect = imgEl.getBoundingClientRect();
         const scaleX = imgSize.w / rect.width;
         const scaleY = imgSize.h / rect.height;
@@ -76,12 +76,20 @@ export default function ImageWithBoundingBoxes({
           return next;
         });
       };
-      const onUp = () => {
+      const onUp = (upEvent: MouseEvent) => {
         window.removeEventListener('mousemove', onMove);
         window.removeEventListener('mouseup', onUp);
-        const next = latestRef.current;
-        if (parentLatestRef) parentLatestRef.current = next;
-        onChange(next);
+        const moved = Math.hypot(upEvent.clientX - startX, upEvent.clientY - startY);
+        if (moved < DRAG_THRESHOLD_PX) {
+          // 未移动或移动很小，视为点击：进入编辑
+          const current = latestRef.current[index];
+          setEditValue(String(current?.number ?? 1));
+          setEditingIndex(index);
+        } else {
+          const next = latestRef.current;
+          if (parentLatestRef) parentLatestRef.current = next;
+          onChange(next);
+        }
       };
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
@@ -168,12 +176,7 @@ export default function ImageWithBoundingBoxes({
                 />
               ) : (
                 <span
-                  className="text-xs font-bold text-foreground px-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleNumberClick(index);
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()}
+                  className="text-xs font-bold text-foreground px-1 pointer-events-none select-none"
                 >
                   {ann.number}
                 </span>

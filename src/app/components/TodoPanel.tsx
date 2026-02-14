@@ -1,5 +1,5 @@
 import { CheckCircle2, Clock3, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import type { TodoItem } from '@/types/types';
 import ArtifactViewer from './ArtifactViewer';
 
@@ -23,7 +23,7 @@ function statusLabel(status: TodoItem['status']) {
   return '待处理';
 }
 
-export default function TodoPanel({ todos }: TodoPanelProps) {
+function TodoPanelInner({ todos }: TodoPanelProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const total = todos.length;
   const completed = todos.filter((t) => t.status === 'completed').length;
@@ -48,8 +48,6 @@ export default function TodoPanel({ todos }: TodoPanelProps) {
       todo.artifacts.llmOutput
     );
   };
-
-  console.log('[TodoPanel] rendering with todos:', todos.length, 'items:', todos);
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -103,3 +101,6 @@ export default function TodoPanel({ todos }: TodoPanelProps) {
     </div>
   );
 }
+
+// 仅当 todos 引用变化时重渲染，避免 ChatProvider 其它 state（messages、isLoading 等）更新时重复渲染
+export default memo(TodoPanelInner);
