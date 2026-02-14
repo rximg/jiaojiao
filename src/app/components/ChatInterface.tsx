@@ -132,11 +132,14 @@ export default function ChatInterface({
     [pendingHitlRequest, respondConfirm]
   );
 
-  const handleHitlCancel = useCallback(() => {
-    if (pendingHitlRequest) {
-      respondConfirm(pendingHitlRequest.requestId, false);
-    }
-  }, [pendingHitlRequest, respondConfirm]);
+  const handleHitlCancel = useCallback(
+    (cancelReason?: string) => {
+      if (pendingHitlRequest) {
+        respondConfirm(pendingHitlRequest.requestId, false, undefined, cancelReason);
+      }
+    },
+    [pendingHitlRequest, respondConfirm]
+  );
 
   return (
     <div className="flex h-screen flex-col">

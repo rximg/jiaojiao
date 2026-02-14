@@ -18,7 +18,7 @@ interface ChatContextType {
   currentSessionId: string | null;
   lastArtifactTime: number; // 最后一次生成产物的时间戳，用于触发刷新
   sendMessage: (text: string, threadId?: string) => Promise<void>;
-  respondConfirm: (requestId: string, approved: boolean, editedPayload?: Record<string, unknown>) => Promise<void>;
+  respondConfirm: (requestId: string, approved: boolean, editedPayload?: Record<string, unknown>, cancelReason?: string) => Promise<void>;
   dismissQuotaError: () => void;
   dismissAgentError: () => void;
   stopStream: () => Promise<void>;
@@ -251,7 +251,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
   }, [attachArtifactsToTodos]);
 
-  const respondConfirm = useCallback(async (requestId: string, approved: boolean, editedPayload?: Record<string, unknown>) => {
+  const respondConfirm = useCallback(async (requestId: string, approved: boolean, editedPayload?: Record<string, unknown>, cancelReason?: string) => {
     const pending = pendingHitlRequestRef.current;
     const finalPayload = approved && editedPayload ? { ...pending?.payload, ...editedPayload } : pending?.payload ?? {};
     if (pending && pending.requestId === requestId) {
@@ -271,11 +271,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       allMessagesRef.current = [...allMessagesRef.current, hitlMessage];
     }
     setPendingHitlRequest(null);
-    console.log('[renderer] responding to HITL with:', requestId, approved, editedPayload ? '(with edited payload)' : '');
+    console.log('[renderer] responding to HITL with:', requestId, approved, editedPayload ? '(with edited payload)' : '', cancelReason ? '(cancel reason)' : '');
     if (typeof window.electronAPI.hitl?.respond === 'function') {
-      const response: { approved: boolean; payload?: Record<string, unknown> } = { approved };
+      const response: { approved: boolean; payload?: Record<string, unknown>; reason?: string } = { approved };
       if (approved && editedPayload && Object.keys(editedPayload).length > 0) {
         response.payload = editedPayload;
+      }
+      if (!approved && cancelReason?.trim()) {
+        response.reason = cancelReason.trim();
       }
       await window.electronAPI.hitl.respond(requestId, response);
     } else {

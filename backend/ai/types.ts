@@ -23,6 +23,8 @@ export interface LLMOptions {
 export interface GenerateScriptFromImageParams {
   imagePath: string;
   sessionId?: string;
+  /** 用户补充或修改要求，与系统提示词一起组成 VL 的完整提示词 */
+  userPrompt?: string;
 }
 
 export interface ScriptLine {

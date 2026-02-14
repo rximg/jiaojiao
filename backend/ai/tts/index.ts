@@ -5,6 +5,7 @@ import path from 'path';
 import { getAIConfig } from '../config.js';
 import { getWorkspaceFilesystem } from '../../services/fs.js';
 import { readLineNumbers, appendEntries, type LineNumberEntry } from '../../mcp/line-numbers.js';
+import { traceAiRun } from '../../agent/langsmith-trace.js';
 import type { SynthesizeSpeechParams, SynthesizeSpeechResult, TTSAIConfig } from '../types.js';
 import { doOneTtsDashScope } from './dashscope.js';
 import { doOneTtsZhipu } from './zhipu.js';
@@ -32,7 +33,26 @@ export async function synthesizeSpeech(params: SynthesizeSpeechParams): Promise<
   });
   await previous;
   try {
-    return await synthesizeSpeechSequential(params);
+    const inputs = {
+      scriptFile: params.scriptFile,
+      textsCount: params.texts?.length,
+      voice: params.voice,
+      format: params.format,
+      sessionId: params.sessionId,
+    };
+    return await traceAiRun(
+      'ai.tts',
+      'tool',
+      inputs,
+      () => synthesizeSpeechSequential(params),
+      (result) => ({
+        audioPathsCount: result.audioPaths.length,
+        audioPaths: result.audioPaths,
+        numbers: result.numbers,
+        sessionId: result.sessionId,
+        _note: 'audio blob not recorded; paths only',
+      })
+    );
   } finally {
     resolveMutex!();
   }

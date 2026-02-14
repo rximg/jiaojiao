@@ -101,7 +101,14 @@ export class HITLService {
         });
       }
       
-      if (!response.approved) return null;
+      if (!response.approved) {
+        const reason = response.reason?.trim();
+        throw new Error(
+          reason
+            ? `${actionType} cancelled by user. User modification: ${reason}`
+            : `${actionType} cancelled by user`
+        );
+      }
       const merged = { ...payload, ...(response.payload ?? {}) };
       return merged as Record<string, unknown>;
     } catch (error) {
@@ -130,8 +137,8 @@ export class HITLService {
    * 发送确认请求到前端
    */
   private async sendConfirmationRequest(request: HITLRequest): Promise<HITLResponse> {
-    // 如果在测试环境，直接返回批准
-    if (process.env.RUN_INTEGRATION_TESTS === 'false' || process.env.NODE_ENV === 'test') {
+    // 仅在明确为集成测试或单元测试时跳过确认（无 UI）；正常运行时必须等待用户点击确认
+    if (process.env.RUN_INTEGRATION_TESTS === 'true' || process.env.NODE_ENV === 'test') {
       return { approved: true };
     }
     

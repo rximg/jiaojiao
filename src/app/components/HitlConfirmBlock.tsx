@@ -27,7 +27,8 @@ interface HitlConfirmBlockProps {
   /** 会话 ID，用于读取 promptFile 内容（仅 pending 时需要） */
   sessionId?: string | null;
   onContinue?: (editedPayload?: Record<string, unknown>) => void;
-  onCancel?: () => void;
+  /** 取消时可传入用户输入的修改说明（如 vl_script 的补充要求），会作为 reason 传回后端并出现在错误信息中，便于下次调用时使用 */
+  onCancel?: (cancelReason?: string) => void;
 }
 
 /** 将 "1. xxx\n2. yyy" 解析回 string[] */
@@ -50,6 +51,7 @@ export default function HitlConfirmBlock({ request, sessionId, onContinue, onCan
   const [promptLoadedFromFile, setPromptLoadedFromFile] = useState(false);
   const [labelAnnotations, setLabelAnnotations] = useState<Array<{ number: number; x: number; y: number }>>([]);
   const labelAnnotationsRef = useRef<Array<{ number: number; x: number; y: number }>>([]);
+  const [editableVlUserPrompt, setEditableVlUserPrompt] = useState('');
 
   // 加载 promptFile 内容
   useEffect(() => {
@@ -110,6 +112,13 @@ export default function HitlConfirmBlock({ request, sessionId, onContinue, onCan
     }
   }, [resolved, request.actionType, payload.annotations, payload.lines, payload.numbers]);
 
+  // 初始化 vl_script 用户补充/修改
+  useEffect(() => {
+    if (resolved || request.actionType !== 'ai.vl_script') return;
+    const up = typeof payload.userPrompt === 'string' ? payload.userPrompt : '';
+    setEditableVlUserPrompt(up);
+  }, [resolved, request.actionType, payload.userPrompt]);
+
   const handleContinue = useCallback(() => {
     if (!onContinue) return;
     if (request.actionType === 'ai.text2image' && !resolved) {
@@ -126,10 +135,13 @@ export default function HitlConfirmBlock({ request, sessionId, onContinue, onCan
     } else if (request.actionType === 'ai.image_label_order' && !resolved) {
       const latest = labelAnnotationsRef.current.length > 0 ? labelAnnotationsRef.current : labelAnnotations;
       onContinue(latest.length > 0 ? { annotations: latest } : undefined);
+    } else if (request.actionType === 'ai.vl_script' && !resolved) {
+      const trimmed = editableVlUserPrompt.trim();
+      onContinue(trimmed ? { userPrompt: trimmed } : undefined);
     } else {
       onContinue();
     }
-  }, [onContinue, request.actionType, resolved, editablePrompt, editableTexts, promptLoadedFromFile, labelAnnotations]);
+  }, [onContinue, request.actionType, resolved, editablePrompt, editableTexts, promptLoadedFromFile, labelAnnotations, editableVlUserPrompt]);
 
   const renderPayload = () => {
     if (request.actionType === 'ai.text2image') {
@@ -169,10 +181,27 @@ export default function HitlConfirmBlock({ request, sessionId, onContinue, onCan
     }
     if (request.actionType === 'ai.vl_script') {
       const imagePath = typeof payload.imagePath === 'string' ? payload.imagePath : '';
-      if (imagePath) {
-        return <ImageBlock path={imagePath} />;
+      if (resolved) {
+        const up = typeof payload.userPrompt === 'string' ? payload.userPrompt : null;
+        return (
+          <div className="space-y-2">
+            {imagePath ? <ImageBlock path={imagePath} /> : <div className="text-sm opacity-80">无图片路径</div>}
+            {up ? <DocumentBlock pathOrContent={up} title="用户补充/修改" /> : null}
+          </div>
+        );
       }
-      return <div className="text-sm opacity-80">无图片路径</div>;
+      return (
+        <div className="space-y-2">
+          {imagePath ? <ImageBlock path={imagePath} /> : <div className="text-sm opacity-80">无图片路径</div>}
+          <EditableDocumentBlock
+            value={editableVlUserPrompt}
+            onChange={setEditableVlUserPrompt}
+            title="用户补充或修改要求"
+            placeholder="可输入对以图生剧本的补充或修改（如：更简短、加入旁白、改成儿童语气等），将与系统提示词一起传给 VL..."
+            minRows={4}
+          />
+        </div>
+      );
     }
     if (request.actionType === 'ai.image_label_order') {
       const imagePath = typeof payload.imagePath === 'string' ? payload.imagePath : '';
@@ -232,7 +261,13 @@ export default function HitlConfirmBlock({ request, sessionId, onContinue, onCan
             </button>
             <button
               type="button"
-              onClick={onCancel}
+              onClick={() => {
+                const reason =
+                  request.actionType === 'ai.vl_script' && editableVlUserPrompt.trim()
+                    ? editableVlUserPrompt.trim()
+                    : undefined;
+                onCancel?.(reason);
+              }}
               className="px-3 py-1.5 text-sm rounded-xl border border-border hover:bg-muted/80 transition-colors"
             >
               取消

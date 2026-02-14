@@ -20,7 +20,7 @@
     "test:integration": "vitest run tests/llm.test.ts tests/t2i.test.ts tests/tts.test.ts tests/vl.test.ts",
     "test:integration:zhipu": "npx cross-env RUN_INTEGRATION_TESTS=true TEST_API_PROVIDER=zhipu vitest run tests/llm.test.ts tests/t2i.test.ts tests/tts.test.ts tests/vl.test.ts",
     "test:integration:dashscope": "npx cross-env RUN_INTEGRATION_TESTS=true TEST_API_PROVIDER=dashscope vitest run tests/llm.test.ts tests/t2i.test.ts tests/tts.test.ts tests/vl.test.ts",
-    "test:integration:both": "npm run test:integration:zhipu && npm run test:integration:dashscope",
+    "test:integration:all": "npm run test:integration:zhipu && npm run test:integration:dashscope",
     "test:t2i:prompt-file": "vitest run tests/t2i.test.ts -t \"prompt file\"",
     "test:agent": "tsx backend/tests/test-agent-factory.ts",
     "test:agent:run": "tsx backend/tests/test-agent-run.ts",

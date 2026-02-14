@@ -5,6 +5,7 @@ import path from 'path';
 import { promises as fs } from 'fs';
 import { getAIConfig } from '../config.js';
 import { getWorkspaceFilesystem } from '../../services/fs.js';
+import { traceAiRun } from '../../agent/langsmith-trace.js';
 import type {
   GenerateScriptFromImageParams,
   GenerateScriptFromImageResult,
@@ -74,6 +75,26 @@ export type { GenerateScriptFromImageParams, GenerateScriptFromImageResult, Scri
 export async function generateScriptFromImage(
   params: GenerateScriptFromImageParams
 ): Promise<GenerateScriptFromImageResult> {
+  const sessionId = params.sessionId ?? DEFAULT_SESSION_ID;
+  const inputs = { imagePath: params.imagePath, sessionId };
+
+  return traceAiRun(
+    'ai.vl',
+    'tool',
+    inputs,
+    () => generateScriptFromImageImpl(params),
+    (result) => ({
+      linesCount: result.lines.length,
+      scriptPath: result.scriptPath,
+      sessionId: result.sessionId,
+      _note: 'image blob and full lines not recorded',
+    })
+  );
+}
+
+async function generateScriptFromImageImpl(
+  params: GenerateScriptFromImageParams
+): Promise<GenerateScriptFromImageResult> {
   const cfg = (await getAIConfig('vl')) as VLAIConfig;
   const sessionId = params.sessionId ?? DEFAULT_SESSION_ID;
   const { loadConfig } = await import('../../app-config.js');
@@ -96,10 +117,16 @@ export async function generateScriptFromImage(
   /** 本地图无 http URL，用 base64 拼成 Data URL 传给 VL 接口 */
   const dataUrl = `data:${mime};base64,${base64}`;
 
+  /** 系统提示词 + 用户输入/修改，一并传给 VL */
+  const fullPrompt =
+    params.userPrompt?.trim()
+      ? `${cfg.prompt}\n\n用户补充或修改要求：\n${params.userPrompt.trim()}`
+      : cfg.prompt;
+
   const content =
     cfg.provider === 'zhipu'
-      ? await callVLZhipu({ cfg, dataUrl, prompt: cfg.prompt })
-      : await callVLDashScope({ cfg, dataUrl, prompt: cfg.prompt });
+      ? await callVLZhipu({ cfg, dataUrl, prompt: fullPrompt })
+      : await callVLDashScope({ cfg, dataUrl, prompt: fullPrompt });
 
   const lines = parseAndValidateLines(content);
 

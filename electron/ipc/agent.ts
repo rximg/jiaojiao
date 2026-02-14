@@ -202,18 +202,30 @@ async function sendAgentMessage(
         role: m.role || 'user',
         content: typeof m.content === 'string' ? m.content : (m.content ?? ''),
       }));
-      inputMessages = [...historyForAgent, { role: 'user', content: message }];
-      console.log(`[agent] Loaded ${recent.length} history messages for session ${sessionId}`);
+      // 已有历史时注入“重新打开会话”上下文，让 agent 明确知道这是续接会话，应结合 checkpoint/todo 只执行用户要求的步骤
+      const isReopenedSession = recent.length > 0;
+      const userContent = isReopenedSession
+        ? `【当前为已有会话的继续；请结合对话历史和 checkpoint 中的 todo 状态，仅执行用户在本条消息中要求的步骤（如「重新生成台词」则只做第 3 步，勿从头重跑）。】\n\n${message}`
+        : message;
+      inputMessages = [...historyForAgent, { role: 'user', content: userContent }];
+      console.log(`[agent] Loaded ${recent.length} history messages for session ${sessionId}${isReopenedSession ? ' (reopened session context injected)' : ''}`);
     } else {
       inputMessages = [{ role: 'user', content: message }];
     }
     const fixedMessages = fixToolCallsInMessages(inputMessages);
 
     try {
+      // 有 sessionId 时传入 thread_id，使 LangGraph checkpointer 按 session 加载/保存状态（session/checkpoints/）
+      const runConfig: { signal: AbortSignal; recursionLimit: number; configurable?: { thread_id: string } } = {
+        signal: currentStreamController.signal,
+        recursionLimit: 200,
+      };
+      if (sessionId) runConfig.configurable = { thread_id: sessionId };
+
       // @ts-ignore - Type instantiation is too deep with deepagents
       const stream = await (agent as any).stream(
         { messages: fixedMessages },
-        { signal: currentStreamController.signal, recursionLimit: 200 }
+        runConfig
       );
 
       let streamingAssistantId: string | null = null;

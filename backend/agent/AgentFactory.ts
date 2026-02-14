@@ -90,11 +90,7 @@ export class AgentFactory {
     if (!this.runtime) {
       throw new Error('Runtime not initialized; cannot request HITL approval');
     }
-    const merged = await this.runtime.hitlService.requestApproval(actionType, payload);
-    if (!merged) {
-      throw new Error(`${actionType} cancelled by user`);
-    }
-    return merged;
+    return await this.runtime.hitlService.requestApproval(actionType, payload);
   }
 
   /**
@@ -185,6 +181,7 @@ export class AgentFactory {
           schema: z.object({
             imagePath: z.string().describe('图片路径（步骤3 generate_image 返回的 imagePath）'),
             sessionId: z.string().optional().describe('会话ID（留空则使用当前会话）'),
+            userPrompt: z.string().optional().describe('用户对以图生剧本的补充或修改要求，会与系统提示词一起传给 VL'),
           }),
         }
       );
@@ -733,6 +730,16 @@ export class AgentFactory {
     const subAgents = await this.createSubAgents(sessionId);
     console.log(`[AgentFactory] 已注册 ${subAgents.length} 个SubAgent`);
 
+    // 有 sessionId 时使用 WorkspaceCheckpointSaver，按 session/checkpoints/ 持久化，stream/invoke 时需传 config.configurable.thread_id = sessionId
+    let checkpointer: InstanceType<typeof import('../services/workspace-checkpoint-saver.js').WorkspaceCheckpointSaver> | undefined;
+    if (sessionId) {
+      const config = await loadConfig();
+      const { getWorkspaceFilesystem } = await import('../services/fs.js');
+      const workspace = getWorkspaceFilesystem({ outputPath: config.storage?.outputPath ?? './outputs' });
+      const { WorkspaceCheckpointSaver } = await import('../services/workspace-checkpoint-saver.js');
+      checkpointer = new WorkspaceCheckpointSaver(workspace);
+    }
+
     // 创建主Agent
     // 注意：不在主 Agent 中添加 FilesystemMiddleware，因为 prompt_generator 子代理已经通过 createAgent 添加了
     // 这样可以避免 middleware 重复定义的错误
@@ -742,6 +749,7 @@ export class AgentFactory {
       tools,
       systemPrompt: mainSystemPrompt,
       subagents: subAgents,
+      ...(checkpointer ? { checkpointer } : {}),
     });
 
     console.log(`[AgentFactory] 主Agent创建成功: ${this.agentConfig.agent.name} (session: ${sessionId})`);

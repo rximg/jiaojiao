@@ -5,6 +5,7 @@ import path from 'path';
 import { promises as fs } from 'fs';
 import { getAIConfig } from '../config.js';
 import { getWorkspaceFilesystem } from '../../services/fs.js';
+import { traceAiRun } from '../../agent/langsmith-trace.js';
 import type {
   GenerateImageParams,
   GenerateImageResult,
@@ -46,6 +47,32 @@ async function resolvePrompt(
 export type { GenerateImageParams, GenerateImageResult };
 
 export async function generateImage(params: GenerateImageParams): Promise<GenerateImageResult> {
+  const { size = '1024*1024', style, count = 1, sessionId = DEFAULT_SESSION_ID } = params;
+  const inputs = {
+    prompt: params.prompt,
+    promptFile: params.promptFile,
+    size,
+    style,
+    count,
+    sessionId,
+  };
+
+  return traceAiRun(
+    'ai.t2i',
+    'tool',
+    inputs,
+    async () => generateImageImpl(params),
+    (result) => ({
+      imagePath: result.imagePath,
+      imageUri: result.imageUri,
+      imageUrl: result.imageUrl,
+      sessionId: result.sessionId,
+      _note: 'blob not recorded; path/uri only',
+    })
+  );
+}
+
+async function generateImageImpl(params: GenerateImageParams): Promise<GenerateImageResult> {
   const { loadConfig } = await import('../../app-config.js');
   const appConfig = await loadConfig();
   const cfg = (await getAIConfig('t2i')) as T2IAIConfig;

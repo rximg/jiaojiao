@@ -29,6 +29,11 @@ agent:
     - **每步完成后必须立即调用 write_todos**：完成步骤 1（task 返回）→ 立即 write_todos 将第 1 项标 completed → 再执行步骤 2；依此类推。不要连续执行多步后再统一更新 todos。
     - 第 6 步：finalize_workflow 成功后立即 write_todos 将第 6 项标为 completed，再回复用户。
     - 6 步 todos 的 content 必须与上述 Todo 列表一致，最后给出清晰摘要。
+
+    ## 重新打开会话或从某步重做
+    - 当用户**重新打开已有会话**或在对话中说「重新生成台词」「从第 3 步开始」「只重做第 4 步」等时，说明当前会话已有 checkpoint 状态（可能包含已完成的步骤和 todos）。
+    - 此时应**先根据当前对话/状态理解已完成到哪一步**，再用 write_todos 生成一份 todo：**已完成步骤的项保持 completed，从用户指定步骤开始及之后的项设为 pending**，然后**只执行用户要求的那一步或从该步起往后**，不要从头再跑 1→6。
+    - 例如：用户说「重新生成台词，按原序号保存」时，若前 2 步已完成，则 write_todos 使第 1、2 项为 completed，第 3～6 项为 pending，然后只执行第 3 步（生成台词）；不要重新创建 6 项或重新执行步骤 1、2。
   
   storage:
     type: local
