@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Eye, EyeOff, FolderOpen, Folder } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -58,7 +59,7 @@ export default function ConfigDialog({
   const [model, setModel] = useState('');
   const [temperature, setTemperature] = useState(0.1);
   const [maxTokens, setMaxTokens] = useState(20000);
-  const [outputPath, setOutputPath] = useState('./outputs');
+  const [outputPath, setOutputPath] = useState('');
   const [ttsStartNumber, setTtsStartNumber] = useState(6000);
   const [applyStepsOpen, setApplyStepsOpen] = useState(false);
   /** 多模态（VL/TTS/T2I）供应商与 API Key */
@@ -66,6 +67,9 @@ export default function ConfigDialog({
   const [multimodalDashscopeKey, setMultimodalDashscopeKey] = useState('');
   const [multimodalZhipuKey, setMultimodalZhipuKey] = useState('');
   const [applyStepsFor, setApplyStepsFor] = useState<'llm' | 'multimodal'>('llm');
+  /** 是否显示 LLM / 多模态 API Key 明文（各自控制） */
+  const [showLlmApiKey, setShowLlmApiKey] = useState(false);
+  const [showMultimodalApiKey, setShowMultimodalApiKey] = useState(false);
 
   /** 弹窗打开时从 backend/config/ai_models.json 加载 LLM 模型列表 */
   const loadLlmOptions = useCallback(async () => {
@@ -187,14 +191,15 @@ export default function ConfigDialog({
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
-          <DialogTitle>配置</DialogTitle>
-          <DialogDescription>
-            配置 API Key 和 Agent 参数。配置将保存在本地。
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-5 py-4">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col p-4 sm:p-6">
+        <div className="flex flex-col gap-4 min-h-0 flex-1 overflow-hidden">
+          <DialogHeader className="shrink-0">
+            <DialogTitle>配置</DialogTitle>
+            <DialogDescription>
+              配置 API Key 和 Agent 参数。配置将保存在本地。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-5 py-4 overflow-y-auto min-h-0 flex-1 pr-1 -mr-1">
           {/* LLM（大语言模型） */}
           <div className="space-y-3 rounded-lg border border-border p-3">
             <h3 className="text-sm font-medium text-foreground">LLM（大语言模型）</h3>
@@ -223,13 +228,26 @@ export default function ConfigDialog({
             </div>
             <div className="space-y-2">
               <Label htmlFor="apikey" className="text-foreground">API Key</Label>
-              <Input
-                id="apikey"
-                type="password"
-                placeholder={provider === 'dashscope' ? 'sk-...（阿里百炼）' : 'sk-...（智谱）'}
-                value={currentApiKey}
-                onChange={(e) => setCurrentApiKey(e.target.value)}
-              />
+              <div className="relative">
+                <Input
+                  id="apikey"
+                  type={showLlmApiKey ? 'text' : 'password'}
+                  placeholder={provider === 'dashscope' ? 'sk-...（阿里百炼）' : 'sk-...（智谱）'}
+                  value={currentApiKey}
+                  onChange={(e) => setCurrentApiKey(e.target.value)}
+                  className="pr-9"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-2 text-muted-foreground hover:bg-transparent"
+                  onClick={() => setShowLlmApiKey((v) => !v)}
+                  title={showLlmApiKey ? '隐藏' : '显示'}
+                >
+                  {showLlmApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -297,23 +315,54 @@ export default function ConfigDialog({
             </div>
             <div className="space-y-2">
               <Label htmlFor="multimodalApikey" className="text-foreground">API Key</Label>
-              <Input
-                id="multimodalApikey"
-                type="password"
-                placeholder={multimodalProvider === 'dashscope' ? 'sk-...（阿里百炼）' : 'sk-...（智谱）'}
-                value={currentMultimodalKey}
-                onChange={(e) => setCurrentMultimodalKey(e.target.value)}
-              />
+              <div className="relative">
+                <Input
+                  id="multimodalApikey"
+                  type={showMultimodalApiKey ? 'text' : 'password'}
+                  placeholder={multimodalProvider === 'dashscope' ? 'sk-...（阿里百炼）' : 'sk-...（智谱）'}
+                  value={currentMultimodalKey}
+                  onChange={(e) => setCurrentMultimodalKey(e.target.value)}
+                  className="pr-9"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-2 text-muted-foreground hover:bg-transparent"
+                  onClick={() => setShowMultimodalApiKey((v) => !v)}
+                  title={showMultimodalApiKey ? '隐藏' : '显示'}
+                >
+                  {showMultimodalApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="outputPath" className="text-foreground">输出路径</Label>
-            <Input
-              id="outputPath"
-              value={outputPath}
-              onChange={(e) => setOutputPath(e.target.value)}
-            />
+            <Label htmlFor="outputPath" className="text-foreground">音频输出路径</Label>
+            <div className="flex gap-2">
+              <Input
+                id="outputPath"
+                value={outputPath}
+                onChange={(e) => setOutputPath(e.target.value)}
+                className="flex-1 min-w-0"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={async () => {
+                  const api = window.electronAPI?.config;
+                  if (!api?.showOutputPathDialog) return;
+                  const chosen = await api.showOutputPathDialog(outputPath || undefined);
+                  if (chosen) setOutputPath(chosen);
+                }}
+              >
+                <FolderOpen className="h-4 w-4 mr-1" />
+                选择
+              </Button>
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="ttsStartNumber" className="text-foreground">TTS 起始编号</Label>
@@ -325,8 +374,21 @@ export default function ConfigDialog({
               onChange={(e) => setTtsStartNumber(parseInt(e.target.value, 10) || 6000)}
             />
           </div>
+          <div className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => window.electronAPI?.config?.openConfigDir?.()}
+            >
+              <Folder className="h-4 w-4 mr-2" />
+              打开配置文件夹
+            </Button>
+          </div>
         </div>
-        <DialogFooter className="gap-2 sm:gap-2">
+        </div>
+        <DialogFooter className="shrink-0 gap-2 sm:gap-2 pt-2 border-t border-border">
           <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-lg">
             取消
           </Button>

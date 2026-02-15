@@ -112,10 +112,14 @@ export async function loadConfig(): Promise<AppConfig> {
         provider: llmProvider,
         multimodalProvider,
       },
-      storage: {
-        outputPath: storedConfig?.storage?.outputPath || './outputs',
-        ttsStartNumber: storedConfig?.storage?.ttsStartNumber ?? 6000,
-      },
+      storage: (() => {
+        const raw = storedConfig?.storage?.outputPath;
+        const outputPath = typeof raw === 'string' && raw.trim() && raw !== './outputs' ? raw.trim() : '';
+        return {
+          outputPath,
+          ttsStartNumber: storedConfig?.storage?.ttsStartNumber ?? 6000,
+        };
+      })(),
       ui: {
         theme: storedConfig?.ui?.theme || 'light',
         language: storedConfig?.ui?.language || 'zh',

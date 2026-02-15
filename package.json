@@ -1,7 +1,8 @@
 {
   "name": "jiaojiao",
-  "version": "0.0.1",
+  "version": "0.0.4",
   "description": "基于 deepagents.js 的有声绘本智能生成应用",
+  "author": "",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
@@ -10,6 +11,7 @@
     "preview": "vite preview",
     "electron:dev": "vite",
     "electron:build": "node -e \"try{require('fs').rmSync('release',{recursive:true,force:true});}catch(e){}\" && tsc && vite build && electron-builder",
+    "electron:build:verbose": "node -e \"try{require('fs').rmSync('release',{recursive:true,force:true});}catch(e){}\" && tsc && vite build && cross-env DEBUG=electron-builder* electron-builder",
     "test": "vitest",
     "test:run": "vitest run",
     "test:unit": "vitest run tests/t2i.unit.test.ts tests/tts.unit.test.ts tests/llm.unit.test.ts tests/vl.unit.test.ts",

@@ -11,6 +11,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     get: () => ipcRenderer.invoke('config:get'),
     getAiModels: () => ipcRenderer.invoke('config:getAiModels'),
     set: (config: any) => ipcRenderer.invoke('config:set', config),
+    openConfigDir: () => ipcRenderer.invoke('config:openConfigDir'),
+    showOutputPathDialog: (defaultPath?: string) => ipcRenderer.invoke('config:showOutputPathDialog', defaultPath),
+    openFolder: (dirPath: string) => ipcRenderer.invoke('config:openFolder', dirPath),
   },
   // 同步 mp3 到 store（由前端按钮触发，非 MCP）
   sync: {
@@ -85,6 +88,9 @@ declare global {
         get: () => Promise<any>;
         getAiModels: () => Promise<Record<string, { default: string; models: Array<{ id: string; label: string }> }>>;
         set: (config: any) => Promise<void>;
+        openConfigDir: () => Promise<void>;
+        showOutputPathDialog: (defaultPath?: string) => Promise<string | null>;
+        openFolder: (dirPath: string) => Promise<void>;
       };
       sync: {
         syncAudioToStore: () => Promise<{ success: boolean; copied: number; storeDir: string; files: string[]; message: string }>;

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Folder, Image, Music, FileText, RefreshCw, ChevronDown, ChevronRight, X } from 'lucide-react';
+import { Folder, FolderOpen, Image, Music, FileText, RefreshCw, ChevronDown, ChevronRight, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface FileEntry {
@@ -161,9 +161,26 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
           <Button
             variant="ghost"
             size="sm"
+            onClick={async () => {
+              try {
+                const { path: dirPath } = await window.electronAPI.fs.getFilePath(sessionId, '.');
+                if (dirPath) window.electronAPI.config?.openFolder?.(dirPath);
+              } catch (e) {
+                console.error('[WorkspacePanel] openFolder failed:', e);
+              }
+            }}
+            className="h-7 w-7 p-0"
+            title="打开工作区文件夹"
+          >
+            <FolderOpen className="h-3 w-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={loadFiles}
             disabled={loading}
             className="h-7 w-7 p-0"
+            title="刷新"
           >
             <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
           </Button>

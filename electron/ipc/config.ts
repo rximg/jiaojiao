@@ -1,4 +1,4 @@
-import { app, ipcMain } from 'electron';
+import { app, ipcMain, shell, dialog, BrowserWindow } from 'electron';
 import Store from 'electron-store';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -18,6 +18,9 @@ function getAppVersion(): string {
   return app.getVersion();
 }
 
+/** 未设置或旧版 ./outputs 时视为空，需用户在配置中设置音频输出路径 */
+const LEGACY_DEFAULT_OUTPUT = './outputs';
+
 const DEFAULTS: Record<string, unknown> = {
   apiKeys: {
     dashscope: '',
@@ -36,7 +39,7 @@ const DEFAULTS: Record<string, unknown> = {
     multimodalProvider: 'dashscope',
   },
   storage: {
-    outputPath: './outputs',
+    outputPath: '',
     ttsStartNumber: 6000,
   },
   ui: {
@@ -162,6 +165,11 @@ export function handleConfigIPC() {
     const s = getStore();
     const latestUIConfig = loadUIConfigFromYaml();
     const currentStore = s.store as any;
+    const storedOutput = (currentStore?.storage as any)?.outputPath;
+    const outputPath =
+      typeof storedOutput === 'string' && storedOutput.trim() && storedOutput !== LEGACY_DEFAULT_OUTPUT
+        ? storedOutput
+        : '';
     const config = {
       ...currentStore,
       configVersion: (currentStore.configVersion as string | undefined) ?? getAppVersion(),
@@ -169,6 +177,10 @@ export function handleConfigIPC() {
       agent: {
         ...(currentStore?.agent as object),
         multimodalProvider: (currentStore?.agent as any)?.multimodalProvider ?? (currentStore?.agent as any)?.provider ?? 'dashscope',
+      },
+      storage: {
+        ...(currentStore?.storage as object),
+        outputPath,
       },
       ui: {
         ...currentStore.ui,
@@ -238,7 +250,10 @@ export function handleConfigIPC() {
           multimodalProvider: config?.agent?.multimodalProvider === 'zhipu' ? 'zhipu' : 'dashscope',
         },
         storage: {
-          outputPath: typeof config?.storage?.outputPath === 'string' ? config.storage.outputPath : (def.storage.outputPath as string),
+          outputPath:
+            typeof config?.storage?.outputPath === 'string' && config.storage.outputPath.trim() && config.storage.outputPath !== LEGACY_DEFAULT_OUTPUT
+              ? config.storage.outputPath.trim()
+              : '',
           ttsStartNumber: Number(config?.storage?.ttsStartNumber) || (def.storage.ttsStartNumber as number),
         },
         ui: {
@@ -261,6 +276,37 @@ export function handleConfigIPC() {
       const stack = error?.stack ?? '';
       log.error('[config] config:set failed:', msg, stack);
       throw error;
+    }
+  });
+
+  /** 打开用户配置所在文件夹（userData，内含 config.json） */
+  ipcMain.handle('config:openConfigDir', async () => {
+    const userDataDir = app.getPath('userData');
+    await shell.openPath(userDataDir);
+  });
+
+  /** 弹出目录选择对话框，返回所选目录路径；取消则返回 null */
+  ipcMain.handle('config:showOutputPathDialog', async (_event, defaultPath?: string) => {
+    const win = BrowserWindow.getFocusedWindow();
+    const opts: Electron.OpenDialogOptions = {
+      properties: ['openDirectory'],
+      title: '选择音频输出目录',
+      defaultPath: defaultPath || app.getPath('documents'),
+    };
+    const { filePaths } = win
+      ? await dialog.showOpenDialog(win, opts)
+      : await dialog.showOpenDialog(opts);
+    return filePaths[0] ?? null;
+  });
+
+  /** 在文件管理器中打开指定路径（文件夹或文件） */
+  ipcMain.handle('config:openFolder', async (_event, dirPath: string) => {
+    if (!dirPath || typeof dirPath !== 'string') return;
+    try {
+      await shell.openPath(dirPath);
+    } catch (e) {
+      log.error('[config] openFolder failed:', e);
+      throw e;
     }
   });
 }
