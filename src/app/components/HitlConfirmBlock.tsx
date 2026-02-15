@@ -39,10 +39,66 @@ function parseNumberedLines(text: string): string[] {
     .filter(Boolean);
 }
 
+/** 将毫秒转为「分:秒」或「剩余 N 秒」 */
+function formatRemaining(ms: number): string {
+  if (ms <= 0) return '0 秒';
+  const totalSeconds = Math.ceil(ms / 1000);
+  if (totalSeconds >= 60) {
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+  return `${totalSeconds} 秒`;
+}
+
 export default function HitlConfirmBlock({ request, sessionId, onContinue, onCancel }: HitlConfirmBlockProps) {
   const resolved = 'approved' in request ? { approved: request.approved } : undefined;
   const title = ACTION_TITLE[request.actionType] ?? '确认操作';
   const payload = request.payload;
+  const timeoutMs = !resolved && 'timeout' in request ? request.timeout : 0;
+
+  // 倒计时：仅 pending 且存在 timeout 时使用，超时由前端控制
+  const [remainingMs, setRemainingMs] = useState(() => timeoutMs);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasTriggeredTimeoutRef = useRef(false);
+
+  const stopCountdown = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (resolved || timeoutMs <= 0) return;
+    hasTriggeredTimeoutRef.current = false;
+    setRemainingMs(timeoutMs);
+    intervalRef.current = setInterval(() => {
+      setRemainingMs((prev) => {
+        const next = Math.max(0, prev - 1000);
+        if (next <= 0 && intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+        return next;
+      });
+    }, 1000);
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [resolved, timeoutMs]);
+
+  // 倒计时到 0 时由前端发送取消给后端，只触发一次
+  useEffect(() => {
+    if (resolved || timeoutMs <= 0 || remainingMs > 0 || !onCancel) return;
+    if (hasTriggeredTimeoutRef.current) return;
+    hasTriggeredTimeoutRef.current = true;
+    stopCountdown();
+    onCancel('用户未在限定时间内确认');
+  }, [resolved, timeoutMs, remainingMs, onCancel, stopCountdown]);
 
   // 可编辑内容状态（仅 pending 时使用）
   const [editablePrompt, setEditablePrompt] = useState<string>('');
@@ -121,6 +177,7 @@ export default function HitlConfirmBlock({ request, sessionId, onContinue, onCan
 
   const handleContinue = useCallback(() => {
     if (!onContinue) return;
+    stopCountdown();
     if (request.actionType === 'ai.text2image' && !resolved) {
       const trimmed = editablePrompt.trim();
       if (trimmed && (promptLoadedFromFile || !trimmed.startsWith('将使用文件：'))) {
@@ -141,7 +198,7 @@ export default function HitlConfirmBlock({ request, sessionId, onContinue, onCan
     } else {
       onContinue();
     }
-  }, [onContinue, request.actionType, resolved, editablePrompt, editableTexts, promptLoadedFromFile, labelAnnotations, editableVlUserPrompt]);
+  }, [onContinue, request.actionType, resolved, editablePrompt, editableTexts, promptLoadedFromFile, labelAnnotations, editableVlUserPrompt, stopCountdown]);
 
   const renderPayload = () => {
     if (request.actionType === 'ai.text2image') {
@@ -251,27 +308,35 @@ export default function HitlConfirmBlock({ request, sessionId, onContinue, onCan
             {resolved.approved ? '已继续' : '已取消'}
           </div>
         ) : (
-          <div className="flex gap-2 mt-3 pt-3 border-t border-border/50">
-            <button
-              type="button"
-              onClick={handleContinue}
-              className="px-3 py-1.5 text-sm rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
-              继续
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const reason =
-                  request.actionType === 'ai.vl_script' && editableVlUserPrompt.trim()
-                    ? editableVlUserPrompt.trim()
-                    : undefined;
-                onCancel?.(reason);
-              }}
-              className="px-3 py-1.5 text-sm rounded-xl border border-border hover:bg-muted/80 transition-colors"
-            >
-              取消
-            </button>
+          <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
+            {timeoutMs > 0 && (
+              <div className="text-sm text-muted-foreground">
+                {Math.ceil(timeoutMs / 1000)} 秒内确认，剩余 {formatRemaining(remainingMs)}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleContinue}
+                className="px-3 py-1.5 text-sm rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                继续
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  stopCountdown();
+                  const reason =
+                    request.actionType === 'ai.vl_script' && editableVlUserPrompt.trim()
+                      ? editableVlUserPrompt.trim()
+                      : undefined;
+                  onCancel?.(reason);
+                }}
+                className="px-3 py-1.5 text-sm rounded-xl border border-border hover:bg-muted/80 transition-colors"
+              >
+                取消
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -1,6 +1,11 @@
 /**
  * HITL Service - Human-in-the-Loop 服务
- * 实现操作确认机制，支持文件、网络、系统操作的人工审批
+ * 实现操作确认机制，支持文件、网络、系统操作的人工审批。
+ *
+ * 超时与恢复：
+ * - 后端不做超时：仅等待前端 respond，无定时器、无超时后自动批准。
+ * - 取消/超时后：工具抛错，当前 run 结束；同一 session 的 LangGraph checkpoint 仍保留在「执行该工具前」的状态。
+ * - 同一会话内再次发消息（或继续）时，会按 thread_id 加载该 checkpoint，从断点继续，会再次进入同一 HITL，用户可点击「继续」通过。
  */
 
 import { randomUUID } from 'crypto';
@@ -49,7 +54,7 @@ export class HITLService {
   /**
    * 请求人工确认。调用方必须在收到批准且拿到返回值后，仅使用返回的 merged 执行后续操作，
    * 不得使用原始 payload，以保证所有编辑修改都能正确传入下一步。
-   * @returns 批准时返回合并后的 payload（原 payload + response.payload 用户编辑），拒绝/超时返回 null
+   * @returns 批准时返回合并后的 payload（原 payload + response.payload 用户编辑），拒绝（含前端超时取消）返回 null
    */
   async requestApproval(
     actionType: string,
@@ -113,21 +118,14 @@ export class HITLService {
       const merged = { ...payload, ...(response.payload ?? {}) };
       return merged as Record<string, unknown>;
     } catch (error) {
-      // 超时或错误
-      request.status = 'timeout';
-      
+      // 仅用于发送请求失败等异常；超时由前端控制并会通过 response 返回取消
+      request.status = 'rejected';
       if (this.logManager) {
         await this.logManager.logHITL(this.sessionId, {
           ...request,
           error: error instanceof Error ? error.message : String(error),
         });
       }
-      
-      // 根据配置决定是否自动批准
-      if (rule?.autoApproveAfter) {
-        return { ...payload } as Record<string, unknown>;
-      }
-      
       return null;
     } finally {
       this.pendingRequests.delete(request.requestId);
@@ -155,21 +153,9 @@ export class HITLService {
         timeout: request.timeout,
       });
       
-      // 等待用户响应（通过 hitl-response-bridge，由 hitl:respond handler 触发）
-      return await new Promise<HITLResponse>((resolve, reject) => {
-        let settled = false;
-        
-        const timer = setTimeout(() => {
-          if (!settled) {
-            settled = true;
-            reject(new Error('User confirmation timeout'));
-          }
-        }, request.timeout);
-        
+      // 仅等待前端响应，超时由前端倒计时控制并发送取消
+      return await new Promise<HITLResponse>((resolve) => {
         registerHitlResponseWaiter(request.requestId, (data) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
           resolve({
             approved: data.approved,
             reason: data.reason,

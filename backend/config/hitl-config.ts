@@ -78,13 +78,12 @@ export const DEFAULT_HITL_CONFIG: HITLConfig = {
       description: 'WebSocket 连接需要确认',
     },
     
-    // AI 生成操作
+    // AI 生成操作（超时由前端倒计时控制，无后端自动继续）
     {
       actionType: 'ai.text2image',
       enabled: true,
       priority: 'low',
       requireApproval: true,
-      autoApproveAfter: 30000, // 30秒后自动批准
       description: '文本生成图片需要确认',
     },
     {
@@ -92,7 +91,6 @@ export const DEFAULT_HITL_CONFIG: HITLConfig = {
       enabled: true,
       priority: 'low',
       requireApproval: true,
-      autoApproveAfter: 30000,
       description: '文本转语音需要确认',
     },
     {
@@ -100,15 +98,13 @@ export const DEFAULT_HITL_CONFIG: HITLConfig = {
       enabled: true,
       priority: 'low',
       requireApproval: true,
-      autoApproveAfter: 30000,
       description: '以图生剧本需要确认',
     },
     {
       actionType: 'ai.image_label_order',
       enabled: true,
-      priority: 'low',
+      priority: 'medium',
       requireApproval: true,
-      autoApproveAfter: 60000,
       description: '图片序号标注需确认（可移动、修改序号）',
     },
     
