@@ -12,7 +12,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openFolder: (dirPath) => ipcRenderer.invoke('config:openFolder', dirPath),
   },
   sync: {
-    syncAudioToStore: () => ipcRenderer.invoke('sync:audioToStore'),
+    syncAudioToStore: (sessionId) => ipcRenderer.invoke('sync:audioToStore', sessionId),
   },
   storage: {
     getHistory: () => ipcRenderer.invoke('storage:getHistory'),

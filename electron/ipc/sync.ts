@@ -3,7 +3,7 @@ import { loadConfig } from '../../backend/agent/config.js';
 import { syncSessionAudioToStore } from '../../backend/mcp/sync-audio-to-store.js';
 
 export function handleSyncIPC() {
-  ipcMain.handle('sync:audioToStore', async () => {
+  ipcMain.handle('sync:audioToStore', async (_event, sessionId?: string) => {
     const config = await loadConfig();
     const syncTargetPath = (config.storage?.syncTargetPath ?? config.storage?.outputPath ?? '').trim();
     if (!syncTargetPath) {
@@ -15,7 +15,7 @@ export function handleSyncIPC() {
         message: '请先在配置界面设置音频同步目标路径',
       };
     }
-    const result = await syncSessionAudioToStore(syncTargetPath);
+    const result = await syncSessionAudioToStore(syncTargetPath, sessionId);
     return {
       success: true,
       copied: result.copied,

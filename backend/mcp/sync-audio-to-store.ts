@@ -16,9 +16,12 @@ export interface SyncAudioToStoreResult {
 /**
  * 从固定工作目录（userData/workspace）读取 audio_record.json，将音频复制到 syncTargetDir/store。
  * 工作目录不可配置；syncTargetDir 为配置项「音频同步目标路径」。
+ * @param syncTargetDir 同步目标目录
+ * @param sessionId 若传入，则只同步该 session 下的音频；否则同步全部
  */
 export async function syncSessionAudioToStore(
-  syncTargetDir: string
+  syncTargetDir: string,
+  sessionId?: string
 ): Promise<SyncAudioToStoreResult> {
   const storeDir = path.join(path.resolve(syncTargetDir), STORE_DIRNAME);
   await fs.mkdir(storeDir, { recursive: true });
@@ -29,9 +32,10 @@ export async function syncSessionAudioToStore(
   const config = await loadConfig();
   const ttsStartNumber = config.storage.ttsStartNumber ?? 6000;
   const { entries } = await readLineNumbers(ttsStartNumber);
+  const toSync = sessionId ? entries.filter((e) => e.sessionId === sessionId) : entries;
 
   const copiedFiles: string[] = [];
-  for (const entry of entries) {
+  for (const entry of toSync) {
     const sessionDir = path.join(workspacesDir, entry.sessionId);
     const srcPath = path.join(sessionDir, entry.relativePath);
     try {

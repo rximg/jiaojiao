@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Folder, FolderOpen, Image, Music, FileText, RefreshCw, ChevronDown, ChevronRight, X } from 'lucide-react';
+import { Folder, FolderOpen, Image, Music, FileText, RefreshCw, ChevronDown, ChevronRight, X, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface FileEntry {
@@ -27,6 +27,7 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
     llm_logs: false,
   });
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const loadFiles = useCallback(async () => {
@@ -138,6 +139,28 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
     }
   };
 
+  const handleSyncAudio = useCallback(async () => {
+    if (!sessionId) return;
+    setSyncing(true);
+    try {
+      const res = await window.electronAPI?.sync?.syncAudioToStore?.(sessionId);
+      if (res?.success !== undefined) {
+        if (res.success) {
+          alert(res.message ?? `已同步 ${res.copied ?? 0} 个 mp3`);
+        } else {
+          alert(res.message ?? '同步失败');
+        }
+      } else {
+        alert('同步功能不可用');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('同步失败：' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setSyncing(false);
+    }
+  }, [sessionId]);
+
   if (!sessionId) {
     return (
       <div className="w-80 border-l border-border bg-sidebar p-6">
@@ -202,21 +225,36 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
         <div className="p-2">
           {Object.entries(files).map(([category, entries]) => (
             <div key={category} className="mb-2">
-              <button
-                onClick={() => toggleExpand(category)}
-                className="flex items-center gap-2 w-full p-2.5 hover:bg-accent/80 rounded-xl text-sm transition-colors"
-              >
-                {expanded[category] ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
+              <div className="flex items-center gap-2 w-full p-2.5 rounded-xl text-sm">
+                <button
+                  onClick={() => toggleExpand(category)}
+                  className="flex items-center gap-2 flex-1 min-w-0 hover:bg-accent/80 rounded-lg py-1 transition-colors text-left"
+                >
+                  {expanded[category] ? (
+                    <ChevronDown className="h-4 w-4 shrink-0" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 shrink-0" />
+                  )}
+                  {getCategoryIcon(category)}
+                  <span className="font-medium">{getCategoryLabel(category)}</span>
+                  <span className="ml-auto text-xs text-muted-foreground shrink-0">
+                    ({entries.length})
+                  </span>
+                </button>
+                {category === 'audio' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={syncing}
+                    onClick={handleSyncAudio}
+                    className="h-7 shrink-0"
+                    title="将本会话音频同步到目标目录"
+                  >
+                    <Upload className={`h-3.5 w-3.5 ${syncing ? 'animate-pulse' : ''}`} />
+                    <span className="ml-1 text-xs">同步</span>
+                  </Button>
                 )}
-                {getCategoryIcon(category)}
-                <span className="font-medium">{getCategoryLabel(category)}</span>
-                <span className="ml-auto text-xs text-muted-foreground">
-                  ({entries.length})
-                </span>
-              </button>
+              </div>
 
               {expanded[category] && (
                 <div className="ml-4 mt-1 space-y-1">

@@ -16,9 +16,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     showOutputPathDialog: (defaultPath?: string) => ipcRenderer.invoke('config:showOutputPathDialog', defaultPath),
     openFolder: (dirPath: string) => ipcRenderer.invoke('config:openFolder', dirPath),
   },
-  // 同步 mp3 到 store（由前端按钮触发，非 MCP）
+  // 同步 mp3 到 store（由工作区音频栏按钮触发）；sessionId 为空则同步全部，有值则只同步该 session
   sync: {
-    syncAudioToStore: () => ipcRenderer.invoke('sync:audioToStore'),
+    syncAudioToStore: (sessionId?: string) => ipcRenderer.invoke('sync:audioToStore', sessionId),
   },
   // 存储相关
   storage: {
@@ -95,7 +95,7 @@ declare global {
         openFolder: (dirPath: string) => Promise<void>;
       };
       sync: {
-        syncAudioToStore: () => Promise<{ success: boolean; copied: number; storeDir: string; files: string[]; message: string }>;
+        syncAudioToStore: (sessionId?: string) => Promise<{ success: boolean; copied: number; storeDir: string; files: string[]; message: string }>;
       };
       storage: {
         getHistory: () => Promise<any[]>;
