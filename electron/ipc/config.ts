@@ -3,8 +3,8 @@ import Store from 'electron-store';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { fileURLToPath } from 'url';
 import { log } from '../logger.js';
+import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,12 +23,17 @@ const DEFAULTS: Record<string, unknown> = {
     dashscope: '',
     zhipu: '',
   },
+  multimodalApiKeys: {
+    dashscope: '',
+    zhipu: '',
+  },
   agent: {
     model: 'qwen-plus-2025-12-01',
     current: '',
     temperature: 0.1,
     maxTokens: 20000,
     provider: 'dashscope',
+    multimodalProvider: 'dashscope',
   },
   storage: {
     outputPath: './outputs',
@@ -126,6 +131,27 @@ function loadUIConfigFromYaml(): Record<string, unknown> {
   }
 }
 
+function getFallbackAiModels(): Record<string, { default: string; models: Array<{ id: string; label: string }> }> {
+  return {
+    dashscope: {
+      default: 'qwen-plus-2025-12-01',
+      models: [
+        { id: 'qwen-plus-2025-12-01', label: '通义 Qwen Plus' },
+        { id: 'qwen-turbo', label: '通义 Qwen Turbo' },
+      ],
+    },
+    zhipu: {
+      default: 'glm-4.7',
+      models: [
+        { id: 'glm-4.5', label: '智谱 GLM-4.5' },
+        { id: 'glm-4.5-flash', label: '智谱 GLM-4.5 Flash' },
+        { id: 'glm-4.6', label: '智谱 GLM-4.6' },
+        { id: 'glm-4.7', label: '智谱 GLM-4.7' },
+      ],
+    },
+  };
+}
+
 export function handleConfigIPC() {
   ipcMain.handle('config:get', async () => {
     const userDataDir = app.getPath('userData');
@@ -139,6 +165,11 @@ export function handleConfigIPC() {
     const config = {
       ...currentStore,
       configVersion: (currentStore.configVersion as string | undefined) ?? getAppVersion(),
+      multimodalApiKeys: currentStore?.multimodalApiKeys ?? currentStore?.apiKeys ?? DEFAULTS.multimodalApiKeys,
+      agent: {
+        ...(currentStore?.agent as object),
+        multimodalProvider: (currentStore?.agent as any)?.multimodalProvider ?? (currentStore?.agent as any)?.provider ?? 'dashscope',
+      },
       ui: {
         ...currentStore.ui,
         ...latestUIConfig,
@@ -146,6 +177,37 @@ export function handleConfigIPC() {
     };
     log.info('[config] config:get ok, hasApiKey=', Boolean(currentStore?.apiKeys?.dashscope || currentStore?.apiKeys?.zhipu));
     return { config, isFirstRun };
+  });
+
+  /** 从 backend/config/ai_models.json 读取 LLM 模型列表，供配置弹窗下拉使用 */
+  ipcMain.handle('config:getAiModels', async () => {
+    try {
+      const configDir = getBackendConfigDir();
+      const filePath = path.join(configDir, 'ai_models.json');
+      if (!fs.existsSync(filePath)) {
+        log.warn('[config] ai_models.json not found:', filePath);
+        return getFallbackAiModels();
+      }
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const schema = JSON.parse(content) as Record<string, { llm?: { default?: string; models?: Array<{ id: string; label: string }> } }>;
+      const result: Record<string, { default: string; models: Array<{ id: string; label: string }> }> = {};
+      for (const provider of ['dashscope', 'zhipu'] as const) {
+        const llm = schema[provider]?.llm;
+        if (llm?.models?.length) {
+          result[provider] = {
+            default: llm.default ?? llm.models[0]?.id ?? '',
+            models: llm.models,
+          };
+        } else {
+          const fallback = getFallbackAiModels();
+          result[provider] = fallback[provider];
+        }
+      }
+      return result;
+    } catch (e) {
+      log.error('[config] getAiModels failed:', (e as Error).message);
+      return getFallbackAiModels();
+    }
   });
 
   ipcMain.handle('config:set', async (_event, config: any) => {
@@ -163,12 +225,17 @@ export function handleConfigIPC() {
           dashscope: typeof config?.apiKeys?.dashscope === 'string' ? config.apiKeys.dashscope : '',
           zhipu: typeof config?.apiKeys?.zhipu === 'string' ? config.apiKeys.zhipu : '',
         },
+        multimodalApiKeys: {
+          dashscope: typeof config?.multimodalApiKeys?.dashscope === 'string' ? config.multimodalApiKeys.dashscope : '',
+          zhipu: typeof config?.multimodalApiKeys?.zhipu === 'string' ? config.multimodalApiKeys.zhipu : '',
+        },
         agent: {
           model: typeof config?.agent?.model === 'string' ? config.agent.model : (def.agent.model as string),
           current: typeof config?.agent?.current === 'string' ? config.agent.current : '',
           temperature: Number(config?.agent?.temperature) || (def.agent.temperature as number),
           maxTokens: Number(config?.agent?.maxTokens) || (def.agent.maxTokens as number),
           provider: config?.agent?.provider === 'zhipu' ? 'zhipu' : 'dashscope',
+          multimodalProvider: config?.agent?.multimodalProvider === 'zhipu' ? 'zhipu' : 'dashscope',
         },
         storage: {
           outputPath: typeof config?.storage?.outputPath === 'string' ? config.storage.outputPath : (def.storage.outputPath as string),
@@ -182,6 +249,7 @@ export function handleConfigIPC() {
 
       s.set('configVersion', normalized.configVersion);
       s.set('apiKeys', normalized.apiKeys);
+      s.set('multimodalApiKeys', normalized.multimodalApiKeys);
       s.set('agent', normalized.agent);
       s.set('storage', normalized.storage);
       s.set('ui', normalized.ui);

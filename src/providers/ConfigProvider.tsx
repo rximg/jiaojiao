@@ -53,7 +53,8 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
       }
       const baseConfig: AppConfig = config || {
         apiKeys: { dashscope: '', zhipu: '' },
-        agent: { model: 'qwen-plus-2025-12-01', temperature: 0.1, maxTokens: 20000, provider: 'dashscope' },
+        multimodalApiKeys: { dashscope: '', zhipu: '' },
+        agent: { model: 'qwen-plus-2025-12-01', temperature: 0.1, maxTokens: 20000, provider: 'dashscope', multimodalProvider: 'dashscope' },
         storage: { outputPath: './outputs' },
         ui: { theme: 'light', language: 'zh' },
       };

@@ -76,8 +76,13 @@ export interface Book {
 export interface AppConfig {
   /** 配置版本号，与 package.json version 一致（如 "1.0.0"） */
   configVersion?: string;
-  /** 按供应商区分的 API Key：一个 provider 一个 key，所有能力（LLM/VL/TTS/T2I）共用 */
+  /** LLM 专用：按供应商区分的 API Key */
   apiKeys: {
+    dashscope?: string;
+    zhipu?: string;
+  };
+  /** 多模态（VL/TTS/T2I）专用：按供应商区分的 API Key */
+  multimodalApiKeys?: {
     dashscope?: string;
     zhipu?: string;
   };
@@ -88,8 +93,10 @@ export interface AppConfig {
     current?: string;
     temperature: number;
     maxTokens: number;
-    /** 当前使用的 LLM 供应商：dashscope（阿里百炼）| zhipu（智谱） */
+    /** LLM 供应商：dashscope（阿里百炼）| zhipu（智谱） */
     provider?: 'dashscope' | 'zhipu';
+    /** 多模态（VL/TTS/T2I）供应商，可与 LLM 不同 */
+    multimodalProvider?: 'dashscope' | 'zhipu';
   };
   storage: {
     outputPath: string;

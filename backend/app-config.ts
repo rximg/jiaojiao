@@ -87,18 +87,30 @@ export async function loadConfig(): Promise<AppConfig> {
   try {
     const storedConfig = store.store as Partial<AppConfig>;
     const apiKeys = migrateApiKeys(storedConfig?.apiKeys as Record<string, unknown>, storedConfig?.agent?.provider);
+    const storedMultimodal = storedConfig?.multimodalApiKeys as { dashscope?: string; zhipu?: string } | undefined;
+    const llmProvider = storedConfig?.agent?.provider ?? 'dashscope';
+    const multimodalProvider = storedConfig?.agent?.multimodalProvider ?? llmProvider;
+    const multimodalApiKeys = {
+      dashscope: (storedMultimodal?.dashscope ?? storedConfig?.apiKeys?.dashscope ?? '')?.trim() || '',
+      zhipu: (storedMultimodal?.zhipu ?? storedConfig?.apiKeys?.zhipu ?? '')?.trim() || '',
+    };
 
     return {
       apiKeys: {
         dashscope: apiKeys.dashscope,
         zhipu: apiKeys.zhipu,
       },
+      multimodalApiKeys: {
+        dashscope: multimodalApiKeys.dashscope,
+        zhipu: multimodalApiKeys.zhipu,
+      },
       agent: {
         model: storedConfig?.agent?.model ?? 'qwen-plus-2025-12-01',
         current: storedConfig?.agent?.current ?? '',
         temperature: storedConfig?.agent?.temperature ?? 0.1,
         maxTokens: storedConfig?.agent?.maxTokens ?? 20000,
-        provider: storedConfig?.agent?.provider ?? 'dashscope',
+        provider: llmProvider,
+        multimodalProvider,
       },
       storage: {
         outputPath: storedConfig?.storage?.outputPath || './outputs',

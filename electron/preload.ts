@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 配置相关
   config: {
     get: () => ipcRenderer.invoke('config:get'),
+    getAiModels: () => ipcRenderer.invoke('config:getAiModels'),
     set: (config: any) => ipcRenderer.invoke('config:set', config),
   },
   // 同步 mp3 到 store（由前端按钮触发，非 MCP）
@@ -82,6 +83,7 @@ declare global {
     electronAPI: {
       config: {
         get: () => Promise<any>;
+        getAiModels: () => Promise<Record<string, { default: string; models: Array<{ id: string; label: string }> }>>;
         set: (config: any) => Promise<void>;
       };
       sync: {

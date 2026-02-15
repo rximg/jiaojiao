@@ -93,24 +93,38 @@ function resolveProviderForAbility(
 
 /**
  * 获取指定能力的 AI 配置（provider、apiKey、endpoint 等）。
- * 一个 provider 对应一个 key，所有能力共用该 key；模型与默认值来自 ai_models.json。
+ * LLM 使用 agent.provider + apiKeys；多模态（VL/TTS/T2I）使用 agent.multimodalProvider + multimodalApiKeys。
  */
 export async function getAIConfig(ability: AIAbility): Promise<AIConfig> {
   const appConfig = await loadConfig();
   const apiKeys = appConfig.apiKeys as { dashscope?: string; zhipu?: string };
+  const multimodalApiKeys = (appConfig.multimodalApiKeys ?? appConfig.apiKeys) as { dashscope?: string; zhipu?: string };
   const aiModels = await loadAiModels();
-  const agent = appConfig.agent as { model?: string; current?: string; provider?: Provider; temperature?: number; maxTokens?: number };
-  const provider: Provider = resolveProviderForAbility(agent?.provider, ability);
+  const agent = appConfig.agent as {
+    model?: string;
+    current?: string;
+    provider?: Provider;
+    multimodalProvider?: Provider;
+    temperature?: number;
+    maxTokens?: number;
+  };
+  const isLlm = ability === 'llm';
+  const provider: Provider = resolveProviderForAbility(
+    isLlm ? agent?.provider : (agent?.multimodalProvider ?? agent?.provider),
+    ability
+  );
   const abilityConfig = getAbilityConfig(aiModels, provider, ability);
   /** 用户当前选择的模型（current 优先，空则用 model；空字符串时 resolveModel 使用 ai_models 默认） */
   const raw = (ability === 'llm' ? (agent?.current ?? agent?.model) : agent?.model)?.trim();
   const specifiedModelForUser = raw || undefined;
 
+  const keysForAbility = isLlm ? apiKeys : multimodalApiKeys;
   const getApiKey = (p: Provider): string => {
-    const key = (apiKeys[p] ?? '').trim();
+    const key = (keysForAbility[p] ?? '').trim();
     if (!key) {
+      const label = isLlm ? 'LLM' : '多模态（视觉/语音/图像）';
       throw new Error(
-        `未配置 API Key：请在应用设置中配置${p === 'zhipu' ? '智谱（Zhipu）' : '通义（DashScope）'}的 API Key（用户目录配置）`
+        `未配置 ${label} API Key：请在应用设置中配置${p === 'zhipu' ? '智谱（Zhipu）' : '通义（DashScope）'}的 API Key`
       );
     }
     return key;
