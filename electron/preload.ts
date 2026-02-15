@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     get: () => ipcRenderer.invoke('config:get'),
     getAiModels: () => ipcRenderer.invoke('config:getAiModels'),
     set: (config: any) => ipcRenderer.invoke('config:set', config),
+    getWorkspaceDir: () => ipcRenderer.invoke('config:getWorkspaceDir'),
     openConfigDir: () => ipcRenderer.invoke('config:openConfigDir'),
     showOutputPathDialog: (defaultPath?: string) => ipcRenderer.invoke('config:showOutputPathDialog', defaultPath),
     openFolder: (dirPath: string) => ipcRenderer.invoke('config:openFolder', dirPath),
@@ -88,6 +89,7 @@ declare global {
         get: () => Promise<any>;
         getAiModels: () => Promise<Record<string, { default: string; models: Array<{ id: string; label: string }> }>>;
         set: (config: any) => Promise<void>;
+        getWorkspaceDir: () => Promise<string>;
         openConfigDir: () => Promise<void>;
         showOutputPathDialog: (defaultPath?: string) => Promise<string | null>;
         openFolder: (dirPath: string) => Promise<void>;

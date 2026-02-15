@@ -54,7 +54,7 @@ export async function annotateImageNumbers(
 ): Promise<AnnotateImageNumbersResult> {
   const config = await loadConfig();
   const sessionId = params.sessionId ?? DEFAULT_SESSION_ID;
-  const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
+  const workspaceFs = getWorkspaceFilesystem({});
   const workspaceRoot = workspaceFs.root;
 
   const absolutePath = resolveImageAbsolutePath(params.imagePath, sessionId, workspaceRoot);

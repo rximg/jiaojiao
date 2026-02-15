@@ -35,8 +35,15 @@ function ensureTrailingSep(dir: string): string {
   return dir.endsWith(path.sep) ? dir : `${dir}${path.sep}`;
 }
 
+/** 工作目录的“基路径”（其下为 workspaces/）。固定用 userData/workspace，由主进程设置 JIAOJIAO_WORKSPACE_ROOT，不可配置。 */
+export function getWorkspaceBase(): string {
+  const envRoot = process.env.JIAOJIAO_WORKSPACE_ROOT;
+  return envRoot && envRoot.trim() ? path.resolve(envRoot.trim()) : path.resolve(process.cwd(), 'outputs');
+}
+
 function resolveRootDir(outputPath?: string): string {
-  const base = outputPath ? path.resolve(outputPath) : path.resolve(process.cwd(), 'outputs');
+  const trimmed = typeof outputPath === 'string' ? outputPath.trim() : '';
+  const base = trimmed ? path.resolve(trimmed) : getWorkspaceBase();
   return path.join(base, WORKSPACES_DIRNAME);
 }
 

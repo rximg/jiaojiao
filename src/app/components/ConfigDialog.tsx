@@ -59,7 +59,7 @@ export default function ConfigDialog({
   const [model, setModel] = useState('');
   const [temperature, setTemperature] = useState(0.1);
   const [maxTokens, setMaxTokens] = useState(20000);
-  const [outputPath, setOutputPath] = useState('');
+  const [syncTargetPath, setSyncTargetPath] = useState('');
   const [ttsStartNumber, setTtsStartNumber] = useState(6000);
   const [applyStepsOpen, setApplyStepsOpen] = useState(false);
   /** 多模态（VL/TTS/T2I）供应商与 API Key */
@@ -110,7 +110,7 @@ export default function ConfigDialog({
       setModel(currentOrDefault);
       setTemperature(initialConfig.agent?.temperature ?? 0.1);
       setMaxTokens(initialConfig.agent?.maxTokens ?? 20000);
-      setOutputPath(initialConfig.storage?.outputPath ?? './outputs');
+      setSyncTargetPath(initialConfig.storage?.syncTargetPath ?? initialConfig.storage?.outputPath ?? '');
       setTtsStartNumber(initialConfig.storage?.ttsStartNumber ?? 6000);
     }
   }, [open, initialConfig, llmOptions]);
@@ -173,7 +173,8 @@ export default function ConfigDialog({
           multimodalProvider,
         },
         storage: {
-          outputPath,
+          outputPath: '',
+          syncTargetPath,
           ttsStartNumber,
         },
         ui: {
@@ -338,13 +339,35 @@ export default function ConfigDialog({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="outputPath" className="text-foreground">音频输出路径</Label>
+          {/* <div className="space-y-2">
+            <Label className="text-foreground">工作目录（只读）</Label>
             <div className="flex gap-2">
               <Input
-                id="outputPath"
-                value={outputPath}
-                onChange={(e) => setOutputPath(e.target.value)}
+                readOnly
+                value={workspaceDir}
+                className="flex-1 min-w-0 bg-muted text-muted-foreground"
+                placeholder="固定于 AppData，不可配置"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => workspaceDir && window.electronAPI?.config?.openFolder?.(workspaceDir)}
+              >
+                <Folder className="h-4 w-4 mr-1" />
+                打开
+              </Button>
+            </div>
+          </div> */}
+          <div className="space-y-2">
+            <Label htmlFor="syncTargetPath" className="text-foreground">音频同步目标路径</Label>
+            <div className="flex gap-2">
+              <Input
+                id="syncTargetPath"
+                value={syncTargetPath}
+                onChange={(e) => setSyncTargetPath(e.target.value)}
+                placeholder="点击「同步」时，将工作目录下的音频复制到此目录"
                 className="flex-1 min-w-0"
               />
               <Button
@@ -355,8 +378,8 @@ export default function ConfigDialog({
                 onClick={async () => {
                   const api = window.electronAPI?.config;
                   if (!api?.showOutputPathDialog) return;
-                  const chosen = await api.showOutputPathDialog(outputPath || undefined);
-                  if (chosen) setOutputPath(chosen);
+                  const chosen = await api.showOutputPathDialog(syncTargetPath || undefined);
+                  if (chosen) setSyncTargetPath(chosen);
                 }}
               >
                 <FolderOpen className="h-4 w-4 mr-1" />

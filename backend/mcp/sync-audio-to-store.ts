@@ -2,6 +2,7 @@ import path from 'path';
 import { promises as fs } from 'fs';
 import { readLineNumbers } from './line-numbers.js';
 import { loadConfig } from '../agent/config.js';
+import { getWorkspaceBase } from '../services/fs.js';
 
 const WORKSPACES_DIRNAME = 'workspaces';
 const STORE_DIRNAME = 'store';
@@ -13,23 +14,23 @@ export interface SyncAudioToStoreResult {
 }
 
 /**
- * 同步所有 session 的 mp3 到 outputPath/store：仅从 workspace 下的 audio_record.json 读取 entries，
- * 按 sessionId + relativePath 拷贝到 store 并重命名为 {number}.mp3，不遍历 *.mp3 文件。
+ * 从固定工作目录（userData/workspace）读取 audio_record.json，将音频复制到 syncTargetDir/store。
+ * 工作目录不可配置；syncTargetDir 为配置项「音频同步目标路径」。
  */
 export async function syncSessionAudioToStore(
-  outputPath: string
+  syncTargetDir: string
 ): Promise<SyncAudioToStoreResult> {
-  const base = outputPath ? path.resolve(outputPath) : path.resolve(process.cwd(), 'outputs');
-  const workspacesDir = path.join(base, WORKSPACES_DIRNAME);
-  const storeDir = path.join(base, STORE_DIRNAME);
-
+  const storeDir = path.join(path.resolve(syncTargetDir), STORE_DIRNAME);
   await fs.mkdir(storeDir, { recursive: true });
 
-  const copiedFiles: string[] = [];
+  const workspaceBase = getWorkspaceBase();
+  const workspacesDir = path.join(workspaceBase, WORKSPACES_DIRNAME);
+
   const config = await loadConfig();
   const ttsStartNumber = config.storage.ttsStartNumber ?? 6000;
+  const { entries } = await readLineNumbers(ttsStartNumber);
 
-  const { entries } = await readLineNumbers(outputPath, ttsStartNumber);
+  const copiedFiles: string[] = [];
   for (const entry of entries) {
     const sessionDir = path.join(workspacesDir, entry.sessionId);
     const srcPath = path.join(sessionDir, entry.relativePath);

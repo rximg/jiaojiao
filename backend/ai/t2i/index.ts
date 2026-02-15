@@ -27,12 +27,11 @@ function toSafePromptRelative(promptFile: string): string {
 
 async function resolvePrompt(
   params: GenerateImageParams,
-  sessionId: string,
-  outputPath: string
+  sessionId: string
 ): Promise<string> {
   if (params.prompt) return params.prompt;
   if (!params.promptFile) throw new Error('Either prompt or promptFile must be provided');
-  const workspaceFs = getWorkspaceFilesystem({ outputPath });
+  const workspaceFs = getWorkspaceFilesystem({});
   const safeRelative = toSafePromptRelative(params.promptFile);
   const fullPath = workspaceFs.sessionPath(sessionId, safeRelative);
   try {
@@ -84,8 +83,8 @@ async function generateImageImpl(params: GenerateImageParams): Promise<GenerateI
 
   if (!cfg.apiKey) throw new Error('T2I API key not configured');
 
-  const workspaceFs = getWorkspaceFilesystem({ outputPath: appConfig.storage.outputPath });
-  const prompt = await resolvePrompt(params, sessionId, appConfig.storage.outputPath);
+  const workspaceFs = getWorkspaceFilesystem({});
+  const prompt = await resolvePrompt(params, sessionId);
 
   const negativePrompt = [cfg.negativePrompt, style].filter(Boolean).join(', ') || undefined;
 

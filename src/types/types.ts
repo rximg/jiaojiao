@@ -99,7 +99,10 @@ export interface AppConfig {
     multimodalProvider?: 'dashscope' | 'zhipu';
   };
   storage: {
-    outputPath: string;
+    /** @deprecated 仅作兼容，新逻辑用 syncTargetPath。工作目录固定为 userData/workspace，不可配置。 */
+    outputPath?: string;
+    /** 音频同步目标路径：点击「同步」时，将工作目录下的音频复制到此目录。可配置，为空时同步会提示设置。 */
+    syncTargetPath?: string;
     /** TTS 起始编号，如 6000，后续生成 6001、6002… */
     ttsStartNumber?: number;
   };

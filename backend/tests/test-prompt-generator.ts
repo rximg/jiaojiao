@@ -60,7 +60,7 @@ async function testPromptGenerator() {
     console.log('\n[检查文件]');
     const { getWorkspaceFilesystem } = await import('../services/fs.js');
     const appConfig = await import('../agent/config.js').then(m => m.loadConfig());
-    const workspaceFs = getWorkspaceFilesystem({ outputPath: appConfig.storage.outputPath });
+    const workspaceFs = getWorkspaceFilesystem({});
     
     // 获取文件完整路径
     const expectedPath = workspaceFs.sessionPath(testSessionId, 'image_prompt.txt');

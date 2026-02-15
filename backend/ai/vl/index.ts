@@ -106,7 +106,7 @@ async function generateScriptFromImageImpl(
   const cfg = (await getAIConfig('vl')) as VLAIConfig;
   const sessionId = params.sessionId ?? DEFAULT_SESSION_ID;
   const appConfig = await loadConfig();
-  const workspaceFs2 = getWorkspaceFilesystem({ outputPath: appConfig.storage.outputPath });
+  const workspaceFs2 = getWorkspaceFilesystem({});
   const workspaceRoot = workspaceFs2.root;
 
   if (!cfg.apiKey) {

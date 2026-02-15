@@ -114,9 +114,20 @@ export async function loadConfig(): Promise<AppConfig> {
       },
       storage: (() => {
         const raw = storedConfig?.storage?.outputPath;
-        const outputPath = typeof raw === 'string' && raw.trim() && raw !== './outputs' ? raw.trim() : '';
+        const trimmed = typeof raw === 'string' ? raw.trim() : '';
+        const cwdNorm = path.normalize(path.resolve(process.cwd())).toLowerCase() + path.sep;
+        const rawNorm = path.normalize(path.resolve(trimmed)).toLowerCase() + path.sep;
+        const isLegacy =
+          !trimmed ||
+          trimmed === './outputs' ||
+          rawNorm === cwdNorm.slice(0, -1) ||
+          rawNorm.startsWith(cwdNorm);
+        const outputPath = isLegacy ? '' : trimmed;
+        const syncRaw = storedConfig?.storage?.syncTargetPath;
+        const syncTargetPath = typeof syncRaw === 'string' && syncRaw.trim() ? syncRaw.trim() : outputPath;
         return {
           outputPath,
+          syncTargetPath,
           ttsStartNumber: storedConfig?.storage?.ttsStartNumber ?? 6000,
         };
       })(),

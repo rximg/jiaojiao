@@ -21,6 +21,17 @@ function getAppVersion(): string {
 /** 未设置或旧版 ./outputs 时视为空，需用户在配置中设置音频输出路径 */
 const LEGACY_DEFAULT_OUTPUT = './outputs';
 
+/** 判断路径是否在应用目录（或 cwd）下，此类视为旧配置并清空，避免继续使用 app 目录下的 workspace */
+function isPathUnderAppDir(dirPath: string): boolean {
+  if (!dirPath || !dirPath.trim()) return true;
+  const normalized = path.normalize(path.resolve(dirPath)).toLowerCase();
+  const appPath = path.normalize(path.resolve(app.getAppPath())).toLowerCase();
+  const cwd = path.normalize(path.resolve(process.cwd())).toLowerCase();
+  const appPrefix = appPath.endsWith(path.sep) ? appPath : appPath + path.sep;
+  const cwdPrefix = cwd.endsWith(path.sep) ? cwd : cwd + path.sep;
+  return normalized === appPath || normalized.startsWith(appPrefix) || normalized === cwd || normalized.startsWith(cwdPrefix);
+}
+
 const DEFAULTS: Record<string, unknown> = {
   apiKeys: {
     dashscope: '',
@@ -40,6 +51,7 @@ const DEFAULTS: Record<string, unknown> = {
   },
   storage: {
     outputPath: '',
+    syncTargetPath: '',
     ttsStartNumber: 6000,
   },
   ui: {
@@ -166,10 +178,18 @@ export function handleConfigIPC() {
     const latestUIConfig = loadUIConfigFromYaml();
     const currentStore = s.store as any;
     const storedOutput = (currentStore?.storage as any)?.outputPath;
+    const storedSync = (currentStore?.storage as any)?.syncTargetPath;
     const outputPath =
-      typeof storedOutput === 'string' && storedOutput.trim() && storedOutput !== LEGACY_DEFAULT_OUTPUT
-        ? storedOutput
+      typeof storedOutput === 'string' &&
+      storedOutput.trim() &&
+      storedOutput !== LEGACY_DEFAULT_OUTPUT &&
+      !isPathUnderAppDir(storedOutput)
+        ? storedOutput.trim()
         : '';
+    const syncTargetPath =
+      typeof storedSync === 'string' && storedSync.trim() && !isPathUnderAppDir(storedSync)
+        ? storedSync.trim()
+        : outputPath || '';
     const config = {
       ...currentStore,
       configVersion: (currentStore.configVersion as string | undefined) ?? getAppVersion(),
@@ -181,6 +201,7 @@ export function handleConfigIPC() {
       storage: {
         ...(currentStore?.storage as object),
         outputPath,
+        syncTargetPath,
       },
       ui: {
         ...currentStore.ui,
@@ -249,13 +270,18 @@ export function handleConfigIPC() {
           provider: config?.agent?.provider === 'zhipu' ? 'zhipu' : 'dashscope',
           multimodalProvider: config?.agent?.multimodalProvider === 'zhipu' ? 'zhipu' : 'dashscope',
         },
-        storage: {
-          outputPath:
-            typeof config?.storage?.outputPath === 'string' && config.storage.outputPath.trim() && config.storage.outputPath !== LEGACY_DEFAULT_OUTPUT
-              ? config.storage.outputPath.trim()
-              : '',
-          ttsStartNumber: Number(config?.storage?.ttsStartNumber) || (def.storage.ttsStartNumber as number),
-        },
+        storage: (() => {
+          const raw = typeof config?.storage?.outputPath === 'string' ? config.storage.outputPath.trim() : '';
+          const out =
+            raw && raw !== LEGACY_DEFAULT_OUTPUT && !isPathUnderAppDir(raw) ? raw : '';
+          const syncRaw = typeof config?.storage?.syncTargetPath === 'string' ? config.storage.syncTargetPath.trim() : '';
+          const syncOut = syncRaw && !isPathUnderAppDir(syncRaw) ? syncRaw : '';
+          return {
+            outputPath: out,
+            syncTargetPath: syncOut,
+            ttsStartNumber: Number(config?.storage?.ttsStartNumber) || (def.storage.ttsStartNumber as number),
+          };
+        })(),
         ui: {
           theme: config?.ui?.theme === 'dark' ? 'dark' : 'light',
           language: config?.ui?.language === 'en' ? 'en' : 'zh',
@@ -279,6 +305,9 @@ export function handleConfigIPC() {
     }
   });
 
+  /** 返回工作目录路径（userData/workspace，固定不可配置） */
+  ipcMain.handle('config:getWorkspaceDir', async () => path.join(app.getPath('userData'), 'workspace'));
+
   /** 打开用户配置所在文件夹（userData，内含 config.json） */
   ipcMain.handle('config:openConfigDir', async () => {
     const userDataDir = app.getPath('userData');
@@ -290,7 +319,7 @@ export function handleConfigIPC() {
     const win = BrowserWindow.getFocusedWindow();
     const opts: Electron.OpenDialogOptions = {
       properties: ['openDirectory'],
-      title: '选择音频输出目录',
+      title: '选择音频同步目标目录',
       defaultPath: defaultPath || app.getPath('documents'),
     };
     const { filePaths } = win

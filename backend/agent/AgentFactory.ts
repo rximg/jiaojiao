@@ -143,8 +143,7 @@ export class AgentFactory {
           const sessionId = (merged.sessionId as string) || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
           const texts = Array.isArray(merged.texts) ? merged.texts : [];
           // 将用户确认后的台词写入文件，TTS 从文件读取，保证使用编辑后的内容
-          const config = await loadConfig();
-          const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
+          const workspaceFs = getWorkspaceFilesystem({});
           const scriptRelPath = 'lines/tts_confirmed.json';
           await workspaceFs.writeFile(sessionId, scriptRelPath, JSON.stringify(texts, null, 2), 'utf-8');
           console.log(`[tts tool] Wrote ${texts.length} texts to ${scriptRelPath}, sessionId: ${sessionId}`);
@@ -200,8 +199,7 @@ export class AgentFactory {
     return tool(
       async (input: { imagePath?: string; audioPath?: string; scriptText?: string; sessionId?: string }) => {
         const { imagePath, audioPath, scriptText, sessionId = process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID } = input;
-        const config = await loadConfig();
-        const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
+        const workspaceFs = getWorkspaceFilesystem({});
         
         // 辅助函数：从绝对路径提取相对路径（相对于 sessionId 目录）
         const extractRelativePath = (absolutePath: string, expectedSessionId: string): string => {
@@ -317,7 +315,7 @@ export class AgentFactory {
             numbers = input.numbers;
           } else {
             const config = await loadConfig();
-            const { entries } = await readLineNumbers(config.storage.outputPath);
+            const { entries } = await readLineNumbers(config.storage.ttsStartNumber ?? 6000);
             const sessionEntries = entries.filter((e) => e.sessionId === sessionId);
             const n = input.lines.length;
             const lastN = sessionEntries.slice(-n);
@@ -336,8 +334,7 @@ export class AgentFactory {
         let imageWidth: number | undefined;
         let imageHeight: number | undefined;
         try {
-          const config = await loadConfig();
-          const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
+          const workspaceFs = getWorkspaceFilesystem({});
           const normalized = input.imagePath.replace(/\\/g, '/');
           const workspacesMatch = normalized.match(/workspaces\/([^/]+)\/(.+)$/);
           const relPath = workspacesMatch ? workspacesMatch[2] : normalized.replace(/^[^/]+[/\\]/, '');
@@ -462,8 +459,7 @@ export class AgentFactory {
       let middleware: any[] = [];
       if (useFilesystemMiddleware) {
         // 获取 workspace 根目录路径，使用 sessionId 作为子目录
-        const config = await loadConfig();
-        const workspaceRoot = resolveWorkspaceRoot(config.storage.outputPath);
+        const workspaceRoot = resolveWorkspaceRoot();
         const sessionWorkspaceRoot = path.join(workspaceRoot, sessionId);
         
         // FilesystemMiddleware 使用 workspaces/{sessionId} 作为根目录
@@ -557,8 +553,7 @@ export class AgentFactory {
         if (input.paths && input.paths.length > 0) {
           pathsToDelete = input.paths.map((p) => p.replace(/\\/g, '/').replace(/^[^/]+[/\\]/, ''));
         } else {
-          const config = await loadConfig();
-          const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
+          const workspaceFs = getWorkspaceFilesystem({});
           const category = input.category || 'both';
           if (category === 'images' || category === 'both') {
             const imgEntries = await workspaceFs.ls(sessionId, 'images');
@@ -583,8 +578,7 @@ export class AgentFactory {
           return { success: true, deleted: 0, message: '用户取消删除' };
         }
 
-        const config = await loadConfig();
-        const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
+        const workspaceFs = getWorkspaceFilesystem({});
         let deleted = 0;
         for (const relPath of confirmedPaths) {
           try {
@@ -671,8 +665,7 @@ export class AgentFactory {
     // 有 sessionId 时使用 WorkspaceCheckpointSaver，按 session/checkpoints/ 持久化，stream/invoke 时需传 config.configurable.thread_id = sessionId
     let checkpointer: InstanceType<typeof import('../services/workspace-checkpoint-saver.js').WorkspaceCheckpointSaver> | undefined;
     if (sessionId) {
-      const config = await loadConfig();
-      const workspace = getWorkspaceFilesystem({ outputPath: config.storage?.outputPath ?? './outputs' });
+      const workspace = getWorkspaceFilesystem({});
       const { WorkspaceCheckpointSaver } = await import('../services/workspace-checkpoint-saver.js');
       checkpointer = new WorkspaceCheckpointSaver(workspace);
     }

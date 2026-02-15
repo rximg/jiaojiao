@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     get: () => ipcRenderer.invoke('config:get'),
     getAiModels: () => ipcRenderer.invoke('config:getAiModels'),
     set: (config) => ipcRenderer.invoke('config:set', config),
+    getWorkspaceDir: () => ipcRenderer.invoke('config:getWorkspaceDir'),
     openConfigDir: () => ipcRenderer.invoke('config:openConfigDir'),
     showOutputPathDialog: (defaultPath) => ipcRenderer.invoke('config:showOutputPathDialog', defaultPath),
     openFolder: (dirPath) => ipcRenderer.invoke('config:openFolder', dirPath),

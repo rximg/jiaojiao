@@ -74,6 +74,7 @@ app.whenReady().then(async () => {
     const outputPath = (config.storage?.outputPath ?? '').trim();
     // 未设置时使用 userData/workspace 作为运行时根目录，避免写入 cwd；同步功能会单独提示用户到配置中设置
     const effectiveOutputPath = outputPath || path.join(app.getPath('userData'), 'workspace');
+    process.env.JIAOJIAO_WORKSPACE_ROOT = effectiveOutputPath;
     await initializeServices({ outputPath: effectiveOutputPath });
     console.log('[Electron] Core services initialized');
   } catch (error) {

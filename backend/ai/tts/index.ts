@@ -68,8 +68,7 @@ async function synthesizeSpeechSequential(params: SynthesizeSpeechParams): Promi
   const cfg = (await getAIConfig('tts')) as TTSAIConfig;
   console.log('cfg', JSON.stringify(cfg, null, 2));
   const { texts: paramTexts, scriptFile, voice = 'chinese_female', format = 'mp3', sessionId = DEFAULT_SESSION_ID } = params;
-  const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
-  const outputPath = config.storage.outputPath;
+  const workspaceFs = getWorkspaceFilesystem({});
   const ttsStartNumber = config.storage.ttsStartNumber ?? 6000;
 
   // 优先从文件读取：用户确认后的台词文件，保证 TTS 使用编辑后的内容
@@ -87,7 +86,7 @@ async function synthesizeSpeechSequential(params: SynthesizeSpeechParams): Promi
     throw new Error('synthesize_speech 需要 texts 或 scriptFile 参数');
   }
 
-  const { nextNumber } = await readLineNumbers(outputPath, ttsStartNumber);
+  const { nextNumber } = await readLineNumbers(ttsStartNumber);
   const planned: { num: number; relativePath: string; text: string }[] = texts.map((text, i) => {
     const num = nextNumber + i;
     const relativePath = path.posix.join('audio', `${num}_${sanitizeForFilename(text)}.${format}`);
@@ -123,7 +122,7 @@ async function synthesizeSpeechSequential(params: SynthesizeSpeechParams): Promi
     relativePath: p.relativePath,
     text: p.text,
   }));
-  await appendEntries(outputPath, newEntries, ttsStartNumber);
+  await appendEntries(newEntries, ttsStartNumber);
 
   return {
     audioPaths,
