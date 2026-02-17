@@ -1,8 +1,8 @@
 /**
  * 产物仓储实现：基于 WorkspaceFilesystem
  */
-import type { ArtifactRepository, LsEntry } from '../../../domain/workspace/repositories/artifact-repository.js';
-import type { WorkspaceFilesystem } from '../../../services/fs.js';
+import type { ArtifactRepository, LsEntry } from '#backend/domain/workspace/repositories/artifact-repository.js';
+import type { WorkspaceFilesystem } from '#backend/services/fs.js';
 
 export class ArtifactFsRepository implements ArtifactRepository {
   constructor(private readonly workspace: WorkspaceFilesystem) {}

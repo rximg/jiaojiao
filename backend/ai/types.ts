@@ -1,8 +1,12 @@
 /**
  * AI 能力统一层：供应商无关的请求/响应类型
  */
+import type { PromptInput, TextsInput } from '#backend/domain/inference/value-objects/prompt-input.js';
+import type { ArtifactFilePath, ArtifactFileUri, RemoteUrl } from '#backend/domain/inference/types.js';
 
 export type Provider = 'dashscope' | 'zhipu';
+
+export type { PromptInput, TextsInput };
 
 // ---------------------------------------------------------------------------
 // LLM（由 LangChain Chat 模型封装，此处仅作配置/能力标识）
@@ -44,8 +48,11 @@ export interface GenerateScriptFromImageResult {
 // ---------------------------------------------------------------------------
 
 export interface SynthesizeSpeechParams {
+  /** 统一参数：直接数组或从文件加载 */
+  content?: TextsInput;
+  /** @deprecated 使用 content 替代 */
   texts?: string[];
-  /** 台词文件路径（相对 session），确认后写入，TTS 优先从此文件读取以保证使用用户确认的台词 */
+  /** @deprecated 使用 content: { fromFile } 替代 */
   scriptFile?: string;
   voice?: string;
   format?: string;
@@ -53,8 +60,8 @@ export interface SynthesizeSpeechParams {
 }
 
 export interface SynthesizeSpeechResult {
-  audioPaths: string[];
-  audioUris: string[];
+  audioPaths: ArtifactFilePath[];
+  audioUris: ArtifactFileUri[];
   numbers: number[];
   sessionId: string;
 }
@@ -64,7 +71,9 @@ export interface SynthesizeSpeechResult {
 // ---------------------------------------------------------------------------
 
 export interface GenerateImageParams {
-  prompt?: string;
+  /** 统一参数：直接字符串或从文件加载 */
+  prompt?: PromptInput;
+  /** @deprecated 使用 prompt: { fromFile } 替代 */
   promptFile?: string;
   size?: string;
   style?: string;
@@ -74,9 +83,9 @@ export interface GenerateImageParams {
 }
 
 export interface GenerateImageResult {
-  imagePath: string;
-  imageUri: string;
-  imageUrl?: string;
+  imagePath: ArtifactFilePath;
+  imageUri: ArtifactFileUri;
+  imageUrl?: RemoteUrl;
   sessionId: string;
 }
 

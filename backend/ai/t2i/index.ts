@@ -2,11 +2,10 @@
  * T2I 统一入口：解析 prompt、按 provider 提交与轮询、下载保存
  */
 import path from 'path';
-import { promises as fs } from 'fs';
 import { getAIConfig } from '../config.js';
-import { loadConfig } from '../../app-config.js';
 import { getWorkspaceFilesystem } from '../../services/fs.js';
 import { traceAiRun } from '../../agent/langsmith-trace.js';
+import { normalizePromptInput, resolvePromptInput } from '../utils/content-input.js';
 import type {
   GenerateImageParams,
   GenerateImageResult,
@@ -17,31 +16,17 @@ import { submitTaskZhipu, pollForImageUrlZhipu } from './zhipu.js';
 
 const DEFAULT_SESSION_ID = 'default';
 
-function toSafePromptRelative(promptFile: string): string {
-  const normalized = promptFile.replace(/\\/g, '/').replace(/^\/+/, '');
-  if (path.isAbsolute(promptFile) || normalized.includes('..')) {
-    return path.basename(promptFile);
-  }
-  return normalized || path.basename(promptFile);
-}
-
 async function resolvePrompt(
   params: GenerateImageParams,
   sessionId: string
 ): Promise<string> {
-  if (params.prompt) return params.prompt;
-  if (!params.promptFile) throw new Error('Either prompt or promptFile must be provided');
+  const promptInput = normalizePromptInput({
+    prompt: params.prompt,
+    promptFile: params.promptFile,
+  });
+  if (!promptInput) throw new Error('Either prompt or promptFile must be provided');
   const workspaceFs = getWorkspaceFilesystem({});
-  const safeRelative = toSafePromptRelative(params.promptFile);
-  const fullPath = workspaceFs.sessionPath(sessionId, safeRelative);
-  try {
-    return await fs.readFile(fullPath, 'utf-8');
-  } catch {
-    throw new Error(
-      `Prompt file not found at: ${fullPath}\n` +
-        `Please ensure prompt_generator subagent has saved the file to workspaces/${sessionId}/${params.promptFile}`
-    );
-  }
+  return resolvePromptInput(promptInput, sessionId, workspaceFs);
 }
 
 export type { GenerateImageParams, GenerateImageResult };
@@ -77,7 +62,6 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
 }
 
 async function generateImageImpl(params: GenerateImageParams): Promise<GenerateImageResult> {
-  const appConfig = await loadConfig();
   const cfg = (await getAIConfig('t2i')) as T2IAIConfig;
   const { size = '1024*1024', style, count = 1, sessionId = DEFAULT_SESSION_ID } = params;
 

@@ -5,6 +5,7 @@ import path from 'path';
 import { getAIConfig } from '../config.js';
 import { loadConfig } from '../../app-config.js';
 import { getWorkspaceFilesystem } from '../../services/fs.js';
+import { normalizeTextsInput, resolveTextsInput } from '../utils/content-input.js';
 import { readLineNumbers, appendEntries, type LineNumberEntry } from '../../mcp/line-numbers.js';
 import { traceAiRun } from '../../agent/langsmith-trace.js';
 import { notifyWorkspaceFileAdded } from '../../workspace-notifier.js';
@@ -67,23 +68,14 @@ export async function synthesizeSpeech(params: SynthesizeSpeechParams): Promise<
 async function synthesizeSpeechSequential(params: SynthesizeSpeechParams): Promise<SynthesizeSpeechResult> {
   const config = await loadConfig();
   const cfg = (await getAIConfig('tts')) as TTSAIConfig;
-  const { texts: paramTexts, scriptFile, voice = 'chinese_female', format = 'mp3', sessionId = DEFAULT_SESSION_ID } = params;
+  const { content, texts: paramTexts, scriptFile, voice = 'chinese_female', format = 'mp3', sessionId = DEFAULT_SESSION_ID } = params;
   const workspaceFs = getWorkspaceFilesystem({});
   const ttsStartNumber = config.storage.ttsStartNumber ?? 6000;
 
   // 优先从文件读取：用户确认后的台词文件，保证 TTS 使用编辑后的内容
-  let texts: string[];
-  if (scriptFile && sessionId) {
-    const absPath = workspaceFs.sessionPath(sessionId, scriptFile);
-    const { promises: fs } = await import('node:fs');
-    const raw = await fs.readFile(absPath, 'utf-8');
-    const parsed = JSON.parse(raw) as unknown;
-    texts = Array.isArray(parsed) ? parsed.map(String) : [];
-  } else if (paramTexts && paramTexts.length > 0) {
-    texts = paramTexts;
-  } else {
-    throw new Error('synthesize_speech 需要 texts 或 scriptFile 参数');
-  }
+  const textsInput = normalizeTextsInput({ content, texts: paramTexts, scriptFile });
+  if (!textsInput) throw new Error('synthesize_speech 需要 texts 或 scriptFile 参数');
+  const texts = await resolveTextsInput(textsInput, sessionId, workspaceFs);
 
   const { nextNumber } = await readLineNumbers(ttsStartNumber);
   const planned: { num: number; relativePath: string; text: string }[] = texts.map((text, i) => {

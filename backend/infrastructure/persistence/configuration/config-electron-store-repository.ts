@@ -1,8 +1,8 @@
 /**
  * 配置仓储实现：基于 electron-store（app-config）
  */
-import { loadConfig, saveConfig } from '../../../app-config.js';
-import type { ConfigRepository } from '../../../domain/configuration/repositories/config-repository.js';
+import { loadConfig, saveConfig } from '#backend/app-config.js';
+import type { ConfigRepository } from '#backend/domain/configuration/repositories/config-repository.js';
 
 export class ConfigElectronStoreRepository implements ConfigRepository {
   async getAppConfig(): Promise<unknown> {

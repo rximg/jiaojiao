@@ -27,6 +27,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '#backend': path.resolve(__dirname, './backend'),
       // 将 deepagents 内部引用的子路径映射到顶层安装，消除 commonjs-resolver 警告
       'deepagents/node_modules/@langchain/core/messages': '@langchain/core/messages',
     },

@@ -3,9 +3,9 @@
  */
 import { promises as fs } from 'fs';
 import path from 'path';
-import type { SessionRepository } from '../../../domain/session/repositories/session-repository.js';
-import type { Session } from '../../../domain/session/entities/session.js';
-import type { WorkspaceFilesystem } from '../../../services/fs.js';
+import type { SessionRepository } from '#backend/domain/session/repositories/session-repository.js';
+import type { Session } from '#backend/domain/session/entities/session.js';
+import type { WorkspaceFilesystem } from '#backend/services/fs.js';
 
 const META_PATH = 'meta/session.json';
 
