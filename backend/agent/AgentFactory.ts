@@ -12,6 +12,7 @@ import type { LLMAIConfig } from '../ai/types.js';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { DEFAULT_SESSION_ID, getWorkspaceFilesystem, resolveWorkspaceRoot } from '../services/fs.js';
+import { getArtifactRepository } from '../infrastructure/repositories.js';
 import { createAgentRuntime, type AgentRuntime } from '../services/runtime-manager.js';
 import { readLineNumbers } from '../mcp/line-numbers.js';
 
@@ -134,9 +135,9 @@ export class AgentFactory {
           const sessionId = (merged.sessionId as string) || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
           const texts = Array.isArray(merged.texts) ? merged.texts : [];
           // 将用户确认后的台词写入文件，TTS 从文件读取，保证使用编辑后的内容
-          const workspaceFs = getWorkspaceFilesystem({});
+          const artifactRepo = getArtifactRepository();
           const scriptRelPath = 'lines/tts_confirmed.json';
-          await workspaceFs.writeFile(sessionId, scriptRelPath, JSON.stringify(texts, null, 2), 'utf-8');
+          await artifactRepo.write(sessionId, scriptRelPath, JSON.stringify(texts, null, 2));
           const { synthesizeSpeech } = await import('../mcp/tts.js');
           return await synthesizeSpeech({
             scriptFile: scriptRelPath,

@@ -1,9 +1,18 @@
 /**
- * VL 脚本 MCP：委托给 ai/vl 统一层，provider 由 getAIConfig('vl') 决定
+ * VL 脚本 MCP：委托给 MultimodalPort，不再直接调用 ai/*
  */
-export {
-  generateScriptFromImage,
-  type GenerateScriptFromImageParams,
-  type GenerateScriptFromImageResult,
-  type ScriptLine,
-} from '../ai/vl/index.js';
+import { getMultimodalPort } from '../infrastructure/repositories.js';
+import type {
+  GenerateScriptFromImageParams,
+  GenerateScriptFromImageResult,
+  ScriptLine,
+} from '#backend/domain/inference/types.js';
+
+export type { GenerateScriptFromImageParams, GenerateScriptFromImageResult, ScriptLine };
+
+export async function generateScriptFromImage(
+  params: GenerateScriptFromImageParams
+): Promise<GenerateScriptFromImageResult> {
+  const port = getMultimodalPort();
+  return port.generateScriptFromImage(params);
+}
