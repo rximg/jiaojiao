@@ -1,13 +1,13 @@
 import { ipcMain } from 'electron';
-import { getWorkspaceFilesystem } from '../../backend/services/fs.js';
+import { getArtifactRepository } from '../../backend/infrastructure/repositories.js';
 
 export function handleFilesystemIPC() {
-  const fs = getWorkspaceFilesystem();
+  const artifactRepo = getArtifactRepository();
 
   // 列出目录文件
   ipcMain.handle('fs:ls', async (_event, sessionId: string, relativePath = '.') => {
     try {
-      const entries = await fs.ls(sessionId, relativePath);
+      const entries = await artifactRepo.list(sessionId, relativePath);
       return { entries };
     } catch (error) {
       console.error('Failed to list files:', error);
@@ -18,7 +18,8 @@ export function handleFilesystemIPC() {
   // 读取文件内容
   ipcMain.handle('fs:readFile', async (_event, sessionId: string, relativePath: string) => {
     try {
-      const content = await fs.readFile(sessionId, relativePath, 'utf-8');
+      const raw = await artifactRepo.read(sessionId, relativePath);
+      const content = typeof raw === 'string' ? raw : raw.toString('utf-8');
       return { content };
     } catch (error) {
       console.error('Failed to read file:', error);
@@ -29,7 +30,7 @@ export function handleFilesystemIPC() {
   // 获取文件路径（用于直接访问）
   ipcMain.handle('fs:getFilePath', async (_event, sessionId: string, relativePath: string) => {
     try {
-      const fullPath = fs.sessionPath(sessionId, relativePath);
+      const fullPath = artifactRepo.resolvePath(sessionId, relativePath);
       return { path: fullPath };
     } catch (error) {
       console.error('Failed to get file path:', error);
@@ -40,7 +41,7 @@ export function handleFilesystemIPC() {
   // Glob搜索文件
   ipcMain.handle('fs:glob', async (_event, sessionId: string, pattern = '**/*') => {
     try {
-      const matches = await fs.glob(sessionId, pattern);
+      const matches = await artifactRepo.glob(sessionId, pattern);
       return { matches };
     } catch (error) {
       console.error('Failed to glob files:', error);
@@ -51,7 +52,7 @@ export function handleFilesystemIPC() {
   // Grep搜索文件内容
   ipcMain.handle('fs:grep', async (_event, sessionId: string, pattern: string, globPattern?: string) => {
     try {
-      const matches = await fs.grep(sessionId, pattern, { glob: globPattern });
+      const matches = await artifactRepo.grep(sessionId, pattern, { glob: globPattern });
       return { matches };
     } catch (error) {
       console.error('Failed to grep files:', error);

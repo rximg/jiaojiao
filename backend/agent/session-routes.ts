@@ -1,27 +1,18 @@
 import type { Express, Request, Response } from 'express';
-import { getWorkspaceFilesystem } from '../services/fs';
 import { randomUUID } from 'crypto';
-import { promises as fs } from 'fs';
-import path from 'path';
 import { getRuntimeManager } from '../services/runtime-manager.js';
 import { getLogManager } from '../services/log-manager.js';
-
-interface SessionMeta {
-  sessionId: string;
-  createdAt: string;
-  updatedAt: string;
-  title?: string;
-  prompt?: string;
-}
+import { getSessionRepository, getArtifactRepository } from '../infrastructure/repositories.js';
 
 export function registerSessionRoutes(app: Express) {
-  const fsService = getWorkspaceFilesystem();
+  const sessionRepo = getSessionRepository();
+  const artifactRepo = getArtifactRepository();
 
   // 创建新会话
   app.post('/api/sessions', async (req: Request, res: Response) => {
     try {
       const sessionId = randomUUID();
-      const meta: SessionMeta = {
+      const meta = {
         sessionId,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -29,25 +20,17 @@ export function registerSessionRoutes(app: Express) {
         prompt: req.body.prompt || '',
       };
 
-      // 创建 Runtime（新增）
       const runtimeManager = getRuntimeManager();
       await runtimeManager.createAgentRuntime(sessionId);
 
-      // 创建会话目录和元数据
-      await fsService.writeFile(
-        sessionId,
-        'meta/session.json',
-        JSON.stringify(meta, null, 2)
-      );
+      await sessionRepo.save({ sessionId, meta });
 
-      // 创建子目录（移除 llm_logs，日志现在统一在 logs/ 目录）
       await Promise.all([
-        fsService.writeFile(sessionId, 'images/.gitkeep', ''),
-        fsService.writeFile(sessionId, 'audio/.gitkeep', ''),
-        fsService.writeFile(sessionId, 'checkpoints/.gitkeep', ''),
+        artifactRepo.write(sessionId, 'images/.gitkeep', ''),
+        artifactRepo.write(sessionId, 'audio/.gitkeep', ''),
+        artifactRepo.write(sessionId, 'checkpoints/.gitkeep', ''),
       ]);
 
-      // 记录审计日志（新增）
       const logManager = getLogManager();
       await logManager.logAudit(sessionId, {
         action: 'session_created',
@@ -63,50 +46,14 @@ export function registerSessionRoutes(app: Express) {
   });
 
   // 获取所有会话列表
-  app.get('/api/sessions', async (req: Request, res: Response) => {
+  app.get('/api/sessions', async (_req: Request, res: Response) => {
     try {
-      const rootDir = fsService.root;
-      let sessionDirs: string[] = [];
-
-      try {
-        const entries = await fs.readdir(rootDir, { withFileTypes: true });
-        sessionDirs = entries
-          .filter((entry) => entry.isDirectory())
-          .map((entry) => entry.name);
-      } catch {
-        return res.json({ sessions: [] });
-      }
-
-      // 读取每个会话的元数据
-      const sessions = await Promise.all(
-        sessionDirs.map(async (sessionId) => {
-          try {
-            const metaContent = await fsService.readFile(
-              sessionId,
-              'meta/session.json',
-              'utf-8'
-            );
-            const meta = JSON.parse(metaContent as string) as SessionMeta;
-            return meta;
-          } catch {
-            // 如果没有元数据，创建一个默认的
-            return {
-              sessionId,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              title: '未命名对话',
-            } as SessionMeta;
-          }
-        })
-      );
-
-      // 按更新时间倒序排列
-      sessions.sort(
-        (a, b) =>
-          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-      );
-
-      res.json({ sessions });
+      const sessions = await sessionRepo.list();
+      const metaList = sessions.map((s) => ({
+        ...s.meta,
+        sessionId: s.sessionId,
+      }));
+      res.json({ sessions: metaList });
     } catch (error) {
       console.error('Failed to list sessions:', error);
       res.status(500).json({ error: 'Failed to list sessions' });
@@ -117,23 +64,19 @@ export function registerSessionRoutes(app: Express) {
   app.get('/api/sessions/:sessionId', async (req: Request, res: Response) => {
     try {
       const { sessionId } = req.params;
+      const session = await sessionRepo.findById(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
 
-      const metaContent = await fsService.readFile(
-        sessionId,
-        'meta/session.json',
-        'utf-8'
-      );
-      const meta = JSON.parse(metaContent as string) as SessionMeta;
-
-      // 获取文件清单
       const [images, audio, logs] = await Promise.all([
-        fsService.ls(sessionId, 'images'),
-        fsService.ls(sessionId, 'audio'),
-        fsService.ls(sessionId, 'llm_logs'),
+        artifactRepo.list(sessionId, 'images'),
+        artifactRepo.list(sessionId, 'audio'),
+        artifactRepo.list(sessionId, 'llm_logs'),
       ]);
 
       res.json({
-        meta,
+        meta: { ...session.meta, sessionId: session.sessionId },
         files: {
           images: images.filter((f) => !f.name.startsWith('.')),
           audio: audio.filter((f) => !f.name.startsWith('.')),
@@ -152,26 +95,19 @@ export function registerSessionRoutes(app: Express) {
       const { sessionId } = req.params;
       const updates = req.body;
 
-      const metaContent = await fsService.readFile(
-        sessionId,
-        'meta/session.json',
-        'utf-8'
-      );
-      const meta = JSON.parse(metaContent as string) as SessionMeta;
+      const session = await sessionRepo.findById(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
 
-      const updatedMeta: SessionMeta = {
-        ...meta,
+      const updatedMeta = {
+        ...session.meta,
         ...updates,
-        sessionId, // 不允许修改sessionId
+        sessionId,
         updatedAt: new Date().toISOString(),
       };
 
-      await fsService.writeFile(
-        sessionId,
-        'meta/session.json',
-        JSON.stringify(updatedMeta, null, 2)
-      );
-
+      await sessionRepo.save({ sessionId, meta: updatedMeta });
       res.json({ meta: updatedMeta });
     } catch (error) {
       console.error('Failed to update session:', error);
@@ -183,20 +119,17 @@ export function registerSessionRoutes(app: Express) {
   app.delete('/api/sessions/:sessionId', async (req: Request, res: Response) => {
     try {
       const { sessionId } = req.params;
-      
-      // 关闭 Runtime（新增）
+
       const runtimeManager = getRuntimeManager();
       await runtimeManager.closeRuntime(sessionId);
-      
-      // 删除文件系统数据
-      await fsService.rm(sessionId, '.');
-      
-      // 记录审计日志（新增）
+
+      await sessionRepo.delete(sessionId);
+
       const logManager = getLogManager();
       await logManager.logAudit(sessionId, {
         action: 'session_deleted',
       });
-      
+
       res.json({ success: true });
     } catch (error) {
       console.error('Failed to delete session:', error);

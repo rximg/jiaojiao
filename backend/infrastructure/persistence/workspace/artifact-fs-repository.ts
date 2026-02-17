@@ -1,7 +1,7 @@
 /**
  * 产物仓储实现：基于 WorkspaceFilesystem
  */
-import type { ArtifactRepository, LsEntry } from '#backend/domain/workspace/repositories/artifact-repository.js';
+import type { ArtifactRepository, GrepMatch, LsEntry } from '#backend/domain/workspace/repositories/artifact-repository.js';
 import type { WorkspaceFilesystem } from '#backend/services/fs.js';
 
 export class ArtifactFsRepository implements ArtifactRepository {
@@ -31,5 +31,17 @@ export class ArtifactFsRepository implements ArtifactRepository {
 
   async delete(sessionId: string, relativePath: string): Promise<void> {
     await this.workspace.rm(sessionId, relativePath);
+  }
+
+  resolvePath(sessionId: string, relativePath: string): string {
+    return this.workspace.sessionPath(sessionId, relativePath);
+  }
+
+  async glob(sessionId: string, pattern = '**/*'): Promise<string[]> {
+    return this.workspace.glob(sessionId, pattern);
+  }
+
+  async grep(sessionId: string, pattern: string | RegExp, options?: { glob?: string }): Promise<GrepMatch[]> {
+    return this.workspace.grep(sessionId, pattern, options);
   }
 }
