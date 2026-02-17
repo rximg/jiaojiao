@@ -38,6 +38,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onQuotaExceeded: (callback) => {
       ipcRenderer.on('agent:quotaExceeded', (_event, data) => callback(data));
     },
+    onWorkspaceFileAdded: (callback) => {
+      ipcRenderer.on('agent:workspaceFileAdded', (_event, data) => callback(data));
+    },
     stopStream: () => ipcRenderer.invoke('agent:stopStream'),
   },
   hitl: {

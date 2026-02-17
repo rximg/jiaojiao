@@ -5,7 +5,6 @@ import { loadConfig } from '../agent/config.js';
 import { getWorkspaceBase } from '../services/fs.js';
 
 const WORKSPACES_DIRNAME = 'workspaces';
-const STORE_DIRNAME = 'store';
 
 export interface SyncAudioToStoreResult {
   copied: number;
@@ -14,7 +13,7 @@ export interface SyncAudioToStoreResult {
 }
 
 /**
- * 从固定工作目录（userData/workspace）读取 audio_record.json，将音频复制到 syncTargetDir/store。
+ * 从固定工作目录（userData/workspace）读取 audio_record.json，将音频复制到 syncTargetDir（不创建 store 子目录）。
  * 工作目录不可配置；syncTargetDir 为配置项「音频同步目标路径」。
  * @param syncTargetDir 同步目标目录
  * @param sessionId 若传入，则只同步该 session 下的音频；否则同步全部
@@ -23,8 +22,8 @@ export async function syncSessionAudioToStore(
   syncTargetDir: string,
   sessionId?: string
 ): Promise<SyncAudioToStoreResult> {
-  const storeDir = path.join(path.resolve(syncTargetDir), STORE_DIRNAME);
-  await fs.mkdir(storeDir, { recursive: true });
+  const targetDir = path.resolve(syncTargetDir);
+  await fs.mkdir(targetDir, { recursive: true });
 
   const workspaceBase = getWorkspaceBase();
   const workspacesDir = path.join(workspaceBase, WORKSPACES_DIRNAME);
@@ -40,7 +39,7 @@ export async function syncSessionAudioToStore(
     const srcPath = path.join(sessionDir, entry.relativePath);
     try {
       await fs.access(srcPath);
-      const destPath = path.join(storeDir, `${entry.number}.mp3`);
+      const destPath = path.join(targetDir, `${entry.number}.mp3`);
       await fs.copyFile(srcPath, destPath);
       copiedFiles.push(`${entry.number}.mp3`);
     } catch (err) {
@@ -48,5 +47,5 @@ export async function syncSessionAudioToStore(
     }
   }
 
-  return { copied: copiedFiles.length, storeDir, files: copiedFiles };
+  return { copied: copiedFiles.length, storeDir: targetDir, files: copiedFiles };
 }

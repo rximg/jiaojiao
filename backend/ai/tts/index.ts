@@ -7,6 +7,7 @@ import { loadConfig } from '../../app-config.js';
 import { getWorkspaceFilesystem } from '../../services/fs.js';
 import { readLineNumbers, appendEntries, type LineNumberEntry } from '../../mcp/line-numbers.js';
 import { traceAiRun } from '../../agent/langsmith-trace.js';
+import { notifyWorkspaceFileAdded } from '../../workspace-notifier.js';
 import type { SynthesizeSpeechParams, SynthesizeSpeechResult, TTSAIConfig } from '../types.js';
 import { doOneTtsDashScope } from './dashscope.js';
 import { doOneTtsZhipu } from './zhipu.js';
@@ -114,6 +115,7 @@ async function synthesizeSpeechSequential(params: SynthesizeSpeechParams): Promi
       cfg.provider === 'zhipu' ? await doOneTtsZhipu(opts) : await doOneTtsDashScope(opts);
     audioPaths.push(result.audioPath);
     audioUris.push(result.audioUri);
+    notifyWorkspaceFileAdded(sessionId, 'audio');
   }
 
   const newEntries: LineNumberEntry[] = planned.map((p) => ({

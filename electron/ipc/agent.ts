@@ -1,6 +1,7 @@
 import path from 'path';
 import { ipcMain, BrowserWindow, type WebContents } from 'electron';
 import { getBackendConfigDir } from './config.js';
+import { workspaceNotifier } from '../../backend/workspace-notifier.js';
 import { loadConfig } from '../../backend/app-config.js';
 import { getWorkspaceFilesystem } from '../../backend/services/fs.js';
 import { getSessionMessages } from './session.js';
@@ -331,6 +332,11 @@ async function sendAgentMessage(
 }
 
 export function handleAgentIPC() {
+  workspaceNotifier.on('fileAdded', (data: { sessionId: string; category: string }) => {
+    const w = BrowserWindow.getAllWindows()[0];
+    w?.webContents?.send('agent:workspaceFileAdded', data);
+  });
+
   ipcMain.handle(
     'agent:sendMessage',
     async (_event, message: string, threadId?: string, sessionId?: string) => {

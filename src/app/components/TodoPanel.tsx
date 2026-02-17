@@ -9,18 +9,24 @@ interface TodoPanelProps {
 
 function statusIcon(status: TodoItem['status']) {
   if (status === 'completed') {
-    return <CheckCircle2 className="h-4 w-4 text-success" />;
+    return <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />;
   }
   if (status === 'in_progress') {
-    return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
+    return <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />;
   }
-  return <Clock3 className="h-4 w-4 text-muted-foreground" />;
+  return <Clock3 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
 }
 
 function statusLabel(status: TodoItem['status']) {
   if (status === 'completed') return '已完成';
   if (status === 'in_progress') return '进行中';
   return '待处理';
+}
+
+function statusBadgeClass(status: TodoItem['status']) {
+  if (status === 'completed') return 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400';
+  if (status === 'in_progress') return 'bg-primary/15 text-primary';
+  return 'bg-muted text-muted-foreground';
 }
 
 function TodoPanelInner({ todos }: TodoPanelProps) {
@@ -50,15 +56,15 @@ function TodoPanelInner({ todos }: TodoPanelProps) {
   };
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
-      <div className="flex items-center justify-between text-sm font-medium text-foreground">
+    <div className="flex flex-col gap-2.5 rounded-xl border border-border bg-card p-3 shadow-sm">
+      <div className="flex items-center justify-between text-xs font-medium text-foreground">
         <span>任务进度</span>
-        <span className="text-muted-foreground">{completed}/{total} · {percent}%</span>
+        <span className="text-muted-foreground tabular-nums">{completed}/{total} · {percent}%</span>
       </div>
       {total === 0 ? (
-        <div className="text-sm text-muted-foreground">暂无待办，输入消息后查看进度。</div>
+        <div className="text-xs text-muted-foreground py-1">暂无待办，输入消息后查看进度。</div>
       ) : (
-        <div className="flex flex-col gap-2 max-h-[480px] overflow-auto pr-1">
+        <div className="flex flex-col gap-1 max-h-[360px] overflow-auto pr-0.5">
           {todos.map((todo, index) => {
             const todoId = todo.id || `todo-${index}`;
             const isExpanded = expandedIds.has(todoId);
@@ -67,29 +73,29 @@ function TodoPanelInner({ todos }: TodoPanelProps) {
             return (
               <div
                 key={todoId}
-                className="rounded-xl bg-card border border-border shadow-sm overflow-hidden"
+                className="rounded-lg border border-border/80 bg-card overflow-hidden"
               >
                 <div
-                  className={`flex items-start gap-2 px-3 py-2.5 ${showArtifacts ? 'cursor-pointer hover:bg-muted/50 rounded-xl' : ''}`}
+                  className={`flex items-center gap-2 px-2.5 py-1.5 min-h-0 ${showArtifacts ? 'cursor-pointer hover:bg-muted/50' : ''}`}
                   onClick={() => showArtifacts && toggleExpanded(todoId)}
                 >
-                  <div className="mt-0.5">{statusIcon(todo.status)}</div>
-                  <div className="flex-1 text-sm leading-tight text-foreground">
-                    <div>{todo.content}</div>
-                    <div className="text-xs text-muted-foreground mt-1">{statusLabel(todo.status)}</div>
-                  </div>
+                  {statusIcon(todo.status)}
+                  <span className="flex-1 text-xs text-foreground truncate min-w-0" title={todo.content}>
+                    {todo.content}
+                  </span>
+                  <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${statusBadgeClass(todo.status)}`}>
+                    {statusLabel(todo.status)}
+                  </span>
                   {showArtifacts && (
-                    <div className="mt-0.5">
-                      {isExpanded ? (
-                        <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                      )}
-                    </div>
+                    isExpanded ? (
+                      <ChevronDown className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                    )
                   )}
                 </div>
                 {isExpanded && showArtifacts && (
-                  <div className="px-3 pb-3 border-t border-border/50 bg-muted/20">
+                  <div className="px-2.5 py-2 border-t border-border/50 bg-muted/20">
                     <ArtifactViewer artifacts={todo.artifacts} />
                   </div>
                 )}

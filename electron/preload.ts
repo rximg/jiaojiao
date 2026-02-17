@@ -46,6 +46,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onQuotaExceeded: (callback: (data: any) => void) => {
       ipcRenderer.on('agent:quotaExceeded', (_event, data) => callback(data));
     },
+    onWorkspaceFileAdded: (callback: (data: { sessionId: string; category: string }) => void) => {
+      ipcRenderer.on('agent:workspaceFileAdded', (_event, data) => callback(data));
+    },
     stopStream: () => ipcRenderer.invoke('agent:stopStream'),
   },
   // HITL 人工确认（统一通道）
@@ -110,6 +113,7 @@ declare global {
         onTodoUpdate: (callback: (data: any) => void) => void;
         onStepResult: (callback: (data: { threadId: string; messageId: string; stepResults: Array<{ type: 'image' | 'audio' | 'document'; payload: Record<string, unknown> }> }) => void) => void;
         onQuotaExceeded: (callback: (data: any) => void) => void;
+        onWorkspaceFileAdded: (callback: (data: { sessionId: string; category: string }) => void) => void;
         stopStream: () => Promise<void>;
       };
       hitl: {

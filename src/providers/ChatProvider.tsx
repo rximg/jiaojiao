@@ -238,6 +238,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (typeof window.electronAPI.agent.onQuotaExceeded === 'function') {
       window.electronAPI.agent.onQuotaExceeded(handleQuotaExceeded);
     }
+    if (typeof window.electronAPI.agent.onWorkspaceFileAdded === 'function') {
+      window.electronAPI.agent.onWorkspaceFileAdded(() => setLastArtifactTime(Date.now()));
+    }
 
     if (typeof window.electronAPI.hitl?.onConfirmRequest === 'function') {
       window.electronAPI.hitl.onConfirmRequest(handleHitlConfirm);

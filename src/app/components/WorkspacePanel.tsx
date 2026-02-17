@@ -67,15 +67,13 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
     loadFiles();
   }, [loadFiles]);
 
-  // 监听lastArtifactTime的变化，当有新产物生成时自动刷新
+  // 监听lastArtifactTime的变化，当有新产物生成时自动刷新（如每生成一个音频就触发一次）
   useEffect(() => {
     if (lastArtifactTime && lastArtifactTime > 0) {
-      console.log('[WorkspacePanel] Artifact generated, refreshing in 2s...');
-      // 延迟2秒刷新，确保文件已经写入完成
+      const delayMs = 500;
       const timer = setTimeout(() => {
-        console.log('[WorkspacePanel] Refreshing files...');
         loadFiles();
-      }, 2000);
+      }, delayMs);
       return () => clearTimeout(timer);
     }
   }, [lastArtifactTime, loadFiles]);
