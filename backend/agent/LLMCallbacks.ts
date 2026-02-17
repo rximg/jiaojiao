@@ -1,5 +1,6 @@
 /**
- * LLM 回调：仅保留简短关键信息，详细追踪由 LangSmith 负责。
+ * LLM 回调：详细追踪由 LangSmith 负责，此处不再输出冗余日志。
+ * 仅保留 handleLLMError 用于未接入 LangSmith 时的错误提示。
  */
 export interface DebugConfig {
   log_llm_calls?: boolean;
@@ -8,12 +9,12 @@ export interface DebugConfig {
 
 export function createLLMCallbacks(_debugConfig?: DebugConfig) {
   return {
-    handleLLMStart({ name }: any) {
-      console.log('[LLM] start', name ?? 'llm');
+    handleLLMStart(_opts: any) {
+      // LangSmith 已覆盖 LLM trace，不输出
     },
 
-    handleLLMEnd(_output: any, runId?: string) {
-      if (runId) console.log('[LLM] end', runId);
+    handleLLMEnd(_output: any, _runId?: string) {
+      // LangSmith 已覆盖 LLM trace，不输出
     },
 
     handleLLMError(err: any) {

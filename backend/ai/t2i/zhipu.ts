@@ -36,8 +36,6 @@ export async function submitTaskZhipu(
   }
   const data = (await res.json()) as { id?: string };
   const taskId = data?.id;
-  console.log('body', JSON.stringify(body, null, 2));
-  console.log('data', JSON.stringify(data, null, 2));
   if (!taskId) throw new Error('T2I submit did not return task id');
   return taskId;
 }

@@ -42,10 +42,6 @@ export class AgentFactory {
       projectRoot = path.resolve(configDir, '..', '..');
     }
 
-    console.log(`[AgentFactory] __dirname: ${__dirname}`);
-    console.log(`[AgentFactory] Project root: ${projectRoot}`);
-    console.log(`[AgentFactory] Config directory: ${configDir}`);
-    
     this.projectRoot = projectRoot;
     this.configLoader = new ConfigLoader(configDir, projectRoot);
 
@@ -58,14 +54,12 @@ export class AgentFactory {
       throw new Error(`配置验证失败:\n${validation.errors.join('\n')}`);
     }
 
-    console.log(`[AgentFactory] 配置加载成功: ${this.agentConfig.name} v${this.agentConfig.version}`);
   }
 
   /**初始化运行时（新增）
    */
   async initRuntime(sessionId: string): Promise<void> {
     this.runtime = await createAgentRuntime(sessionId);
-    console.log(`[AgentFactory] Runtime initialized for session: ${sessionId}`);
   }
 
   /**
@@ -108,8 +102,6 @@ export class AgentFactory {
     const toolName = mcpEntry.name;
     const serviceType = mcpConfig.service.type;
 
-    console.log(`[AgentFactory] 创建MCP工具: ${toolName} (${serviceType})`);
-
     // 根据服务类型创建工具
     if (serviceType === 't2i') {
           return tool(
@@ -118,7 +110,6 @@ export class AgentFactory {
           const merged = await this.requestApprovalViaHITL('ai.text2image', params as Record<string, unknown>);
           const { generateImage } = await import('../mcp/t2i.js');
           const sessionId = (merged.sessionId as string) || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
-          console.log(`[t2i tool] Using sessionId: ${sessionId} (from params: ${params.sessionId}, env: ${process.env.AGENT_SESSION_ID})`);
           return await generateImage({ ...merged, sessionId });
         },
         {
@@ -146,7 +137,6 @@ export class AgentFactory {
           const workspaceFs = getWorkspaceFilesystem({});
           const scriptRelPath = 'lines/tts_confirmed.json';
           await workspaceFs.writeFile(sessionId, scriptRelPath, JSON.stringify(texts, null, 2), 'utf-8');
-          console.log(`[tts tool] Wrote ${texts.length} texts to ${scriptRelPath}, sessionId: ${sessionId}`);
           const { synthesizeSpeech } = await import('../mcp/tts.js');
           return await synthesizeSpeech({
             scriptFile: scriptRelPath,
@@ -173,7 +163,6 @@ export class AgentFactory {
           const merged = await this.requestApprovalViaHITL('ai.vl_script', params as Record<string, unknown>);
           const { generateScriptFromImage } = await import('../mcp/vl_script.js');
           const sessionId = (merged.sessionId as string) || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
-          console.log(`[vl_script tool] Using sessionId: ${sessionId} (from params: ${params.sessionId}, env: ${process.env.AGENT_SESSION_ID})`);
           return await generateScriptFromImage({ ...merged, sessionId } as { imagePath: string; sessionId?: string });
         },
         {
@@ -233,7 +222,6 @@ export class AgentFactory {
             const imageRelPath = extractRelativePath(imagePath, sessionId);
             await workspaceFs.readFile(sessionId, imageRelPath);
             checks.hasImage = true;
-            console.log(`[finalize_workflow] Image verified: ${imageRelPath} (session: ${sessionId})`);
           } catch (error) {
             console.warn(`[finalize_workflow] Image not found: ${imagePath}`, error);
           }
@@ -246,7 +234,6 @@ export class AgentFactory {
             const audioRelPath = extractRelativePath(actualAudioPath, sessionId);
             await workspaceFs.readFile(sessionId, audioRelPath);
             checks.hasAudio = true;
-            console.log(`[finalize_workflow] Audio verified: ${audioRelPath} (session: ${sessionId})`);
           } catch (error) {
             console.warn(`[finalize_workflow] Audio not found: ${audioPath}`, error);
           }
@@ -255,7 +242,6 @@ export class AgentFactory {
         const allComplete = checks.hasImage && checks.hasAudio && checks.hasScript;
         
         if (allComplete) {
-          console.log(`[finalize_workflow] All files verified, workflow complete`);
           return {
             status: 'WORKFLOW_COMPLETE',
             success: true,
@@ -451,8 +437,6 @@ export class AgentFactory {
 
     // 如果配置为 createAgent，使用 createAgent 创建独立代理
     if (agentType === 'createAgent') {
-      console.log(`[AgentFactory] 为 ${subAgentName} 创建独立 agent（使用 createAgent）`);
-      
       const subLlm = await this.createLLM();
       
       // 如果需要 FilesystemMiddleware，创建新实例
@@ -471,8 +455,6 @@ export class AgentFactory {
           }),
         });
         middleware = [fsMiddleware];
-        console.log(`[AgentFactory] ${subAgentName} 启用 FilesystemMiddleware`);
-        console.log(`[AgentFactory] Session workspace root: ${sessionWorkspaceRoot}`);
       }
       
       // 使用 createAgent 创建子代理
@@ -495,7 +477,6 @@ export class AgentFactory {
         runnable: subAgentRunnable as any,  // 类型兼容性处理
       };
       
-      console.log(`[AgentFactory] 创建 CompiledSubAgent: ${subEntry.name} (agent_type: ${agentType}, middleware: ${useFilesystemMiddleware})`);
       return compiledSubAgent;
     }
 
@@ -516,7 +497,6 @@ export class AgentFactory {
       tools: subAgentTools.length > 0 ? subAgentTools : undefined,
     };
 
-    console.log(`[AgentFactory] 创建 SubAgent: ${subEntry.name} (${subAgentTools.length} tools)`);
     return subAgent;
   }
 
@@ -622,7 +602,6 @@ export class AgentFactory {
       const tool = this.createBuiltInTool(name);
       if (tool) {
         tools.push(tool);
-        console.log(`[AgentFactory] 添加内置工具: ${name}`);
       }
     }
 
@@ -633,8 +612,6 @@ export class AgentFactory {
         tools.push(tool);
       }
     }
-
-    console.log(`[AgentFactory] 已加载 ${tools.length} 个工具`);
 
     // 新增：记录审计日志
     if (this.runtime) {
@@ -660,7 +637,6 @@ export class AgentFactory {
 
     // 创建SubAgents
     const subAgents = await this.createSubAgents(sessionId);
-    console.log(`[AgentFactory] 已注册 ${subAgents.length} 个SubAgent`);
 
     // 有 sessionId 时使用 WorkspaceCheckpointSaver，按 session/checkpoints/ 持久化，stream/invoke 时需传 config.configurable.thread_id = sessionId
     let checkpointer: InstanceType<typeof import('../services/workspace-checkpoint-saver.js').WorkspaceCheckpointSaver> | undefined;
@@ -681,8 +657,6 @@ export class AgentFactory {
       subagents: subAgents,
       ...(checkpointer ? { checkpointer } : {}),
     });
-
-    console.log(`[AgentFactory] 主Agent创建成功: ${this.agentConfig.agent.name} (session: ${sessionId})`);
 
     return agent;
   }

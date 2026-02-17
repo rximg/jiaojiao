@@ -67,7 +67,6 @@ export async function synthesizeSpeech(params: SynthesizeSpeechParams): Promise<
 async function synthesizeSpeechSequential(params: SynthesizeSpeechParams): Promise<SynthesizeSpeechResult> {
   const config = await loadConfig();
   const cfg = (await getAIConfig('tts')) as TTSAIConfig;
-  console.log('cfg', JSON.stringify(cfg, null, 2));
   const { texts: paramTexts, scriptFile, voice = 'chinese_female', format = 'mp3', sessionId = DEFAULT_SESSION_ID } = params;
   const workspaceFs = getWorkspaceFilesystem({});
   const ttsStartNumber = config.storage.ttsStartNumber ?? 6000;
@@ -80,7 +79,6 @@ async function synthesizeSpeechSequential(params: SynthesizeSpeechParams): Promi
     const raw = await fs.readFile(absPath, 'utf-8');
     const parsed = JSON.parse(raw) as unknown;
     texts = Array.isArray(parsed) ? parsed.map(String) : [];
-    console.log(`[tts] Reading ${raw.length} chars from ${scriptFile}, got ${texts.length} texts`);
   } else if (paramTexts && paramTexts.length > 0) {
     texts = paramTexts;
   } else {

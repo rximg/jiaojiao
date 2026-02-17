@@ -107,9 +107,6 @@ export class ConfigLoader {
       // 自动计算：从configDir (backend/config) 向上两级到app根目录
       this.projectRoot = path.resolve(this.configDir, '..', '..');
     }
-    
-    console.log(`[ConfigLoader] Config dir: ${this.configDir}`);
-    console.log(`[ConfigLoader] Project root: ${this.projectRoot}`);
   }
 
   /**
@@ -131,8 +128,6 @@ export class ConfigLoader {
       // 其他相对路径基于configDir
       absolutePath = path.resolve(this.configDir, filePath);
     }
-
-    console.log(`[ConfigLoader] Loading YAML: ${filePath} -> ${absolutePath}`);
 
     if (!fs.existsSync(absolutePath)) {
       throw new Error(`配置文件不存在: ${absolutePath}`);
