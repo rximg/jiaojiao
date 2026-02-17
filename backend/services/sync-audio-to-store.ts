@@ -1,8 +1,8 @@
 import path from 'path';
 import { promises as fs } from 'fs';
-import { readLineNumbers } from './line-numbers.js';
-import { loadConfig } from '../agent/config.js';
-import { getWorkspaceBase } from '../services/fs.js';
+import { readLineNumbers } from '../tools/line-numbers.js';
+import { loadConfig } from '../app-config.js';
+import { getWorkspaceBase } from './fs.js';
 
 const WORKSPACES_DIRNAME = 'workspaces';
 

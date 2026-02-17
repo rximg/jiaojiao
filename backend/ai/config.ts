@@ -30,7 +30,7 @@ function getConfigDir(): string {
 async function loadYaml(name: string): Promise<Record<string, unknown>> {
   try {
     const configDir = getConfigDir();
-    const filePath = path.join(configDir, 'mcp', name);
+    const filePath = path.join(configDir, 'ai', name);
     const content = await fs.readFile(filePath, 'utf-8');
     return (jsyaml.load(content) as Record<string, unknown>) ?? {};
   } catch {

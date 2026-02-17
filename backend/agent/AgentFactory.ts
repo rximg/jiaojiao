@@ -1,10 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai';
-import { tool } from '@langchain/core/tools';
-import { z } from 'zod';
 import { createAgent } from 'langchain';
 import { createDeepAgent, createFilesystemMiddleware, FilesystemBackend, type SubAgent, type CompiledSubAgent } from 'deepagents';
 import { ConfigLoader, type AgentConfig } from './ConfigLoader.js';
-import { loadConfig } from './config.js';
 import { createLLMCallbacks } from './LLMCallbacks.js';
 import { getAIConfig } from '../ai/config.js';
 import { createLLMFromAIConfig } from '../ai/llm/index.js';
@@ -12,9 +9,8 @@ import type { LLMAIConfig } from '../ai/types.js';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { DEFAULT_SESSION_ID, getWorkspaceFilesystem, resolveWorkspaceRoot } from '../services/fs.js';
-import { getArtifactRepository } from '../infrastructure/repositories.js';
 import { createAgentRuntime, type AgentRuntime } from '../services/runtime-manager.js';
-import { readLineNumbers } from '../mcp/line-numbers.js';
+import { createTool } from '../tools/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -89,293 +85,6 @@ export class AgentFactory {
       throw new Error(`${actionType} was rejected or cancelled`);
     }
     return result;
-  }
-
-  /**
-   * 创建MCP工具
-   */
-  private async createMCPTool(_mcpKey: string, mcpEntry: AgentConfig['mcp_services'][string]): Promise<any> {
-    if (!mcpEntry.enable || !mcpEntry.config) {
-      return null;
-    }
-
-    const mcpConfig = mcpEntry.config;
-    const toolName = mcpEntry.name;
-    const serviceType = mcpConfig.service.type;
-
-    // 根据服务类型创建工具
-    if (serviceType === 't2i') {
-          return tool(
-        async (params: { prompt?: string; promptFile?: string; size?: string; style?: string; count?: number; model?: string; sessionId?: string }) => {
-          // HITL：仅用户确认后执行，下文仅使用 merged（含用户编辑的 prompt）
-          const merged = await this.requestApprovalViaHITL('ai.text2image', params as Record<string, unknown>);
-          const { generateImage } = await import('../mcp/t2i.js');
-          const sessionId = (merged.sessionId as string) || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
-          return await generateImage({ ...merged, sessionId });
-        },
-        {
-          name: toolName,
-          description: mcpEntry.description,
-          schema: z.object({
-            prompt: z.string().optional().describe('文生图提示词（与promptFile二选一）'),
-            promptFile: z.string().optional().describe('提示词文件路径（workspace相对路径，与prompt二选一）'),
-            size: z.string().optional().default(mcpConfig.service.default_params.size).describe('图片尺寸'),
-            style: z.string().optional().describe('图片风格'),
-            count: z.number().optional().default(mcpConfig.service.default_params.count).describe('生成数量'),
-            model: z.string().optional().default(mcpConfig.service.model).describe('模型名称（留空则使用配置文件中的默认值）'),
-            sessionId: z.string().optional().describe('文件写入使用的会话ID（留空则使用当前会话）'),
-          }),
-        }
-      );
-    } else if (serviceType === 'tts') {
-      return tool(
-        async (params: { texts: string[]; voice?: string; format?: string; sessionId?: string }) => {
-          // HITL：仅用户确认后执行，仅使用 merged（含用户编辑的 texts），写入文件后 TTS 从文件读
-          const merged = await this.requestApprovalViaHITL('ai.text2speech', params as Record<string, unknown>);
-          const sessionId = (merged.sessionId as string) || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
-          const texts = Array.isArray(merged.texts) ? merged.texts : [];
-          // 将用户确认后的台词写入文件，TTS 从文件读取，保证使用编辑后的内容
-          const artifactRepo = getArtifactRepository();
-          const scriptRelPath = 'lines/tts_confirmed.json';
-          await artifactRepo.write(sessionId, scriptRelPath, JSON.stringify(texts, null, 2));
-          const { synthesizeSpeech } = await import('../mcp/tts.js');
-          return await synthesizeSpeech({
-            scriptFile: scriptRelPath,
-            voice: (merged.voice as string) ?? mcpConfig.service.default_params?.voice ?? 'chinese_female',
-            format: (merged.format as string) ?? mcpConfig.service.default_params?.format ?? 'mp3',
-            sessionId,
-          });
-        },
-        {
-          name: toolName,
-          description: mcpEntry.description,
-          schema: z.object({
-            texts: z.array(z.string()).describe('台词文本数组'),
-            voice: z.string().optional().default(mcpConfig.service.default_params.voice).describe('语音类型'),
-            format: z.string().optional().default(mcpConfig.service.default_params.format).describe('音频格式'),
-            sessionId: z.string().optional().describe('文件写入使用的会话ID（留空则使用当前会话）'),
-          }),
-        }
-      );
-    } else if (serviceType === 'vl_script') {
-      return tool(
-        async (params: { imagePath: string; sessionId?: string }) => {
-          // HITL：仅用户确认后执行，下文仅使用 merged
-          const merged = await this.requestApprovalViaHITL('ai.vl_script', params as Record<string, unknown>);
-          const { generateScriptFromImage } = await import('../mcp/vl_script.js');
-          const sessionId = (merged.sessionId as string) || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
-          return await generateScriptFromImage({ ...merged, sessionId } as { imagePath: string; sessionId?: string });
-        },
-        {
-          name: toolName,
-          description: mcpEntry.description,
-          schema: z.object({
-            imagePath: z.string().describe('图片路径（步骤3 generate_image 返回的 imagePath）'),
-            sessionId: z.string().optional().describe('会话ID（留空则使用当前会话）'),
-            userPrompt: z.string().optional().describe('用户对以图生剧本的补充或修改要求，会与系统提示词一起传给 VL'),
-          }),
-        }
-      );
-    }
-
-    console.warn(`[AgentFactory] 未知的MCP服务类型: ${serviceType}`);
-    return null;
-  }
-
-  /**
-   * 创建finalize_workflow工具（检查文件并完成工作流）
-   */
-  private createFinalizeWorkflowTool(): any {
-    return tool(
-      async (input: { imagePath?: string; audioPath?: string; scriptText?: string; sessionId?: string }) => {
-        const { imagePath, audioPath, scriptText, sessionId = process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID } = input;
-        const workspaceFs = getWorkspaceFilesystem({});
-        
-        // 辅助函数：从绝对路径提取相对路径（相对于 sessionId 目录）
-        const extractRelativePath = (absolutePath: string, expectedSessionId: string): string => {
-          const normalized = absolutePath.replace(/\\/g, '/');
-          // 如果包含 workspaces/{sessionId}/，提取相对路径
-          const workspacesMatch = normalized.match(/workspaces\/([^/]+)\/(.+)$/);
-          if (workspacesMatch) {
-            const pathSessionId = workspacesMatch[1];
-            const relativePath = workspacesMatch[2];
-            // 验证 sessionId 是否匹配
-            if (pathSessionId === expectedSessionId) {
-              return relativePath;
-            } else {
-              console.warn(`[finalize_workflow] SessionId mismatch: expected ${expectedSessionId}, found ${pathSessionId}`);
-            }
-          }
-          // 如果不包含 workspaces，假设是相对路径
-          return absolutePath;
-        };
-        
-        // 检查文件是否存在
-        const checks = {
-          hasImage: false,
-          hasAudio: false,
-          hasScript: !!scriptText
-        };
-        
-        if (imagePath) {
-          try {
-            // 从绝对路径提取相对路径（相对于 sessionId 目录）
-            const imageRelPath = extractRelativePath(imagePath, sessionId);
-            await workspaceFs.readFile(sessionId, imageRelPath);
-            checks.hasImage = true;
-          } catch (error) {
-            console.warn(`[finalize_workflow] Image not found: ${imagePath}`, error);
-          }
-        }
-        
-        if (audioPath) {
-          try {
-            // audioPath 可能是数组（多个音频文件），取第一个
-            const actualAudioPath = Array.isArray(audioPath) ? audioPath[0] : audioPath;
-            const audioRelPath = extractRelativePath(actualAudioPath, sessionId);
-            await workspaceFs.readFile(sessionId, audioRelPath);
-            checks.hasAudio = true;
-          } catch (error) {
-            console.warn(`[finalize_workflow] Audio not found: ${audioPath}`, error);
-          }
-        }
-        
-        const allComplete = checks.hasImage && checks.hasAudio && checks.hasScript;
-        
-        if (allComplete) {
-          return {
-            status: 'WORKFLOW_COMPLETE',
-            success: true,
-            completed: true,
-            message: `✅ 绘本生成完成！文件已全部验证通过。`,
-            summary: {
-              imagePath: imagePath,
-              audioPath: audioPath,
-              scriptText: scriptText,
-              sessionId: sessionId
-            },
-            checks: checks
-          };
-        } else {
-          return {
-            status: 'WORKFLOW_INCOMPLETE',
-            success: false,
-            completed: false,
-            message: `⚠️ 部分文件缺失，请检查`,
-            checks: checks
-          };
-        }
-      },
-      {
-        name: 'finalize_workflow',
-        description: '检查图片、音频文件是否生成，如果都存在则完成工作流并向用户展示结果摘要',
-        schema: z.object({
-          imagePath: z.string().optional().describe('生成的图片文件路径'),
-          audioPath: z.string().optional().describe('生成的音频文件路径'),
-          scriptText: z.string().optional().describe('生成的台词文本'),
-          sessionId: z.string().optional().describe('会话ID（留空使用当前会话）'),
-        }),
-      }
-    );
-  }
-
-  /**
-   * 创建 annotate_image_numbers 工具（按坐标在图上画白底数字标签并保存新图）
-   * 执行前会触发 ai.image_label_order HITL，用户可移动/修改序号
-   */
-  private createAnnotateImageNumbersTool(): any {
-    return tool(
-      async (input: {
-        imagePath: string;
-        annotations?: Array<{ number: number; x: number; y: number }>;
-        lines?: Array<{ text?: string; x: number; y: number }>;
-        numbers?: number[];
-        sessionId?: string;
-      }) => {
-        const sessionId = input.sessionId || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
-        let annotations: Array<{ number: number; x: number; y: number }>;
-        if (input.annotations && input.annotations.length > 0) {
-          annotations = input.annotations;
-        } else if (input.lines && input.lines.length > 0) {
-          let numbers: number[];
-          if (input.numbers && input.numbers.length === input.lines.length) {
-            numbers = input.numbers;
-          } else {
-            const config = await loadConfig();
-            const { entries } = await readLineNumbers(config.storage.ttsStartNumber ?? 6000);
-            const sessionEntries = entries.filter((e) => e.sessionId === sessionId);
-            const n = input.lines.length;
-            const lastN = sessionEntries.slice(-n);
-            numbers = lastN.map((e) => e.number);
-          }
-          annotations = input.lines.map((line, i) => ({
-            number: numbers[i] ?? i + 1,
-            x: line.x,
-            y: line.y,
-          }));
-        } else {
-          throw new Error('annotate_image_numbers 需要 annotations 或 lines 参数');
-        }
-
-        // HITL：用户可移动/修改序号
-        let imageWidth: number | undefined;
-        let imageHeight: number | undefined;
-        try {
-          const workspaceFs = getWorkspaceFilesystem({});
-          const normalized = input.imagePath.replace(/\\/g, '/');
-          const workspacesMatch = normalized.match(/workspaces\/([^/]+)\/(.+)$/);
-          const relPath = workspacesMatch ? workspacesMatch[2] : normalized.replace(/^[^/]+[/\\]/, '');
-          const absPath = workspaceFs.sessionPath(sessionId, relPath);
-          const sharp = (await import('sharp')).default;
-          const meta = await sharp(absPath).metadata();
-          imageWidth = meta.width ?? undefined;
-          imageHeight = meta.height ?? undefined;
-        } catch {
-          // 忽略尺寸获取失败
-        }
-
-        const hitlPayload: Record<string, unknown> = {
-          imagePath: input.imagePath,
-          annotations,
-          lines: input.lines,
-          numbers: input.numbers,
-          sessionId,
-        };
-        if (imageWidth != null) hitlPayload.imageWidth = imageWidth;
-        if (imageHeight != null) hitlPayload.imageHeight = imageHeight;
-
-        // HITL：仅用户确认后执行，仅使用 merged.annotations（含用户移动/编辑的序号）
-        const merged = await this.requestApprovalViaHITL('ai.image_label_order', hitlPayload);
-        const finalAnnotations = (merged.annotations as Array<{ number: number; x: number; y: number }>) ?? annotations;
-
-        const { annotateImageNumbers } = await import('../mcp/annotate_numbers.js');
-        return await annotateImageNumbers({
-          imagePath: input.imagePath,
-          annotations: finalAnnotations,
-          sessionId,
-        });
-      },
-      {
-        name: 'annotate_image_numbers',
-        description: '在图片上按坐标绘制白底数字标签并保存为新图（如 images/xxx_annotated.png）。使用 lines 时，优先使用 numbers 参数（来自 TTS 返回），否则从 audio_record.json 读取；使用 annotations 时直接使用传入的 number。',
-        schema: z.object({
-          imagePath: z.string().describe('当前 session 下图片路径（与 generate_image / generate_script_from_image 一致）'),
-          annotations: z
-            .array(z.object({ number: z.number(), x: z.number(), y: z.number() }))
-            .optional()
-            .describe('标注点：number, x, y；与 lines 二选一'),
-          lines: z
-            .array(z.object({ text: z.string().optional(), x: z.number(), y: z.number() }))
-            .optional()
-            .describe('vl_script 返回的 lines，序号将使用 numbers 参数（如果提供）或 audio_record.json 中当前 session 对应条目的 number（与音频 6000.mp3 等对应）；与 annotations 二选一'),
-          numbers: z
-            .array(z.number())
-            .optional()
-            .describe('可选的 number 列表（来自 TTS 返回的 numbers），与 lines 按索引一一对应；如果提供则优先使用，否则从 audio_record.json 读取'),
-          sessionId: z.string().optional().describe('会话ID（留空使用当前会话）'),
-        }),
-      }
-    );
   }
 
   /**
@@ -502,89 +211,6 @@ export class AgentFactory {
   }
 
   /**
-   * 根据配置中的名称创建内置工具（非 MCP），未在配置中声明的工具不会创建
-   */
-  private createBuiltInTool(toolName: string): any | null {
-    switch (toolName) {
-      case 'finalize_workflow':
-        return this.createFinalizeWorkflowTool();
-      case 'annotate_image_numbers':
-        return this.createAnnotateImageNumbersTool();
-      case 'delete_artifacts':
-        return this.createDeleteArtifactsTool();
-      default:
-        return null;
-    }
-  }
-
-  /**
-   * 创建 delete_artifacts 工具：删除 session 下的图片/音频等产物，重新生成前需先删除
-   * 执行前 HITL 列出待删文件，用户确认后执行
-   */
-  private createDeleteArtifactsTool(): any {
-    return tool(
-      async (input: {
-        sessionId?: string;
-        category?: 'images' | 'audio' | 'both';
-        paths?: string[];
-      }) => {
-        const sessionId = input.sessionId || process.env.AGENT_SESSION_ID || DEFAULT_SESSION_ID;
-        let pathsToDelete: string[] = [];
-
-        if (input.paths && input.paths.length > 0) {
-          pathsToDelete = input.paths.map((p) => p.replace(/\\/g, '/').replace(/^[^/]+[/\\]/, ''));
-        } else {
-          const workspaceFs = getWorkspaceFilesystem({});
-          const category = input.category || 'both';
-          if (category === 'images' || category === 'both') {
-            const imgEntries = await workspaceFs.ls(sessionId, 'images');
-            pathsToDelete.push(...imgEntries.filter((e) => !e.isDir).map((e) => `images/${e.name}`));
-          }
-          if (category === 'audio' || category === 'both') {
-            const audioEntries = await workspaceFs.ls(sessionId, 'audio');
-            pathsToDelete.push(...audioEntries.filter((e) => !e.isDir).map((e) => `audio/${e.name}`));
-          }
-        }
-
-        if (pathsToDelete.length === 0) {
-          return { success: true, deleted: 0, message: '无待删除文件' };
-        }
-
-        const hitlPayload: Record<string, unknown> = { sessionId, paths: pathsToDelete };
-        // HITL：仅用户确认后执行，仅使用 merged.paths（若前端支持编辑列表则含用户修改）
-        const merged = await this.requestApprovalViaHITL('artifacts.delete', hitlPayload);
-        const confirmedPaths = (merged.paths as string[]) ?? [];
-
-        if (confirmedPaths.length === 0) {
-          return { success: true, deleted: 0, message: '用户取消删除' };
-        }
-
-        const workspaceFs = getWorkspaceFilesystem({});
-        let deleted = 0;
-        for (const relPath of confirmedPaths) {
-          try {
-            await workspaceFs.rm(sessionId, relPath);
-            deleted++;
-          } catch (err) {
-            console.warn(`[delete_artifacts] Failed to delete ${relPath}:`, err);
-          }
-        }
-        return { success: true, deleted, message: `已删除 ${deleted} 个文件` };
-      },
-      {
-        name: 'delete_artifacts',
-        description: '删除当前 session 下的产物（图片、音频等）。重新生成前需先调用此工具删除旧产物。category 为 images|audio|both；也可直接传 paths 数组。',
-        schema: z.object({
-          sessionId: z.string().optional().describe('会话ID（留空使用当前会话）'),
-          category: z.enum(['images', 'audio', 'both']).optional().default('both').describe('要删除的类别'),
-          paths: z.array(z.string()).optional().describe('指定要删除的路径（相对 session），若提供则忽略 category'),
-        }),
-      }
-    );
-  }
-
-
-  /**
    * 创建主Agent
    * @param sessionId 会话ID（新增）
    */
@@ -595,23 +221,26 @@ export class AgentFactory {
     // 创建LLM
     const llm = await this.createLLM(sessionId);
 
-    // 创建工具：先按配置添加内置工具，再添加 MCP 工具
+    // 创建工具：配置驱动，通过 tools 注册表创建
+    const toolContext = {
+      requestApprovalViaHITL: this.requestApprovalViaHITL.bind(this),
+      getDefaultSessionId: () => process.env.AGENT_SESSION_ID || sessionId || DEFAULT_SESSION_ID,
+    };
+
     const tools: any[] = [];
     const toolsConfig = this.agentConfig.tools ?? {};
     for (const [name, opts] of Object.entries(toolsConfig)) {
-      if ((opts as { enable?: boolean })?.enable === false) continue;
-      const tool = this.createBuiltInTool(name);
-      if (tool) {
-        tools.push(tool);
-      }
-    }
-
-    // 添加MCP工具
-    for (const [mcpKey, mcpEntry] of Object.entries(this.agentConfig.mcp_services)) {
-      const tool = await this.createMCPTool(mcpKey, mcpEntry);
-      if (tool) {
-        tools.push(tool);
-      }
+      const entry = opts as { enable?: boolean; description?: string; config?: any };
+      if (entry.enable === false) continue;
+      const config = {
+        enable: true,
+        name: name,
+        description: entry.description,
+        serviceConfig: entry.config,
+      };
+      const t = createTool(name, config, toolContext);
+      const resolved = t instanceof Promise ? await t : t;
+      if (resolved) tools.push(resolved);
     }
 
     // 新增：记录审计日志

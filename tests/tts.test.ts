@@ -2,7 +2,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { promises as fs } from 'fs';
-import { synthesizeSpeech } from '../backend/mcp/tts';
+import { getMultimodalPort } from '../backend/infrastructure/repositories.js';
 import { loadConfig, lastLoadedConfigPath } from '../backend/app-config';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -78,7 +78,8 @@ describe('TTS synthesizeSpeech()', () => {
       ctx.skip();
     }
     const texts = ['你好，世界！', '这是一次 TTS 测试。'];
-    const result = await synthesizeSpeech({ texts, format: 'mp3', sessionId });
+    const port = getMultimodalPort();
+    const result = await port.synthesizeSpeech({ content: texts, format: 'mp3', sessionId });
 
     expect(Array.isArray(result.audioPaths)).toBe(true);
     expect(result.audioPaths.length).toBe(texts.length);

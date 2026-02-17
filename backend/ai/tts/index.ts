@@ -6,7 +6,7 @@ import { getAIConfig } from '../config.js';
 import { loadConfig } from '../../app-config.js';
 import { getWorkspaceFilesystem } from '../../services/fs.js';
 import { normalizeTextsInput, resolveTextsInput } from '../utils/content-input.js';
-import { readLineNumbers, appendEntries, type LineNumberEntry } from '../../mcp/line-numbers.js';
+import { readLineNumbers, appendEntries, type LineNumberEntry } from '../../tools/line-numbers.js';
 import { traceAiRun } from '../../agent/langsmith-trace.js';
 import { notifyWorkspaceFileAdded } from '../../workspace-notifier.js';
 import type { SynthesizeSpeechParams, SynthesizeSpeechResult, TTSAIConfig } from '../types.js';

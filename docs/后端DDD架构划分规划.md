@@ -155,6 +155,14 @@
 - **适配器（防腐层）**：按具体 provider API 实现请求体构造、响应解析、URL/二进制提取，将外部模型转换为领域可用的输入输出。
 - **应用层**：依赖 `MultimodalPort` 等端口，按业务语义封装（如 TTS 从 scriptFile 读台词、写 audio、维护 line_numbers），不依赖具体 provider。
 
+**三层结构**（Agent → Tools → Inference）：
+
+| 层 | 模块 | 职责 |
+|----|------|------|
+| **Agent** | AgentFactory、createDeepAgent | 工具创建、HITL、SubAgent、工作流编排 |
+| **Tools** | `backend/tools/` | 业务语义封装：session、workspace、参数解析、line_numbers、批量处理；调用 MultimodalPort（防腐层） |
+| **Inference** | MultimodalPort、ai/* 实现 | 防腐层：端口定义 + 适配器实现，隔离外部 provider API |
+
 #### 2.4.3 能力与模式对照
 
 | 能力 | 调用模式 | 批量/单次 | 当前实现 |

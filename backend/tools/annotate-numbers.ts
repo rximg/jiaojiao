@@ -1,8 +1,7 @@
 import path from 'path';
 import { promises as fs } from 'fs';
 import sharp from 'sharp';
-import { loadConfig } from '../agent/config';
-import { DEFAULT_SESSION_ID, getWorkspaceFilesystem } from '../services/fs';
+import { DEFAULT_SESSION_ID, getWorkspaceFilesystem } from '../services/fs.js';
 
 export interface AnnotationPoint {
   number: number;
@@ -52,7 +51,6 @@ const PADDING = 8;
 export async function annotateImageNumbers(
   params: AnnotateImageNumbersParams
 ): Promise<AnnotateImageNumbersResult> {
-  const config = await loadConfig();
   const sessionId = params.sessionId ?? DEFAULT_SESSION_ID;
   const workspaceFs = getWorkspaceFilesystem({});
   const workspaceRoot = workspaceFs.root;

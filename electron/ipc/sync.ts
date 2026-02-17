@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
 import { loadConfig } from '../../backend/agent/config.js';
-import { syncSessionAudioToStore } from '../../backend/mcp/sync-audio-to-store.js';
+import { syncSessionAudioToStore } from '../../backend/services/sync-audio-to-store.js';
 
 export function handleSyncIPC() {
   ipcMain.handle('sync:audioToStore', async (_event, sessionId?: string) => {

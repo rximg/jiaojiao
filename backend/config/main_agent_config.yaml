@@ -49,32 +49,23 @@ agent:
     log_llm_calls: false
     save_llm_calls: false
 
-# 主 Agent 内置工具（仅主 Agent 使用的工具；SubAgent 专用工具在各自 sub_agent 配置中）
+# 主 Agent 工具配置（统一 tools，含内置与 AI 能力）
 tools:
   finalize_workflow: {}      # 检查文件并完成流程
   annotate_image_numbers: {} # 按坐标在图上画白底数字标签
-# MCP服务配置
-mcp_services:
-  t2i:
+  delete_artifacts: {}       # 删除 session 下产物，重新生成前需先删除
+  generate_image:
     enable: true
-    type: t2i_mcp
-    name: generate_image
     description: 生成绘本图片
-    config_path: ./mcp/t2i_config.yaml
-  
-  tts:
+    config_path: ./ai/t2i_config.yaml
+  synthesize_speech:
     enable: true
-    type: tts_mcp
-    name: synthesize_speech
     description: 合成语音
-    config_path: ./mcp/tts_config.yaml
-  
-  vl_script:
+    config_path: ./ai/tts_config.yaml
+  generate_script_from_image:
     enable: true
-    type: vl_script_mcp
-    name: generate_script_from_image
     description: 根据图片路径，用视觉模型生成台词及坐标
-    config_path: ./mcp/vl_script_config.yaml
+    config_path: ./ai/vl_script_config.yaml
 
 # SubAgent配置
 sub_agents:

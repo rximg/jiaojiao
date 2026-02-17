@@ -27,16 +27,6 @@ export interface AgentConfig {
       save_llm_calls?: boolean;
     };
   };
-  mcp_services: {
-    [key: string]: {
-      enable: boolean;
-      type: string;
-      name: string;
-      description: string;
-      config_path: string;
-      config?: any;
-    };
-  };
   sub_agents: {
     [key: string]: {
       enable: boolean;
@@ -46,8 +36,11 @@ export interface AgentConfig {
       config?: any;
     };
   };
-  /** 内置工具（非 MCP）：工具名 -> 选项，enable 默认为 true */
-  tools?: Record<string, { enable?: boolean }>;
+  /** 工具配置：工具名 -> 选项；config_path 指向 AI 服务配置时自动加载为 serviceConfig */
+  tools?: Record<
+    string,
+    { enable?: boolean; description?: string; config_path?: string; config?: any }
+  >;
   workflow?: {
     steps: Array<{
       id: number;
@@ -193,14 +186,15 @@ export class ConfigLoader {
     const mainConfigPath = configPath || path.join(this.configDir, 'main_agent_config.yaml');
     const config = this.loadYaml<AgentConfig>(mainConfigPath);
 
-    // 加载所有MCP服务配置
-    if (config.mcp_services) {
-      for (const [key, mcpEntry] of Object.entries(config.mcp_services)) {
-        if (mcpEntry.enable && mcpEntry.config_path) {
+    // 加载工具配置（含 config_path 的从文件加载）
+    if (config.tools) {
+      for (const [key, toolEntry] of Object.entries(config.tools)) {
+        const entry = toolEntry as { enable?: boolean; config_path?: string; config?: any };
+        if (entry.config_path) {
           try {
-            mcpEntry.config = this.loadYaml<any>(mcpEntry.config_path);
+            entry.config = this.loadYaml<any>(entry.config_path);
           } catch (error) {
-            console.warn(`加载MCP配置失败 (${key}):`, error);
+            console.warn(`加载工具配置失败 (${key}):`, error);
           }
         }
       }
@@ -253,16 +247,6 @@ export class ConfigLoader {
       }
       if (!config.agent.storage?.path) {
         errors.push('缺少存储路径配置');
-      }
-    }
-
-    // 验证MCP服务
-    if (config.mcp_services) {
-      for (const [key, mcp] of Object.entries(config.mcp_services)) {
-        if (mcp.enable) {
-          if (!mcp.type) errors.push(`MCP服务 ${key} 缺少type字段`);
-          if (!mcp.config_path) errors.push(`MCP服务 ${key} 缺少config_path`);
-        }
       }
     }
 
