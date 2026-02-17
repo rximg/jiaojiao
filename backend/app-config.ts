@@ -140,3 +140,18 @@ export async function loadConfig(): Promise<AppConfig> {
     throw new Error(`无法从用户目录加载配置: ${(error as Error).message}`);
   }
 }
+
+/**
+ * 保存配置（部分更新，与 electron-store 合并）
+ */
+export async function saveConfig(updates: Partial<AppConfig>): Promise<void> {
+  const store = getConfigStore();
+  if (typeof (store as { set?: (k: string, v: unknown) => void }).set !== 'function') return;
+  const set = (store as { set: (k: string, v: unknown) => void }).set;
+  const keys = ['apiKeys', 'multimodalApiKeys', 'agent', 'storage', 'ui', 'configVersion'] as const;
+  for (const key of keys) {
+    if (key in updates && (updates as Record<string, unknown>)[key] !== undefined) {
+      set(key, (updates as Record<string, unknown>)[key]);
+    }
+  }
+}
