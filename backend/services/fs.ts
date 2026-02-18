@@ -64,15 +64,19 @@ export class WorkspaceFilesystem {
     await fs.mkdir(this.rootDir, { recursive: true });
   }
 
-  sessionPath(sessionId: string, relativePath = ''): string {
-    const safeSession = sessionId || DEFAULT_SESSION_ID;
-    // 若传入绝对路径会导致 resolve 结果脱离 root，只接受相对路径
+  /**
+   * 解析会话内或全局路径。sessionId 为 null/空 时表示全局路径（相对 rootDir，如 audio_record.json）。
+   */
+  sessionPath(sessionId: string | null, relativePath = ''): string {
     const trimmed = relativePath.replace(/\\/g, '/').replace(/^\/+/, '').trim();
     if (path.isAbsolute(relativePath) || trimmed.includes('..')) {
       throw new Error('Path escapes workspace root');
     }
     const normalizedRelative = normalizeRelative(trimmed || relativePath);
-    const resolved = path.resolve(this.rootDir, safeSession, normalizedRelative);
+    const resolved =
+      sessionId != null && sessionId !== ''
+        ? path.resolve(this.rootDir, sessionId || DEFAULT_SESSION_ID, normalizedRelative)
+        : path.resolve(this.rootDir, normalizedRelative);
     const resolvedNorm = path.normalize(resolved);
     const rootNorm = path.normalize(this.rootWithSep);
     if (!resolvedNorm.startsWith(rootNorm) && resolvedNorm !== path.normalize(this.rootDir)) {
@@ -86,7 +90,7 @@ export class WorkspaceFilesystem {
   }
 
   async writeFile(
-    sessionId: string,
+    sessionId: string | null,
     relativePath: string,
     data: string | NodeJS.ArrayBufferView,
     encoding?: BufferEncoding
@@ -99,7 +103,7 @@ export class WorkspaceFilesystem {
   }
 
   async appendFile(
-    sessionId: string,
+    sessionId: string | null,
     relativePath: string,
     data: string | NodeJS.ArrayBufferView,
     encoding?: BufferEncoding
@@ -117,21 +121,40 @@ export class WorkspaceFilesystem {
   }
 
   async readFile(
-    sessionId: string,
+    sessionId: string | null,
     relativePath: string,
     encoding?: BufferEncoding
   ): Promise<string | Buffer> {
     await this.ensureRoot();
     const targetPath = this.sessionPath(sessionId, relativePath);
-    
+
     // Check if file exists before trying to read
     try {
       await fs.access(targetPath);
     } catch (error) {
-      throw new Error(`File not found: ${relativePath} in session ${sessionId}. Full path: ${targetPath}`);
+      const scope = sessionId != null && sessionId !== '' ? `session ${sessionId}` : 'global';
+      throw new Error(`File not found: ${relativePath} (${scope}). Full path: ${targetPath}`);
     }
-    
+
     return fs.readFile(targetPath, encoding);
+  }
+
+  /**
+   * 原子写入：先写临时文件再重命名，适用于全局文件（如 audio_record.json）。
+   */
+  async writeFileAtomic(
+    sessionId: string | null,
+    relativePath: string,
+    data: string,
+    encoding: BufferEncoding = 'utf-8'
+  ): Promise<string> {
+    await this.ensureRoot();
+    const targetPath = this.sessionPath(sessionId, relativePath);
+    await fs.mkdir(path.dirname(targetPath), { recursive: true });
+    const tmpPath = `${targetPath}.${Date.now()}.tmp`;
+    await fs.writeFile(tmpPath, data, encoding);
+    await fs.rename(tmpPath, targetPath);
+    return targetPath;
   }
 
   async ls(sessionId: string, relativePath = '.'): Promise<LsEntry[]> {

@@ -166,7 +166,7 @@ export class ConfigLoader {
   }
 
   /**
-   * 加载MCP配置
+   * 加载 MCP 配置（保留供后续模块使用；主 Agent 当前仅用 tools 配置，不加载 MCP）
    */
   loadMCPConfig(configPath: string): MCPConfig {
     return this.loadYaml<MCPConfig>(configPath);

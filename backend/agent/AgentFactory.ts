@@ -221,10 +221,16 @@ export class AgentFactory {
     // 创建LLM
     const llm = await this.createLLM(sessionId);
 
-    // 创建工具：配置驱动，通过 tools 注册表创建
+    // 创建工具：配置驱动，通过 tools 注册表创建；Phase 5 注入 getSessionBackend 供 Agent 模块使用 FilesystemBackend
+    const workspaceRoot = resolveWorkspaceRoot();
     const toolContext = {
       requestApprovalViaHITL: this.requestApprovalViaHITL.bind(this),
       getDefaultSessionId: () => process.env.AGENT_SESSION_ID || sessionId || DEFAULT_SESSION_ID,
+      getSessionBackend: (sid: string) =>
+        new FilesystemBackend({
+          rootDir: path.join(workspaceRoot, sid || DEFAULT_SESSION_ID),
+          virtualMode: true,
+        }),
     };
 
     const tools: any[] = [];
