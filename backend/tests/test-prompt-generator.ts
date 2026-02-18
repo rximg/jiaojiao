@@ -7,7 +7,6 @@ import { AgentFactory } from '../agent/AgentFactory.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { DEFAULT_SESSION_ID } from '../services/fs.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -59,7 +58,6 @@ async function testPromptGenerator() {
     // 检查文件是否生成
     console.log('\n[检查文件]');
     const { getWorkspaceFilesystem } = await import('../services/fs.js');
-    const appConfig = await import('../app-config.js').then(m => m.loadConfig());
     const workspaceFs = getWorkspaceFilesystem({});
     
     // 获取文件完整路径

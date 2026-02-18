@@ -1,8 +1,9 @@
 # TTS 工具层配置（default_params、batch.delay）
+# 通义 TTS 限流 10 RPM，请求间隔至少 60s/10 = 6s，delay 设为 6000ms
 default_params:
   voice: chinese_female
   format: mp3
   sample_rate: 24000
 batch:
   enabled: true
-  delay: 2500
+  delay: 6000

@@ -1,6 +1,9 @@
-# 有声绘本智能体
+# ♪iao♪iao有声绘本智能体
+
 
 基于 Electron + React + deepagentsjs 的有声绘本智能生成应用。
+
+![jiaojiao logo](assets/logo.jpg)
 
 ## 技术栈
 

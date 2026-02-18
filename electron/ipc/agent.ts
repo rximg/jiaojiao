@@ -7,23 +7,23 @@ import { resolveStepResultPaths } from '../../backend/application/helpers/resolv
 
 let currentStreamController: AbortController | null = null;
 
-/** 向渲染进程发送额度错误并抛出 */
+/** 向渲染进程发送额度/限流错误并抛出。403=额度或权限，429=请求频率超限（限流）。 */
 function sendQuotaExceededAndThrow(
   win: WebContents,
   error: any,
   kind: '403' | '429'
 ): never {
-  const is403 = kind === '403';
-  const message = is403
-    ? 'API额度已用完，请前往设置更换模型'
-    : 'API配额不足，请检查您的账户余额和套餐详情';
-  const details =
-    kind === '429'
-      ? '您已超出当前配额，请检查您的计划和账单详情。详情请参阅：https://help.aliyun.com/zh/model-studio/error-code#token-limit'
-      : undefined;
+  const is429 = kind === '429';
+  const message = is429
+    ? '请求过于频繁，请稍后再试'
+    : 'API额度已用完，请前往设置更换模型';
+  const details = is429
+    ? '当前接口调用频率超限（429），请降低请求频率或稍后重试。详见：https://help.aliyun.com/zh/model-studio/error-code#rate-limit'
+    : undefined;
   win.send('agent:quotaExceeded', {
+    kind: is429 ? 'rate_limit' : 'quota',
     message,
-    error: error?.message ?? (is403 ? '403 Forbidden' : '429 Insufficient Quota'),
+    error: error?.message ?? (is429 ? '429 Too Many Requests' : '403 Forbidden'),
     ...(details ? { details } : {}),
   });
   throw new Error(message);

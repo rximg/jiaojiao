@@ -215,6 +215,9 @@ export class WorkspaceCheckpointSaver extends BaseCheckpointSaver {
       threadId = lastGetTupleThreadId;
     }
     if (threadId === undefined) {
+      threadId = this.defaultThreadId;
+    }
+    if (threadId === undefined) {
       throw new Error('Failed to put checkpoint. The passed RunnableConfig is missing a required "thread_id" field in its "configurable" property.');
     }
 
@@ -256,6 +259,9 @@ export class WorkspaceCheckpointSaver extends BaseCheckpointSaver {
     }
     if (threadId === undefined) {
       threadId = lastGetTupleThreadId;
+    }
+    if (threadId === undefined) {
+      threadId = this.defaultThreadId;
     }
     if (threadId === undefined) {
       throw new Error('Failed to put writes. The passed RunnableConfig is missing a required "thread_id" field in its "configurable" property.');

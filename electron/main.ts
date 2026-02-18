@@ -10,6 +10,30 @@ const __dirname = dirname(__filename);
 
 // 尽早加载 .env（与 AgentFactory 一致：从应用根目录读取，避免 dist-electron 运行时 cwd 不对）
 const appRoot = __dirname.includes('dist-electron') ? path.join(__dirname, '..') : process.cwd();
+
+/** 窗口/任务栏图标：优先 .ico（内含多分辨率，系统自动选高分辨率），再 fallback PNG */
+function getIconPath(): string | null {
+  const icoDirs = [
+    path.join(appRoot, 'assets'),
+    path.join(appRoot, 'public'),
+    path.join(appRoot, 'dist'),
+    path.join(appRoot, 'build'),
+  ];
+  for (const dir of icoDirs) {
+    const p = path.join(dir, 'favicon.ico');
+    if (fs.existsSync(p)) return p;
+  }
+  const assetsIco = path.join(appRoot, 'assets', 'logo.ico');
+  if (fs.existsSync(assetsIco)) return assetsIco;
+  const pngNames = ['favicon-256.png', 'favicon-128.png', 'favicon.png', 'icon.png'];
+  for (const name of pngNames) {
+    for (const dir of icoDirs) {
+      const p = path.join(dir, name);
+      if (fs.existsSync(p)) return p;
+    }
+  }
+  return null;
+}
 const envPath = path.join(appRoot, '.env');
 dotenv.config({ path: envPath });
 if (process.env.NODE_ENV === 'development') {
@@ -36,9 +60,11 @@ function createWindow() {
     ? path.join(process.cwd(), 'electron', 'preload.cjs')
     : path.join(__dirname, '..', 'electron', 'preload.cjs');
   
+  const iconPath = getIconPath();
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    icon: iconPath ?? undefined,
     webPreferences: {
       preload: preloadPath,
       nodeIntegration: false,
@@ -51,7 +77,7 @@ function createWindow() {
   // 开发环境加载 Vite 开发服务器，生产环境加载构建文件
   if (process.env.NODE_ENV === 'development') {
     mainWindow.loadURL('http://localhost:5173');
-    mainWindow.webContents.openDevTools();
+    // mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
     // mainWindow.webContents.openDevTools();

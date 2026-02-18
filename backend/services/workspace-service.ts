@@ -63,7 +63,7 @@ export class WorkspaceService {
   /**
    * 检查路径权限
    */
-  private checkPathPermission(sessionId: string, relativePath: string, operation: 'read' | 'write' | 'delete'): void {
+  private checkPathPermission(_sessionId: string, relativePath: string, operation: 'read' | 'write' | 'delete'): void {
     // 检查路径是否允许
     if (!isPathAllowed(relativePath, this.config)) {
       throw new Error(`Path not allowed: ${relativePath}`);
