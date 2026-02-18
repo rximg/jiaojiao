@@ -2,7 +2,7 @@ import { ipcMain, BrowserWindow, type WebContents } from 'electron';
 import { getBackendConfigDir } from './config.js';
 import { workspaceNotifier } from '../../backend/workspace-notifier.js';
 import { getSessionMessages } from './session.js';
-import { invokeAgentUseCase } from '../../backend/application/use-cases/index.js';
+import { invokeAgentUseCase } from '../../backend/application/agent/index.js';
 import { resolveStepResultPaths } from '../../backend/application/helpers/resolve-step-result-paths.js';
 
 let currentStreamController: AbortController | null = null;
@@ -73,7 +73,7 @@ async function sendAgentMessage(
     }
     process.env.AGENT_CONFIG_DIR = getBackendConfigDir();
 
-    const { createMainAgent } = await import('../../backend/agent/factory.js');
+    const { createMainAgent } = await import('../../backend/agent/AgentFactory.js');
     const deps = {
       createAgent: createMainAgent,
       getSessionMessages,

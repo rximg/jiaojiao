@@ -59,7 +59,7 @@ async function testPromptGenerator() {
     // 检查文件是否生成
     console.log('\n[检查文件]');
     const { getWorkspaceFilesystem } = await import('../services/fs.js');
-    const appConfig = await import('../agent/config.js').then(m => m.loadConfig());
+    const appConfig = await import('../app-config.js').then(m => m.loadConfig());
     const workspaceFs = getWorkspaceFilesystem({});
     
     // 获取文件完整路径

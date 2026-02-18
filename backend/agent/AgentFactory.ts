@@ -2,7 +2,6 @@ import { ChatOpenAI } from '@langchain/openai';
 import { createAgent } from 'langchain';
 import { createDeepAgent, createFilesystemMiddleware, FilesystemBackend, type SubAgent, type CompiledSubAgent } from 'deepagents';
 import { ConfigLoader, type AgentConfig } from './ConfigLoader.js';
-import { createLLMCallbacks } from './LLMCallbacks.js';
 import { getAIConfig } from '../infrastructure/inference/ai-config.js';
 import { createLLMFromAIConfig } from '../infrastructure/inference/adapters/llm/index.js';
 import type { LLMAIConfig } from '#backend/domain/inference/types.js';
@@ -66,7 +65,7 @@ export class AgentFactory {
     const cfg = (await getAIConfig('llm')) as LLMAIConfig;
     return createLLMFromAIConfig({
       ...cfg,
-      callbacks: [createLLMCallbacks(this.agentConfig.agent.debug)],
+      callbacks: [],
     });
   }
 
@@ -296,4 +295,10 @@ export class AgentFactory {
 
     return agent;
   }
+}
+
+/** 对外入口：创建主 Agent 实例（无 session 时使用 DEFAULT_SESSION_ID）。 */
+export async function createMainAgent(sessionId?: string) {
+  const factory = new AgentFactory();
+  return await factory.createMainAgent(sessionId ?? DEFAULT_SESSION_ID);
 }

@@ -1,14 +1,14 @@
 import type { Express, Request, Response } from 'express';
-import { getRuntimeManager } from '../services/runtime-manager.js';
-import { getLogManager } from '../services/log-manager.js';
-import { getSessionRepository, getArtifactRepository } from '../infrastructure/repositories.js';
+import { getRuntimeManager } from '../../services/runtime-manager.js';
+import { getLogManager } from '../../services/log-manager.js';
+import { getSessionRepository, getArtifactRepository } from '../../infrastructure/repositories.js';
 import {
   createSessionUseCase,
   listSessionsUseCase,
   getSessionUseCase,
   updateSessionUseCase,
   deleteSessionUseCase,
-} from '../application/use-cases/index.js';
+} from '../../application/agent/index.js';
 
 function sessionUseCaseDeps() {
   const sessionRepo = getSessionRepository();
@@ -28,10 +28,7 @@ export function registerSessionRoutes(app: Express) {
   app.post('/api/sessions', async (req: Request, res: Response) => {
     try {
       const deps = sessionUseCaseDeps();
-      const result = await createSessionUseCase(deps, {
-        title: req.body?.title,
-        prompt: req.body?.prompt,
-      });
+      const result = await createSessionUseCase(deps, { title: req.body?.title, prompt: req.body?.prompt });
       res.json(result);
     } catch (error) {
       console.error('Failed to create session:', error);
@@ -58,9 +55,7 @@ export function registerSessionRoutes(app: Express) {
       res.json(result);
     } catch (error: any) {
       console.error('Failed to get session:', error);
-      if (error?.message === 'Session not found') {
-        return res.status(404).json({ error: 'Session not found' });
-      }
+      if (error?.message === 'Session not found') return res.status(404).json({ error: 'Session not found' });
       res.status(500).json({ error: 'Failed to get session' });
     }
   });
@@ -68,9 +63,8 @@ export function registerSessionRoutes(app: Express) {
   app.patch('/api/sessions/:sessionId', async (req: Request, res: Response) => {
     try {
       const { sessionId } = req.params;
-      const updates = req.body;
       const deps = sessionUseCaseDeps();
-      const result = await updateSessionUseCase(deps, sessionId, updates);
+      const result = await updateSessionUseCase(deps, sessionId, req.body);
       res.json(result);
     } catch (error) {
       console.error('Failed to update session:', error);

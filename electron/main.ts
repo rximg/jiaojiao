@@ -26,7 +26,7 @@ import { handleHITLIPC } from './ipc/hitl.js';
 import { handleSyncIPC } from './ipc/sync.js';
 import { setDefaultLogRoot } from '../backend/services/log-manager.js';
 import { initializeServices, shutdownServices } from '../backend/services/service-initializer.js';
-import { loadConfig } from '../backend/agent/config.js';
+import { loadConfig } from '../backend/app-config.js';
 import { initLangSmithEnv } from '../backend/agent/langsmith.js';
 
 let mainWindow: BrowserWindow | null = null;

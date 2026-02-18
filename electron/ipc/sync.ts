@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron';
-import { loadConfig } from '../../backend/agent/config.js';
+import { loadConfig } from '../../backend/app-config.js';
 import { syncSessionAudioToStore } from '../../backend/services/sync-audio-to-store.js';
 
 export function handleSyncIPC() {

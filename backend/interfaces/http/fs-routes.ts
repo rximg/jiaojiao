@@ -1,11 +1,10 @@
 import type { Express, Request, Response } from 'express';
 import path from 'path';
-import { getArtifactRepository } from '../infrastructure/repositories.js';
+import { getArtifactRepository } from '../../infrastructure/repositories.js';
 
 export function registerFilesystemRoutes(app: Express) {
   const artifactRepo = getArtifactRepository();
 
-  // 列出目录文件
   app.get('/api/fs/ls', async (req: Request, res: Response) => {
     try {
       const { sessionId, path: relativePath = '.' } = req.query;
@@ -22,7 +21,6 @@ export function registerFilesystemRoutes(app: Express) {
     }
   });
 
-  // 读取文件内容
   app.get('/api/fs/file', async (req: Request, res: Response) => {
     try {
       const { sessionId, path: relativePath } = req.query;
@@ -67,7 +65,6 @@ export function registerFilesystemRoutes(app: Express) {
     }
   });
 
-  // Glob搜索文件
   app.get('/api/fs/glob', async (req: Request, res: Response) => {
     try {
       const { sessionId, pattern = '**/*' } = req.query;
@@ -84,7 +81,6 @@ export function registerFilesystemRoutes(app: Express) {
     }
   });
 
-  // Grep搜索文件内容
   app.get('/api/fs/grep', async (req: Request, res: Response) => {
     try {
       const { sessionId, pattern, glob } = req.query;

@@ -8,7 +8,7 @@ import {
   getSessionUseCase,
   updateSessionUseCase,
   deleteSessionUseCase,
-} from '../../backend/application/use-cases/index.js';
+} from '../../backend/application/agent/index.js';
 
 /** 供 agent 等主进程逻辑使用：根据 sessionId 读取该会话的 messages，用于拼接到 agent 的上下文中 */
 export async function getSessionMessages(sessionId: string): Promise<any[]> {

@@ -1,5 +1,5 @@
 /**
- * 应用层用例：会话 CRUD、Agent 流式调用
+ * 应用层 agent 域统一入口：会话 CRUD + Agent 流式调用（团队习惯以 agent 为应用层主域名）。
  */
 export {
   createSessionUseCase,

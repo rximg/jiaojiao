@@ -6,7 +6,7 @@
 
 import { AgentFactory } from '../agent/AgentFactory.js';
 import { initializeServices } from '../services/service-initializer.js';
-import { loadConfig } from '../agent/config.js';
+import { loadConfig } from '../app-config.js';
 import { initLangSmithEnv } from '../agent/langsmith.js';
 
 async function testAgentRun() {
