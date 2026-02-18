@@ -5,9 +5,8 @@
 ## 技术栈
 
 - **前端**: Electron + React + TypeScript + ShadCN UI
-- **后端**: deepagentsjs (基于 LangChain/LangGraph)
-- **AI 模型**: 阿里百炼（通义千问）
-- **服务**: T2I (文生图) + TTS (语音合成)
+- **后端**: deepagents.js（基于 LangChain/LangGraph），运行在 Electron 主进程，通过 IPC 与渲染进程通信
+- **AI 模型**: 通义（阿里百炼）/ 智谱，支持 LLM、T2I（文生图）、TTS（语音合成）、VL（以图生剧本）
 
 ## 项目结构
 
@@ -16,21 +15,27 @@ app/
 ├── electron/              # Electron 主进程
 │   ├── main.ts           # 主进程入口
 │   ├── preload.ts        # 预加载脚本
-│   └── ipc/              # IPC 处理
+│   └── ipc/              # IPC 通道（session、agent、config、fs、hitl、sync、storage）
 ├── src/                   # React 前端
 │   ├── app/              # 应用组件
-│   │   └── components/   # 页面组件
-│   ├── components/        # 共享组件
-│   │   └── ui/           # ShadCN UI 组件
+│   ├── components/       # 共享组件与 ShadCN UI
 │   ├── providers/        # Context Providers
 │   ├── types/            # TypeScript 类型
 │   └── lib/              # 工具函数
-├── backend/              # 后端 Agent
-│   ├── agent/            # Agent 核心
-│   ├── mcp/              # MCP 服务
-│   └── utils/            # 工具函数
+├── backend/              # 后端（DDD 分层，见 docs/后端软件架构.md）
+│   ├── agent/            # Agent 核心（AgentFactory、ConfigLoader、LangSmith）
+│   ├── application/      # 应用层用例（session CRUD、invoke-agent）
+│   ├── interfaces/http/  # HTTP 接口层（可选，当前未挂载）
+│   ├── domain/           # 领域层（inference、session、workspace、configuration）
+│   ├── infrastructure/   # 基础设施（推理 adapters、仓储实现）
+│   ├── tools/            # 工具实现与 registry（config/tools/*.yaml 驱动）
+│   ├── services/         # 运行时、持久化、HITL、日志等
+│   ├── config/           # main_agent_config.yaml、ai_models.json、tools、sub_agents
+│   └── app-config.ts     # 应用配置（electron-store）
 └── package.json
 ```
+
+后端分层与模块说明见 **[docs/后端软件架构.md](docs/后端软件架构.md)**。
 
 ## 快速开始
 
@@ -89,32 +94,29 @@ npm run electron:build
 
 ### 5. 运行测试（含集成测试与供应商选择）
 
-API Key 来自应用设置（用户目录配置）。集成测试会调用真实接口，需在应用中配置 Key；可通过脚本或环境变量选择只测智谱或只测通义：
+API Key 来自应用设置（用户目录配置）。集成测试会调用真实接口，需在应用中配置 Key；可通过环境变量选择只测智谱或只测通义：
 
 ```bash
-# 仅本地单元测试（不调真实 API）
+# 全量测试（不调真实 API 的用例）
 npm run test:run
 
-# 集成测试：只测智谱（Zhipu）接口
-npm run test:integration:zhipu
+# 推理集成测试（LLM、VL、T2I、TTS）
+npm run test:inference
+npm run test:inference:zhipu    # 仅智谱
+npm run test:inference:dashscope # 仅通义
 
-# 集成测试：只测通义（DashScope）接口
-npm run test:integration:dashscope
+# 工具集成测试（文生图、语音合成等）
+npm run test:tools
+npm run test:tools:zhipu
+npm run test:tools:dashscope
 
-# 集成测试：先测智谱再测通义（两轮）
-npm run test:integration:all
+# Agent 集成测试（创建 Agent、完整 invoke 流程）
+npm run test:agent
 ```
 
-环境变量（需先在应用设置中配置对应 API Key）：
+环境变量：`TEST_API_PROVIDER=zhipu` 或 `dashscope` 可限定本次使用的 provider；不设则使用应用配置中的默认 provider。
 
-- `TEST_API_PROVIDER=zhipu`：本次只测智谱
-- `TEST_API_PROVIDER=dashscope`：本次只测通义
-- 不设 `TEST_API_PROVIDER`：使用应用配置中的默认 provider
-
-测试覆盖：
-- LLM：调用配置的 LLM 端点，校验返回内容非空（`tests/llm.test.ts`）
-- T2I：文生图生成图片，校验文件落盘（`tests/t2i.test.ts`）
-- TTS：语音合成生成音频，校验文件落盘（`tests/tts.test.ts`）
+测试位置：`tests/integration/inference/`、`tests/integration/tools/`、`tests/integration/agent/`。
 
 ## 功能特性
 
@@ -157,47 +159,29 @@ npm run test:integration:all
 
 ### Agent 工作流程
 
-1. **生成提示词**：直接将用户输入委派给 `prompt_generator` 子代理（通过 task 的 description 传入用户回答）
-2. **生成图片**：调用 `generate_image` 工具
-3. **生成台词**：调用 `generate_script_from_image` MCP（VL：根据图片生成台词与坐标）
-4. **生成语音**：调用 `synthesize_speech` 工具
-5. **整合结果**：返回完整绘本
+1. **生成提示词**：将用户输入委派给 `prompt_generator` 子代理（task description 传入用户回答），写入 `image_prompt.txt`
+2. **生成图片**：调用 `generate_image` 工具（T2I，config/tools/t2i.yaml）
+3. **生成台词**：调用 `generate_script_from_image` 工具（VL：根据图片生成台词与坐标，config/tools/vl_script.yaml）
+4. **生成语音**：调用 `synthesize_speech` 工具（config/tools/tts.yaml）
+5. **标注与收尾**：`annotate_image_numbers`、`finalize_workflow`，返回完整绘本
+
+### 后端架构摘要
+
+- **通信**：桌面端仅通过 **Electron IPC** 与主进程交互（session、agent、config、fs、hitl 等），无独立 HTTP 服务。
+- **配置驱动**：主 Agent、工具、子代理均由 `backend/config/main_agent_config.yaml` 及 `config/tools/*.yaml`、`config/sub_agents/*.yaml` 配置。
+- **分层**：应用层用例（application/agent）→ 领域层（domain）→ 基础设施（infrastructure），详见 [docs/后端软件架构.md](docs/后端软件架构.md)。
 
 ## 开发说明
 
 ### 添加新工具
 
-在 `backend/agent/factory.ts` 中使用 `tool` 函数创建新工具：
-
-```typescript
-const myTool = tool(
-  async (params: { ... }) => {
-    // 工具逻辑
-  },
-  {
-    name: 'my_tool',
-    description: '工具描述',
-    schema: z.object({ ... }),
-  }
-);
-```
+1. 在 `backend/tools/` 中实现工具逻辑，并在 `backend/tools/registry.ts` 中注册（供 AgentFactory 通过 `createTool(name, config, context)` 使用）。
+2. 在 `backend/config/main_agent_config.yaml` 的 **tools** 段增加条目；若需业务参数，在 `backend/config/tools/` 下新增 YAML（如 `my_tool.yaml`），并设置 `config_path: ./tools/my_tool.yaml`。
 
 ### 添加新子代理
 
-在 `backend/agent/factory.ts` 中添加 `SubAgent`：
-
-```typescript
-const subAgent: SubAgent = {
-  name: 'my_subagent',
-  description: '子代理描述',
-  systemPrompt: '系统提示词',
-  tools: [...], // 可选
-};
-```
-
-### 扩展 MCP 服务
-
-在 `backend/mcp/` 目录下添加新的 MCP 服务。
+1. 在 `backend/config/sub_agents/` 下新增子代理 YAML（提示词与配置）。
+2. 在 `backend/config/main_agent_config.yaml` 的 **sub_agents** 段增加条目（name、description、config_path 等）。
 
 ### 计划中
 
@@ -205,11 +189,11 @@ const subAgent: SubAgent = {
 
 ## 注意事项
 
-- 确保已获取阿里百炼 API Key
+- 确保已获取通义/智谱 API Key 并在应用内配置
 - 首次使用需要配置 API Key
-- 生成的内容保存在 `outputs/` 目录下
-- 配置信息保存在 `~/.有声绘本智能体/config.json`
-- deepagentsjs 需要 Node.js 18+ 和兼容的 LangChain 版本
+- 生成的内容按会话保存在工作空间（userData/workspace 或配置的输出目录）
+- 应用配置保存在 userData 目录（如 `config.json`）
+- 需要 Node.js 18+ 和兼容的 LangChain / deepagents.js 版本
 
 ## 故障排除
 
