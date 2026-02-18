@@ -1,7 +1,9 @@
 /**
- * 通义 VL 适配器：纯 HTTP，chat/completions 多模态
+ * 通义 VL 适配器：同步接口，仅 endpoint
  */
-import type { VLAIConfig } from '../../../ai/types.js';
+import type { VLAIConfig } from '#backend/domain/inference/types.js';
+import { SyncInferenceBase } from '../../bases/sync-inference-base.js';
+import type { VLPortInput } from '../../port-types.js';
 
 export interface CallVLParams {
   cfg: VLAIConfig;
@@ -12,7 +14,7 @@ export interface CallVLParams {
 /** 调用通义多模态接口，返回助手回复文本（应为 JSON 数组字符串） */
 export async function callVLDashScope(params: CallVLParams): Promise<string> {
   const { cfg, dataUrl, prompt } = params;
-  const chatUrl = cfg.baseUrl.replace(/\/$/, '') + '/chat/completions';
+  const chatUrl = cfg.endpoint.replace(/\/$/, '') + '/chat/completions';
   const body = {
     model: cfg.model,
     messages: [
@@ -46,4 +48,15 @@ export async function callVLDashScope(params: CallVLParams): Promise<string> {
     throw new Error('VL API did not return message content');
   }
   return content;
+}
+
+/** 通义 VL 同步端口适配器 */
+export class VLDashScopePort extends SyncInferenceBase<VLPortInput, string> {
+  constructor(private readonly cfg: VLAIConfig) {
+    super();
+  }
+
+  protected async _execute(input: VLPortInput): Promise<string> {
+    return callVLDashScope({ cfg: this.cfg, dataUrl: input.dataUrl, prompt: input.prompt });
+  }
 }

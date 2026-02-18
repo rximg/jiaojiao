@@ -2,9 +2,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { loadConfig, lastLoadedConfigPath } from '../backend/app-config';
-import { getAIConfig } from '../backend/ai/config';
-import { createLLMFromAIConfig } from '../backend/ai/llm/index';
-import type { LLMAIConfig } from '../backend/ai/types';
+import { getAIConfig } from '../backend/infrastructure/inference/ai-config.js';
+import { createLLMFromAIConfig } from '../backend/infrastructure/inference/adapters/llm/index.js';
+import type { LLMAIConfig } from '#backend/domain/inference/types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

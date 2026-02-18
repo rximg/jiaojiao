@@ -1,7 +1,9 @@
 /**
- * 智谱 T2I 适配器：纯 HTTP，POST + 轮询，返回 imageUrl
+ * 智谱 T2I 适配器：异步接口（endpoint 提交 + taskEndpoint 轮询），返回 imageUrl
  */
-import type { T2IAIConfig } from '../../../ai/types.js';
+import type { T2IAIConfig } from '#backend/domain/inference/types.js';
+import { AsyncInferenceBase } from '../../bases/async-inference-base.js';
+import type { T2IPortInput } from '../../port-types.js';
 
 const POLL_INTERVAL_MS = 3000;
 const MAX_ATTEMPTS = 60;
@@ -72,4 +74,24 @@ export async function pollForImageUrlZhipu(cfg: T2IAIConfig, taskId: string): Pr
     }
   }
   throw new Error(`T2I task timeout after ${MAX_ATTEMPTS} attempts`);
+}
+
+/** 智谱 T2I 异步端口适配器 */
+export class T2IZhipuPort extends AsyncInferenceBase<T2IPortInput, string, string> {
+  constructor(private readonly cfg: T2IAIConfig) {
+    super();
+  }
+
+  protected async _submit(input: T2IPortInput): Promise<string> {
+    const params = {
+      size: (input.parameters.size as string) ?? '1280x1280',
+      quality: (input.parameters.quality as string) ?? 'hd',
+      negative_prompt: input.parameters.negative_prompt as string | undefined,
+    };
+    return submitTaskZhipu(this.cfg, input.prompt, params);
+  }
+
+  protected async _poll(taskId: string): Promise<string> {
+    return pollForImageUrlZhipu(this.cfg, taskId);
+  }
 }

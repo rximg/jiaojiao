@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { callVLDashScope } from '../backend/ai/vl/dashscope';
-import { callVLZhipu } from '../backend/ai/vl/zhipu';
+import { callVLDashScope } from '../backend/infrastructure/inference/adapters/vl/dashscope.js';
+import { callVLZhipu } from '../backend/infrastructure/inference/adapters/vl/zhipu.js';
 
 vi.mock('../backend/app-config', () => ({ loadConfig: vi.fn() }));
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { getMultimodalPort } from '../backend/infrastructure/repositories.js';
+import { getMultimodalPortAsync } from '../backend/infrastructure/repositories.js';
 import { loadConfig } from '../backend/agent/config';
 
 const realFetch = globalThis.fetch;
@@ -55,7 +55,7 @@ describe('T2I generateImage() [unit]', () => {
   });
 
   it('writes image file to workspace session directory', async () => {
-    const port = getMultimodalPort();
+    const port = await getMultimodalPortAsync();
     const result = await port.generateImage({ prompt: 'any', size: '1024*1024', sessionId });
     const exists = await fs
       .access(result.imagePath)

@@ -1,9 +1,9 @@
 /**
  * 统一内容输入解析：PromptInput / TextsInput
- * 供 Tools 复用「直接使用 vs 从文件加载」的分支逻辑
+ * 供 Tools 与 MultimodalPortImpl 复用「直接使用 vs 从文件加载」的分支逻辑
  */
 import path from 'path';
-import type { PromptInput, TextsInput } from '#backend/domain/inference/value-objects/prompt-input.js';
+import type { PromptInput, TextsInput } from './prompt-input.js';
 
 export type { PromptInput, TextsInput };
 

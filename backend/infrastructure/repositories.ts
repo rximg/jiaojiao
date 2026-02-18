@@ -9,7 +9,15 @@ import type { SessionRepository } from '#backend/domain/session/repositories/ses
 import type { ArtifactRepository } from '#backend/domain/workspace/repositories/artifact-repository.js';
 import type { ConfigRepository } from '#backend/domain/configuration/repositories/config-repository.js';
 import type { MultimodalPort } from '#backend/domain/inference/ports/multimodal-port.js';
+import type { T2IAIConfig, TTSAIConfig, VLAIConfig } from '#backend/domain/inference/types.js';
 import { MultimodalPortImpl } from './inference/multimodal-port-impl.js';
+import { getAIConfig } from './inference/ai-config.js';
+import {
+  createVLPort,
+  createT2IPort,
+  createTTSSyncPort,
+  createTTSAsyncPort,
+} from './inference/create-ports.js';
 
 let _sessionRepo: SessionRepository | null = null;
 let _artifactRepo: ArtifactRepository | null = null;
@@ -45,14 +53,50 @@ export function getConfigRepository(): ConfigRepository {
   return _configRepo;
 }
 
-let _multimodalPort: MultimodalPort | null = null;
+let _multimodalPortPromise: Promise<MultimodalPort> | null = null;
 
 /**
- * 获取多模态端口（单例）
+ * 创建多模态端口（使用 getAIConfig 构建，供注入或单例使用）
+ */
+export async function createMultimodalPort(): Promise<MultimodalPort> {
+  const [t2iCfg, ttsCfg, vlCfg] = await Promise.all([
+    getAIConfig('t2i'),
+    getAIConfig('tts'),
+    getAIConfig('vl'),
+  ]);
+  const t2i = t2iCfg as T2IAIConfig;
+  const tts = ttsCfg as TTSAIConfig;
+  const vl = vlCfg as VLAIConfig;
+  const artifactRepo = getArtifactRepository();
+  const workspace = getWorkspaceFilesystem();
+  return new MultimodalPortImpl({
+    vlPort: createVLPort(vl),
+    t2iPort: createT2IPort(t2i),
+    ttsSyncPort: createTTSSyncPort(tts),
+    ttsAsyncPort: createTTSAsyncPort(tts),
+    vlCfg: vl,
+    t2iCfg: t2i,
+    ttsCfg: tts,
+    artifactRepo,
+    getWorkspaceRoot: () => workspace.root,
+  });
+}
+
+/**
+ * 获取多模态端口（异步单例，首次调用时通过 getAIConfig 构建）
+ */
+export async function getMultimodalPortAsync(): Promise<MultimodalPort> {
+  if (!_multimodalPortPromise) {
+    _multimodalPortPromise = createMultimodalPort();
+  }
+  return _multimodalPortPromise;
+}
+
+/**
+ * @deprecated 使用 getMultimodalPortAsync() 或注入的 MultimodalPort。保留仅为兼容，内部改为异步单例。
  */
 export function getMultimodalPort(): MultimodalPort {
-  if (!_multimodalPort) {
-    _multimodalPort = new MultimodalPortImpl();
-  }
-  return _multimodalPort;
+  throw new Error(
+    'getMultimodalPort() 已废弃，请使用 getMultimodalPortAsync() 或通过 ToolContext 注入 MultimodalPort'
+  );
 }

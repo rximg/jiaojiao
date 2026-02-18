@@ -3,9 +3,9 @@ import { createAgent } from 'langchain';
 import { createDeepAgent, createFilesystemMiddleware, FilesystemBackend, type SubAgent, type CompiledSubAgent } from 'deepagents';
 import { ConfigLoader, type AgentConfig } from './ConfigLoader.js';
 import { createLLMCallbacks } from './LLMCallbacks.js';
-import { getAIConfig } from '../ai/config.js';
-import { createLLMFromAIConfig } from '../ai/llm/index.js';
-import type { LLMAIConfig } from '../ai/types.js';
+import { getAIConfig } from '../infrastructure/inference/ai-config.js';
+import { createLLMFromAIConfig } from '../infrastructure/inference/adapters/llm/index.js';
+import type { LLMAIConfig } from '#backend/domain/inference/types.js';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { DEFAULT_SESSION_ID, getWorkspaceFilesystem, resolveWorkspaceRoot } from '../services/fs.js';
@@ -60,7 +60,7 @@ export class AgentFactory {
   }
 
   /**
-   * 创建LLM实例（通过 ai/llm 统一层，支持 dashscope / zhipu）
+   * 创建 LLM 实例（通过 infrastructure/inference/adapters/llm，支持 dashscope / zhipu）
    */
   private async createLLM(_sessionId?: string): Promise<ChatOpenAI> {
     const cfg = (await getAIConfig('llm')) as LLMAIConfig;

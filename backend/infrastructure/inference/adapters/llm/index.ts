@@ -1,8 +1,7 @@
 /**
- * LLM 工厂：根据 provider 创建 LangChain Chat 模型
+ * LLM 工厂：根据 provider 创建 LangChain Chat 模型（构建时由 getAIConfig('llm') 注入）
  */
-import type { Provider } from '../types.js';
-import type { LLMAIConfig } from '../types.js';
+import type { Provider, LLMAIConfig } from '#backend/domain/inference/types.js';
 import { createLLMDashScope, type CreateLLMOptions, type ChatModelInstance } from './dashscope.js';
 import { createLLMZhipu } from './zhipu.js';
 
@@ -12,9 +11,6 @@ export interface CreateLLMParams extends LLMAIConfig {
   callbacks?: CreateLLMOptions['callbacks'];
 }
 
-/**
- * 根据 provider 创建 LLM 实例（与供应商无关的入口）
- */
 export function createLLM(provider: Provider, options: CreateLLMOptions): ChatModelInstance {
   if (provider === 'zhipu') {
     return createLLMZhipu(options);
@@ -22,13 +18,10 @@ export function createLLM(provider: Provider, options: CreateLLMOptions): ChatMo
   return createLLMDashScope(options);
 }
 
-/**
- * 从完整 LLM 配置创建（含 callbacks），供 AgentFactory 等调用
- */
 export function createLLMFromAIConfig(cfg: CreateLLMParams): ChatModelInstance {
   const opts: CreateLLMOptions = {
     apiKey: cfg.apiKey,
-    baseURL: cfg.baseURL,
+    endpoint: cfg.endpoint,
     model: cfg.model,
     temperature: cfg.temperature,
     maxTokens: cfg.maxTokens,

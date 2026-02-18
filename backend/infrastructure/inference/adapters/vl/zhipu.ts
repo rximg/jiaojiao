@@ -1,7 +1,9 @@
 /**
- * 智谱 VL 适配器：纯 HTTP，chat/completions 多模态
+ * 智谱 VL 适配器：同步接口，仅 endpoint
  */
-import type { VLAIConfig } from '../../../ai/types.js';
+import type { VLAIConfig } from '#backend/domain/inference/types.js';
+import { SyncInferenceBase } from '../../bases/sync-inference-base.js';
+import type { VLPortInput } from '../../port-types.js';
 
 export interface CallVLParams {
   cfg: VLAIConfig;
@@ -12,7 +14,7 @@ export interface CallVLParams {
 /** 调用智谱多模态接口，返回助手回复文本（应为 JSON 数组字符串） */
 export async function callVLZhipu(params: CallVLParams): Promise<string> {
   const { cfg, dataUrl, prompt } = params;
-  const chatUrl = cfg.baseUrl.replace(/\/$/, '') + '/chat/completions';
+  const chatUrl = cfg.endpoint.replace(/\/$/, '') + '/chat/completions';
   const body = {
     model: cfg.model,
     messages: [
@@ -46,4 +48,15 @@ export async function callVLZhipu(params: CallVLParams): Promise<string> {
     throw new Error('VL API did not return message content');
   }
   return content;
+}
+
+/** 智谱 VL 同步端口适配器 */
+export class VLZhipuPort extends SyncInferenceBase<VLPortInput, string> {
+  constructor(private readonly cfg: VLAIConfig) {
+    super();
+  }
+
+  protected async _execute(input: VLPortInput): Promise<string> {
+    return callVLZhipu({ cfg: this.cfg, dataUrl: input.dataUrl, prompt: input.prompt });
+  }
 }

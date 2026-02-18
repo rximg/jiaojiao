@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getAIConfig } from '../backend/ai/config';
+import { getAIConfig } from '../backend/infrastructure/inference/ai-config.js';
+import type { LLMAIConfig, VLAIConfig, TTSAIConfig, T2IAIConfig } from '#backend/domain/inference/types.js';
 
 vi.mock('../backend/app-config', () => ({
   loadConfig: vi.fn(),
@@ -30,7 +31,7 @@ describe('getAIConfig', () => {
     const cfg = await getAIConfig('llm');
     expect(cfg.provider).toBe('dashscope');
     expect(cfg.apiKey).toBe('sk-dashscope');
-    const llmCfg = cfg as import('../backend/ai/types').LLMAIConfig;
+    const llmCfg = cfg as LLMAIConfig;
     expect(llmCfg.baseURL).toContain('dashscope');
     expect(llmCfg.model).toBeDefined();
     expect(llmCfg.temperature).toBe(0.1);
@@ -48,7 +49,7 @@ describe('getAIConfig', () => {
     const cfg = await getAIConfig('llm');
     expect(cfg.provider).toBe('zhipu');
     expect(cfg.apiKey).toBe('sk-zhipu');
-    const llmCfg = cfg as import('../backend/ai/types').LLMAIConfig;
+    const llmCfg = cfg as LLMAIConfig;
     expect(llmCfg.baseURL).toContain('open.bigmodel.cn');
   });
 
@@ -56,15 +57,15 @@ describe('getAIConfig', () => {
     const cfg = await getAIConfig('vl');
     expect(cfg).toHaveProperty('provider');
     expect(cfg).toHaveProperty('apiKey');
-    const vlCfg = cfg as import('../backend/ai/types').VLAIConfig;
-    expect(vlCfg).toHaveProperty('baseUrl');
+    const vlCfg = cfg as VLAIConfig;
+    expect(vlCfg).toHaveProperty('endpoint');
     expect(vlCfg).toHaveProperty('model');
     expect(vlCfg).toHaveProperty('prompt');
   });
 
   it('returns TTS config with endpoint and rateLimitMs', async () => {
     const cfg = await getAIConfig('tts');
-    const ttsCfg = cfg as import('../backend/ai/types').TTSAIConfig;
+    const ttsCfg = cfg as TTSAIConfig;
     expect(ttsCfg).toHaveProperty('endpoint');
     expect(ttsCfg).toHaveProperty('model');
     expect(typeof ttsCfg.rateLimitMs).toBe('number');
@@ -72,7 +73,7 @@ describe('getAIConfig', () => {
 
   it('returns T2I config with endpoint and taskEndpoint', async () => {
     const cfg = await getAIConfig('t2i');
-    const t2iCfg = cfg as import('../backend/ai/types').T2IAIConfig;
+    const t2iCfg = cfg as T2IAIConfig;
     expect(t2iCfg).toHaveProperty('endpoint');
     expect(t2iCfg).toHaveProperty('taskEndpoint');
     expect(t2iCfg).toHaveProperty('model');

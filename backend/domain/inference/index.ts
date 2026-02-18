@@ -11,4 +11,20 @@ export type {
   SynthesizeSpeechResult,
   GenerateScriptFromImageParams,
   GenerateScriptFromImageResult,
+  Provider,
+  AIAbility,
+  AIConfig,
+  LLMAIConfig,
+  TTSAIConfig,
+  T2IAIConfig,
+  VLAIConfig,
+  AiModelsSchema,
+  ProviderAbilityModelsConfig,
 } from './types.js';
+export {
+  resolvePromptInput,
+  resolveTextsInput,
+  normalizePromptInput,
+  normalizeTextsInput,
+  type WorkspaceFsLike,
+} from './value-objects/content-input.js';

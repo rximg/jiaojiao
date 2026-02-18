@@ -1,0 +1,8 @@
+# TTS 工具层配置（default_params、batch.delay）
+default_params:
+  voice: chinese_female
+  format: mp3
+  sample_rate: 24000
+batch:
+  enabled: true
+  delay: 2500

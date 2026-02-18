@@ -56,16 +56,13 @@ tools:
   delete_artifacts: {}       # 删除 session 下产物，重新生成前需先删除
   generate_image:
     enable: true
-    description: 生成绘本图片
-    config_path: ./ai/t2i_config.yaml
+    config_path: ./tools/t2i.yaml
   synthesize_speech:
     enable: true
-    description: 合成语音
-    config_path: ./ai/tts_config.yaml
+    config_path: ./tools/tts.yaml
   generate_script_from_image:
     enable: true
-    description: 根据图片路径，用视觉模型生成台词及坐标
-    config_path: ./ai/vl_script_config.yaml
+    config_path: ./tools/vl_script.yaml
 
 # SubAgent配置
 sub_agents:

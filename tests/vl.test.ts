@@ -2,11 +2,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { describe, it, expect, beforeAll } from 'vitest';
 import sharp from 'sharp';
-import { getAIConfig } from '../backend/ai/config';
-import { callVLZhipu } from '../backend/ai/vl/zhipu';
-import { callVLDashScope } from '../backend/ai/vl/dashscope';
+import { getAIConfig } from '../backend/infrastructure/inference/ai-config.js';
+import { callVLZhipu } from '../backend/infrastructure/inference/adapters/vl/zhipu.js';
+import { callVLDashScope } from '../backend/infrastructure/inference/adapters/vl/dashscope.js';
 import { loadConfig, lastLoadedConfigPath } from '../backend/app-config';
-import type { VLAIConfig } from '../backend/ai/types';
+import type { VLAIConfig } from '#backend/domain/inference/types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

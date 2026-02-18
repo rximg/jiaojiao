@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { submitTaskDashScope, pollForImageUrlDashScope } from '../backend/ai/t2i/dashscope';
-import { submitTaskZhipu, pollForImageUrlZhipu } from '../backend/ai/t2i/zhipu';
+import { submitTaskDashScope, pollForImageUrlDashScope } from '../backend/infrastructure/inference/adapters/t2i/dashscope.js';
+import { submitTaskZhipu, pollForImageUrlZhipu } from '../backend/infrastructure/inference/adapters/t2i/zhipu.js';
 
 const dashscopeCfg = {
   provider: 'dashscope' as const,

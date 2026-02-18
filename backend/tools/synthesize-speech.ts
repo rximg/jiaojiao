@@ -1,19 +1,33 @@
 /**
- * synthesize_speech：语音合成，调用 MultimodalPort
+ * synthesize_speech：语音合成，调用 MultimodalPort（line_numbers 在 tools 层，端口只接收 items）
  */
+import path from 'path';
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { getArtifactRepository, getMultimodalPort } from '../infrastructure/repositories.js';
-import type { SynthesizeSpeechParams } from '#backend/domain/inference/types.js';
+import { getArtifactRepository, getMultimodalPortAsync } from '../infrastructure/repositories.js';
+import { readLineNumbers, appendEntries, type LineNumberEntry } from './line-numbers.js';
+import { loadConfig } from '../app-config.js';
 import type { ToolConfig, ToolContext } from './registry.js';
 import { registerTool } from './registry.js';
+
+function sanitizeForFilename(text: string, maxLen = 40): string {
+  const noPunctuation = text.replace(/[\s\p{P}\p{S}]/gu, '').trim();
+  const truncated = noPunctuation.slice(0, maxLen);
+  const safe = truncated.replace(/[/\\:*?"<>|]/g, '_');
+  return safe || 'line';
+}
 
 function create(config: ToolConfig, context: ToolContext) {
   const toolName = config.name ?? 'synthesize_speech';
   const description = config.description ?? '合成语音';
-  const defaultParams = config.serviceConfig?.service?.default_params ?? {};
+  const serviceConfig = config.serviceConfig as {
+    default_params?: Record<string, unknown>;
+    batch?: { delay?: number };
+  };
+  const defaultParams = serviceConfig?.default_params ?? {};
   const defaultVoice = (defaultParams.voice as string) ?? 'chinese_female';
   const defaultFormat = (defaultParams.format as string) ?? 'mp3';
+  const rateLimitMs = serviceConfig?.batch?.delay ?? 2000;
 
   return tool(
     async (params: { texts?: string[]; voice?: string; format?: string; sessionId?: string }) => {
@@ -25,13 +39,35 @@ function create(config: ToolConfig, context: ToolContext) {
       const scriptRelPath = 'lines/tts_confirmed.json';
       await artifactRepo.write(sessionId, scriptRelPath, JSON.stringify(texts, null, 2));
 
-      const port = getMultimodalPort();
-      return port.synthesizeSpeech({
-        content: { fromFile: scriptRelPath },
-        voice: (merged.voice as string) ?? defaultVoice,
-        format: (merged.format as string) ?? defaultFormat,
+      const appConfig = await loadConfig();
+      const ttsStartNumber = appConfig.storage?.ttsStartNumber ?? 6000;
+      const { nextNumber } = await readLineNumbers(ttsStartNumber);
+      const voice = (merged.voice as string) ?? defaultVoice;
+      const format = (merged.format as string) ?? defaultFormat;
+      const items = texts.map((text, i) => {
+        const num = nextNumber + i;
+        const relativePath = path.posix.join('audio', `${num}_${sanitizeForFilename(text)}.${format}`);
+        return { text, relativePath, number: num };
+      });
+
+      const port = await getMultimodalPortAsync();
+      const result = await port.synthesizeSpeech({
+        items,
+        voice,
+        format,
         sessionId,
-      } as SynthesizeSpeechParams);
+        rateLimitMs,
+      });
+
+      const newEntries: LineNumberEntry[] = items.map((p) => ({
+        number: p.number!,
+        sessionId,
+        relativePath: p.relativePath,
+        text: p.text,
+      }));
+      await appendEntries(newEntries, ttsStartNumber);
+
+      return result;
     },
     {
       name: toolName,

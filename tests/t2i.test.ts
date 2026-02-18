@@ -2,7 +2,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { promises as fs } from 'fs';
-import { getMultimodalPort } from '../backend/infrastructure/repositories.js';
+import { getMultimodalPortAsync } from '../backend/infrastructure/repositories.js';
 import { loadConfig, lastLoadedConfigPath } from '../backend/app-config';
 import { getWorkspaceFilesystem } from '../backend/services/fs';
 
@@ -106,7 +106,7 @@ describe('T2I generateImage()', () => {
     const config = await loadConfig();
     const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
     await workspaceFs.writeFile(sessionId, 'image_prompt.txt', 'A cute cartoon cat on a sunny windowsill.', 'utf-8');
-    const port = getMultimodalPort();
+    const port = await getMultimodalPortAsync();
     const result = await port.generateImage({
       prompt: { fromFile: 'image_prompt.txt' },
       size: '1024*1024',

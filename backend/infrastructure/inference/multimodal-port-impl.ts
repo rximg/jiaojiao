@@ -1,9 +1,10 @@
 /**
- * MultimodalPort 实现：委托给现有 ai/* 模块
+ * MultimodalPort 实现：通过 SyncInferencePort / AsyncInferencePort 调用 VL / T2I / TTS，仅 resolve、trace、写 workspace。
  */
-import { generateImage } from '../../ai/t2i/index.js';
-import { synthesizeSpeech } from '../../ai/tts/index.js';
-import { generateScriptFromImage } from '../../ai/vl/index.js';
+import path from 'path';
+import { pathToFileURL } from 'node:url';
+import { promises as fs } from 'fs';
+import { resolvePromptInput } from '#backend/domain/inference/value-objects/content-input.js';
 import type {
   MultimodalPort,
   GenerateImageParams,
@@ -12,20 +13,312 @@ import type {
   SynthesizeSpeechResult,
   GenerateScriptFromImageParams,
   GenerateScriptFromImageResult,
+  ScriptLine,
+  T2IAIConfig,
+  TTSAIConfig,
+  VLAIConfig,
 } from '#backend/domain/inference/index.js';
+import type { ArtifactRepository } from '#backend/domain/workspace/repositories/artifact-repository.js';
+import { traceAiRun } from '../../agent/langsmith-trace.js';
+import { pcmToMp3, pcmToWav } from '../../services/audio-format.js';
+import type { VLPort, T2IPort, TTSSyncPort, TTSAsyncPort } from './create-ports.js';
+
+const DEFAULT_SESSION_ID = 'default';
+
+const VL_FALLBACK_PROMPT = `你是一个有声绘本台词设计师，找出图片中的元素，给每个元素设计一个台词。返回一个列表，列表里是台词和对应元素坐标，坐标原点为图片左上角。 格式为：[{"text": "台词", "x": "x坐标", "y": "y坐标"}]`;
+
+export interface MultimodalPortImplDeps {
+  vlPort: VLPort;
+  t2iPort: T2IPort;
+  /** 同步 TTS（智谱）；与 ttsAsyncPort 二选一 */
+  ttsSyncPort: TTSSyncPort | null;
+  /** 异步 TTS（通义）；与 ttsSyncPort 二选一 */
+  ttsAsyncPort: TTSAsyncPort | null;
+  vlCfg: VLAIConfig;
+  t2iCfg: T2IAIConfig;
+  ttsCfg: TTSAIConfig;
+  artifactRepo: ArtifactRepository;
+  getWorkspaceRoot: () => string;
+}
+
+function parseAndValidateLines(content: string): ScriptLine[] {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(content);
+  } catch {
+    throw new Error('VL script response is not valid JSON');
+  }
+  if (!Array.isArray(raw)) {
+    throw new Error('VL script response must be a JSON array');
+  }
+  const lines: ScriptLine[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const item = raw[i];
+    if (item == null || typeof item !== 'object') {
+      throw new Error(`VL script item at index ${i} must be an object`);
+    }
+    const text = typeof item.text === 'string' ? item.text : String(item.text ?? '');
+    const x = typeof item.x === 'number' ? item.x : Number(item.x) || 0;
+    const y = typeof item.y === 'number' ? item.y : Number(item.y) || 0;
+    lines.push({ text, x, y });
+  }
+  return lines;
+}
+
+function resolveImageAbsolutePath(
+  imagePath: string,
+  sessionId: string,
+  workspaceRoot: string
+): string {
+  const normalized = imagePath.replace(/\\/g, '/').replace(/^\/+/, '');
+  const workspacesMatch = normalized.match(/outputs\/workspaces\/([^/]+)\/(.+)$/);
+  if (workspacesMatch) {
+    const sid = workspacesMatch[1];
+    const rel = workspacesMatch[2];
+    const targetSessionId = sid === sessionId ? sessionId : sid;
+    return path.join(workspaceRoot, targetSessionId, rel);
+  }
+  if (path.isAbsolute(imagePath)) {
+    return imagePath;
+  }
+  return path.join(workspaceRoot, sessionId, normalized);
+}
+
+async function readImageAsBase64(absolutePath: string): Promise<{ base64: string; mime: string }> {
+  const ext = path.extname(absolutePath).toLowerCase();
+  const mime =
+    ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : ext === '.webp' ? 'image/webp' : 'image/png';
+  const buffer = await fs.readFile(absolutePath);
+  return { base64: buffer.toString('base64'), mime };
+}
 
 export class MultimodalPortImpl implements MultimodalPort {
+  private readonly workspaceFsLike = {
+    sessionPath: (sessionId: string, rel: string) =>
+      this.deps.artifactRepo.resolvePath(sessionId, rel),
+  };
+
+  constructor(private readonly deps: MultimodalPortImplDeps) {}
+
   async generateImage(params: GenerateImageParams): Promise<GenerateImageResult> {
-    return generateImage(params as Parameters<typeof generateImage>[0]);
+    const sessionId = params.sessionId ?? DEFAULT_SESSION_ID;
+    const promptStr = await resolvePromptInput(
+      params.prompt,
+      sessionId,
+      this.workspaceFsLike
+    );
+    const { size = '1024*1024', style, count = 1 } = params;
+    const cfg = this.deps.t2iCfg;
+    const negativePrompt = [cfg.negativePrompt, params.negativePrompt, style].filter(Boolean).join(', ') || undefined;
+
+    const inputs = {
+      promptLength: promptStr.length,
+      size,
+      count,
+      sessionId,
+      provider: cfg.provider,
+      model: cfg.model,
+    };
+
+    return traceAiRun(
+      'inference.t2i',
+      'tool',
+      inputs,
+      async () => this.generateImageImpl(promptStr, sessionId, size, count, negativePrompt),
+      (result) => ({
+        imagePath: result.imagePath,
+        imageUri: result.imageUri,
+        imageUrl: result.imageUrl,
+        sessionId: result.sessionId,
+        _note: 'blob not recorded',
+      })
+    );
+  }
+
+  private async generateImageImpl(
+    prompt: string,
+    sessionId: string,
+    size: string,
+    count: number,
+    negativePrompt?: string
+  ): Promise<GenerateImageResult> {
+    const cfg = this.deps.t2iCfg;
+    const parameters: Record<string, unknown> =
+      cfg.provider === 'zhipu'
+        ? {
+            size: size.replace(/\*/g, 'x'),
+            quality: 'hd',
+            negative_prompt: negativePrompt,
+          }
+        : {
+            size,
+            max_images: count,
+            enable_interleave: true,
+            negative_prompt: negativePrompt,
+          };
+    const taskId = await this.deps.t2iPort.submit({ prompt, parameters });
+    const imageUrl = await this.deps.t2iPort.poll(taskId);
+
+    const imageRes = await fetch(imageUrl);
+    if (!imageRes.ok) {
+      throw new Error(`T2I image download failed: ${imageRes.status} ${imageRes.statusText}`);
+    }
+    const buffer = Buffer.from(await imageRes.arrayBuffer());
+    const imageFileName = `image_${Date.now()}_${Math.random().toString(36).slice(2, 9)}.png`;
+    const relativePath = path.posix.join('images', imageFileName);
+    await this.deps.artifactRepo.write(sessionId, relativePath, buffer);
+    const imagePath = this.deps.artifactRepo.resolvePath(sessionId, relativePath);
+    const imageUri = pathToFileURL(imagePath).href;
+
+    return {
+      imagePath,
+      imageUri,
+      imageUrl,
+      sessionId,
+    };
   }
 
   async synthesizeSpeech(params: SynthesizeSpeechParams): Promise<SynthesizeSpeechResult> {
-    return synthesizeSpeech(params as Parameters<typeof synthesizeSpeech>[0]);
+    const { items, voice = 'chinese_female', format = 'mp3', sessionId = DEFAULT_SESSION_ID, rateLimitMs } = params;
+    const cfg = this.deps.ttsCfg;
+
+    const inputs = {
+      itemsCount: items.length,
+      voice,
+      format,
+      sessionId,
+      provider: cfg.provider,
+      model: cfg.model,
+    };
+
+    const delayMs = rateLimitMs ?? 2000;
+    return traceAiRun(
+      'inference.tts',
+      'tool',
+      inputs,
+      () => this.synthesizeSpeechImpl(items, voice, format, sessionId, delayMs),
+      (result) => ({
+        audioPathsCount: result.audioPaths.length,
+        audioPaths: result.audioPaths,
+        numbers: result.numbers,
+        sessionId: result.sessionId,
+        _note: 'audio blob not recorded',
+      })
+    );
+  }
+
+  private async synthesizeSpeechImpl(
+    items: SynthesizeSpeechParams['items'],
+    voice: string,
+    format: string,
+    sessionId: string,
+    delayMs: number
+  ): Promise<SynthesizeSpeechResult> {
+    const audioPaths: string[] = [];
+    const audioUris: string[] = [];
+    const ttsSync = this.deps.ttsSyncPort;
+    const ttsAsync = this.deps.ttsAsyncPort;
+    if (!ttsSync && !ttsAsync) {
+      throw new Error('TTS 未配置：需提供 ttsSyncPort（智谱）或 ttsAsyncPort（通义）');
+    }
+    for (let i = 0; i < items.length; i++) {
+      if (i > 0) await new Promise((r) => setTimeout(r, delayMs));
+      const { text, relativePath } = items[i];
+      let buffer: Buffer;
+      if (ttsSync) {
+        const { pcmBuffer, sampleRate, channels } = await ttsSync.execute({ text, voice });
+        buffer =
+          format === 'wav'
+            ? pcmToWav(pcmBuffer, { sampleRate, channels })
+            : await pcmToMp3(pcmBuffer, { sampleRate, channels });
+      } else {
+        const taskId = await ttsAsync!.submit({ text, voice });
+        const { audioUrl } = await ttsAsync!.poll(taskId);
+        const res = await fetch(audioUrl);
+        if (!res.ok) {
+          throw new Error(`TTS audio download failed: ${res.status} ${res.statusText}`);
+        }
+        buffer = Buffer.from(await res.arrayBuffer());
+      }
+      await this.deps.artifactRepo.write(sessionId, relativePath, buffer);
+      const absPath = this.deps.artifactRepo.resolvePath(sessionId, relativePath);
+      audioPaths.push(absPath);
+      audioUris.push(pathToFileURL(absPath).href);
+    }
+
+    const numbers = items.map((it) => it.number).filter((n): n is number => n !== undefined);
+
+    return {
+      audioPaths,
+      audioUris,
+      numbers: numbers.length ? numbers : items.map((_, idx) => idx),
+      sessionId,
+    };
   }
 
   async generateScriptFromImage(
     params: GenerateScriptFromImageParams
   ): Promise<GenerateScriptFromImageResult> {
-    return generateScriptFromImage(params as Parameters<typeof generateScriptFromImage>[0]);
+    const sessionId = params.sessionId ?? DEFAULT_SESSION_ID;
+    const cfg = this.deps.vlCfg;
+    const inputs = {
+      imagePath: params.imagePath,
+      sessionId,
+      provider: cfg.provider,
+      model: cfg.model,
+    };
+
+    return traceAiRun(
+      'inference.vl',
+      'tool',
+      inputs,
+      () => this.generateScriptFromImageImpl(params),
+      (result) => ({
+        linesCount: result.lines.length,
+        scriptPath: result.scriptPath,
+        sessionId: result.sessionId,
+        _note: 'image and lines not recorded',
+      })
+    );
+  }
+
+  private async generateScriptFromImageImpl(
+    params: GenerateScriptFromImageParams
+  ): Promise<GenerateScriptFromImageResult> {
+    const sessionId = params.sessionId ?? DEFAULT_SESSION_ID;
+    const workspaceRoot = this.deps.getWorkspaceRoot();
+    const absolutePath = resolveImageAbsolutePath(params.imagePath, sessionId, workspaceRoot);
+    try {
+      await fs.access(absolutePath);
+    } catch {
+      throw new Error(`Image file not found: ${absolutePath}`);
+    }
+
+    const { base64, mime } = await readImageAsBase64(absolutePath);
+    const dataUrl = `data:${mime};base64,${base64}`;
+    const prompt =
+      params.prompt?.trim() ||
+      this.deps.vlCfg.prompt?.trim() ||
+      VL_FALLBACK_PROMPT;
+    const fullPrompt = params.userPrompt?.trim()
+      ? `${prompt}\n\n用户补充或修改要求：\n${params.userPrompt.trim()}`
+      : prompt;
+
+    const content = await this.deps.vlPort.execute({
+      dataUrl,
+      prompt: fullPrompt,
+    });
+
+    const lines = parseAndValidateLines(content);
+    const imageBasename = path.basename(absolutePath, path.extname(absolutePath));
+    const scriptRelativePath = `lines/${imageBasename}.json`;
+    await this.deps.artifactRepo.write(
+      sessionId,
+      scriptRelativePath,
+      JSON.stringify(lines, null, 2)
+    );
+    const scriptPath = this.deps.artifactRepo.resolvePath(sessionId, scriptRelativePath);
+
+    return { lines, scriptPath, sessionId };
   }
 }

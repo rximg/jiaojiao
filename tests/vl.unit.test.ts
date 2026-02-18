@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { callVLZhipu } from '../backend/ai/vl/zhipu';
-import { callVLDashScope } from '../backend/ai/vl/dashscope';
+import { callVLZhipu } from '../backend/infrastructure/inference/adapters/vl/zhipu.js';
+import { callVLDashScope } from '../backend/infrastructure/inference/adapters/vl/dashscope.js';
 
 const realFetch = globalThis.fetch;
 

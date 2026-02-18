@@ -1,9 +1,9 @@
 /**
- * generate_script_from_image：以图生剧本，调用 MultimodalPort
+ * generate_script_from_image：以图生剧本，调用 MultimodalPort（prompt 来自 config/tools/vl_script.yaml）
  */
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { getMultimodalPort } from '../infrastructure/repositories.js';
+import { getMultimodalPortAsync } from '../infrastructure/repositories.js';
 import type { GenerateScriptFromImageParams } from '#backend/domain/inference/types.js';
 import type { ToolConfig, ToolContext } from './registry.js';
 import { registerTool } from './registry.js';
@@ -11,17 +11,19 @@ import { registerTool } from './registry.js';
 function create(config: ToolConfig, context: ToolContext) {
   const toolName = config.name ?? 'generate_script_from_image';
   const description = config.description ?? '根据图片路径，用视觉模型生成台词及坐标';
+  const promptFromConfig = (config.serviceConfig as { prompt?: string })?.prompt as string | undefined;
 
   return tool(
     async (params: { imagePath: string; sessionId?: string; userPrompt?: string }) => {
       const merged = await context.requestApprovalViaHITL('ai.vl_script', params as Record<string, unknown>);
       const sessionId = (merged.sessionId as string) || context.getDefaultSessionId();
 
-      const port = getMultimodalPort();
+      const port = await getMultimodalPortAsync();
       return port.generateScriptFromImage({
         imagePath: merged.imagePath as string,
         sessionId,
         userPrompt: merged.userPrompt as string | undefined,
+        prompt: promptFromConfig,
       } as GenerateScriptFromImageParams);
     },
     {

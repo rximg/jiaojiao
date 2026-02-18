@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createLLM, createLLMFromAIConfig } from '../backend/ai/llm/index';
+import { createLLM, createLLMFromAIConfig } from '../backend/infrastructure/inference/adapters/llm/index.js';
 
 describe('createLLM', () => {
   const baseOptions = {

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { getMultimodalPort } from '../backend/infrastructure/repositories.js';
+import { getMultimodalPortAsync } from '../backend/infrastructure/repositories.js';
 import { loadConfig } from '../backend/agent/config';
 
 const realFetch = globalThis.fetch;
@@ -48,8 +48,9 @@ describe('TTS synthesizeSpeech() [unit]', () => {
 
   it('writes audio files to workspace session directory', async () => {
     const texts = ['a', 'b'];
-    const port = getMultimodalPort();
-    const result = await port.synthesizeSpeech({ content: texts, format: 'mp3', sessionId });
+    const port = await getMultimodalPortAsync();
+    const items = texts.map((t, i) => ({ text: t, relativePath: `audio/${i}_${t}.mp3` }));
+    const result = await port.synthesizeSpeech({ items, format: 'mp3', sessionId });
 
     expect(result.audioPaths.length).toBe(2);
     expect(result.audioUris.length).toBe(2);

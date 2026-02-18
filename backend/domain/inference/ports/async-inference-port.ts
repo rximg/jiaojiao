@@ -1,5 +1,5 @@
 /**
- * 异步推理端口：submit + poll 模式
+ * 异步推理端口：submit + poll 模式（endpoint 提交，taskEndpoint 轮询）
  */
 export interface AsyncInferencePort<TInput, TTaskId, TOutput> {
   submit(input: TInput): Promise<TTaskId>;
