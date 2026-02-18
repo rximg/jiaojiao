@@ -10,7 +10,6 @@ import { loadConfig, lastLoadedConfigPath } from '../../../backend/app-config';
 import { resolveWorkspaceRoot } from '../../../backend/services/fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const runIntegration = process.env.RUN_INTEGRATION_TESTS === 'true';
 const testProvider = process.env.TEST_API_PROVIDER === 'zhipu' || process.env.TEST_API_PROVIDER === 'dashscope' ? process.env.TEST_API_PROVIDER : undefined;
 let hasKey = false;
 
@@ -28,14 +27,14 @@ describe('Tools / synthesize_speech', () => {
       const config = await loadConfig();
       const provider = (testProvider ?? config.agent?.provider ?? 'dashscope') as 'dashscope' | 'zhipu';
       hasKey = !!((config.apiKeys as Record<string, string>)[provider]?.trim());
-      debugLog('[TTS] runIntegration=' + runIntegration + ' hasKey=' + hasKey);
+      debugLog('[TTS] hasKey=' + hasKey);
     } catch {
       hasKey = false;
     }
   });
 
   it('should generate audio files', async (ctx) => {
-    if (!hasKey || !runIntegration) ctx.skip();
+    if (!hasKey) ctx.skip();
     const texts = ['你好，世界！', '这是一次 TTS 测试。'];
     const port = await getMultimodalPortAsync();
     const items = texts.map((text, i) => ({ text, relativePath: `audio/test_${i}.mp3` }));

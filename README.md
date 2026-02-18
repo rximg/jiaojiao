@@ -64,9 +64,6 @@ npm install --legacy-peer-deps
 ```env
 DASHSCOPE_API_KEY=你的阿里百炼API Key
 DASHSCOPE_MODEL=qwen-plus
-# 仅当你希望在测试中真实调用外部API时设为 true
-RUN_INTEGRATION_TESTS=false
-
 # 可选：为文生图/语音单独配置模型与端点（你的账户权限为准）
 # 文生图（T2I）
 DASHSCOPE_T2I_MODEL=wan2.6-i2v
@@ -92,7 +89,7 @@ npm run electron:build
 
 ### 5. 运行测试（含集成测试与供应商选择）
 
-API Key 来自应用设置（用户目录配置）。集成测试需设置 `RUN_INTEGRATION_TESTS=true`，并可通过环境变量或脚本选择只测智谱、只测通义或两者都测：
+API Key 来自应用设置（用户目录配置）。集成测试会调用真实接口，需在应用中配置 Key；可通过脚本或环境变量选择只测智谱或只测通义：
 
 ```bash
 # 仅本地单元测试（不调真实 API）
@@ -105,12 +102,11 @@ npm run test:integration:zhipu
 npm run test:integration:dashscope
 
 # 集成测试：先测智谱再测通义（两轮）
-npm run test:integration:both
+npm run test:integration:all
 ```
 
-也可用环境变量手动控制（需先在应用设置中配置对应 API Key）：
+环境变量（需先在应用设置中配置对应 API Key）：
 
-- `RUN_INTEGRATION_TESTS=true`：启用集成测试
 - `TEST_API_PROVIDER=zhipu`：本次只测智谱
 - `TEST_API_PROVIDER=dashscope`：本次只测通义
 - 不设 `TEST_API_PROVIDER`：使用应用配置中的默认 provider

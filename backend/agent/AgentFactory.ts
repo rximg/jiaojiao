@@ -41,8 +41,13 @@ export class AgentFactory {
     this.projectRoot = projectRoot;
     this.configLoader = new ConfigLoader(configDir, projectRoot);
 
-    // 加载主配置
+    // 加载主配置（configDir 应与 Electron getBackendConfigDir() 一致，打包后为 resources/backend/config）
+    const mainConfigPath = configPath ?? path.join(configDir, 'main_agent_config.yaml');
     this.agentConfig = this.configLoader.loadMainConfig(configPath);
+    if (this.agentConfig.sub_agents == null || typeof this.agentConfig.sub_agents !== 'object') {
+      console.warn('[AgentFactory] 主配置缺少 sub_agents，请检查是否加载了正确的 main_agent_config.yaml:', mainConfigPath);
+      this.agentConfig.sub_agents = {};
+    }
 
     // 验证配置
     const validation = this.configLoader.validateConfig(this.agentConfig);
@@ -92,8 +97,9 @@ export class AgentFactory {
    */
   private async createSubAgents(sessionId: string = DEFAULT_SESSION_ID): Promise<Array<SubAgent | CompiledSubAgent>> {
     const subAgents: Array<SubAgent | CompiledSubAgent> = [];
+    const subAgentsConfig = this.agentConfig.sub_agents ?? {};
 
-    for (const [key, subEntry] of Object.entries(this.agentConfig.sub_agents)) {
+    for (const [key, subEntry] of Object.entries(subAgentsConfig)) {
       if (!subEntry.enable || !subEntry.config) {
         continue;
       }

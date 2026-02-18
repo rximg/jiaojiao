@@ -1,5 +1,5 @@
 /**
- * Inference 层：LLM 适配器
+ * Inference 层：LLM 适配器（集成测试调用真实 LLM 接口 DashScope/智谱）
  */
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -10,7 +10,6 @@ import { createLLMFromAIConfig } from '../../../backend/infrastructure/inference
 import type { LLMAIConfig } from '#backend/domain/inference/types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const runIntegration = process.env.RUN_INTEGRATION_TESTS === 'true';
 const testProvider = process.env.TEST_API_PROVIDER === 'zhipu' || process.env.TEST_API_PROVIDER === 'dashscope' ? process.env.TEST_API_PROVIDER : undefined;
 let hasKey = false;
 
@@ -26,14 +25,14 @@ describe('Inference / LLM', () => {
       const config = await loadConfig();
       const provider = testProvider ?? (config.agent?.provider as string) ?? 'dashscope';
       hasKey = !!((config.apiKeys as Record<string, string>)[provider]?.trim());
-      debugLog(`[LLM] runIntegration=${runIntegration} hasKey=${hasKey} path=${lastLoadedConfigPath ?? ''}`);
+      debugLog(`[LLM] hasKey=${hasKey} path=${lastLoadedConfigPath ?? ''}`);
     } catch {
       hasKey = false;
     }
   });
 
   it('should return non-empty response', async (ctx) => {
-    if (!hasKey || !runIntegration) ctx.skip();
+    if (!hasKey) ctx.skip();
     const cfg = (await getAIConfig('llm')) as LLMAIConfig;
     const llm = createLLMFromAIConfig(cfg);
     const res = await llm.invoke('用一句话介绍你自己');

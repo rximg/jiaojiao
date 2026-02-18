@@ -10,7 +10,6 @@ import { loadConfig } from '../../../backend/app-config';
 import { getWorkspaceFilesystem, resolveWorkspaceRoot } from '../../../backend/services/fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const runIntegration = process.env.RUN_INTEGRATION_TESTS === 'true';
 const testProvider = process.env.TEST_API_PROVIDER === 'zhipu' || process.env.TEST_API_PROVIDER === 'dashscope' ? process.env.TEST_API_PROVIDER : undefined;
 let hasKey = false;
 const createdFiles: string[] = [];
@@ -29,7 +28,7 @@ describe('Tools / generate_image', () => {
       const config = await loadConfig();
       const provider = (testProvider ?? config.agent?.provider ?? 'dashscope') as 'dashscope' | 'zhipu';
       hasKey = !!((config.apiKeys as Record<string, string>)[provider]?.trim());
-      debugLog(`[T2I] runIntegration=${runIntegration} hasKey=${hasKey}`);
+      debugLog(`[T2I] hasKey=${hasKey}`);
     } catch {
       hasKey = false;
     }
@@ -42,7 +41,7 @@ describe('Tools / generate_image', () => {
   });
 
   it('should generate an image from prompt file', async (ctx) => {
-    if (!hasKey || !runIntegration) ctx.skip();
+    if (!hasKey) ctx.skip();
     const workspaceFs = getWorkspaceFilesystem();
     await workspaceFs.writeFile(sessionId, 'image_prompt.txt', 'A cute cartoon cat on a sunny windowsill.', 'utf-8');
     const port = await getMultimodalPortAsync();

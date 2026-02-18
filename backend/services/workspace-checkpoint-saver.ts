@@ -60,10 +60,21 @@ interface StoredWrite {
   valueBase64: string;
 }
 
+/** 当 LangGraph 内部调用 putWrites 时可能只传 checkpoint_ns/checkpoint_id 不传 thread_id，用此映射回退 */
+const threadIdByCheckpointKey = new Map<string, string>();
+/** 首次 getTuple 会带上 thread_id，putWrites 可能不带，用此作回退（单 run 场景） */
+let lastGetTupleThreadId: string | undefined;
+
+function checkpointKey(ns: string, cid: string): string {
+  return `${ns}:${cid}`;
+}
+
 export class WorkspaceCheckpointSaver extends BaseCheckpointSaver {
+  /** 当 LangGraph 子节点未传 thread_id 时使用（与 createMainAgent(sessionId) 一致） */
   constructor(
     private workspace: WorkspaceFilesystem,
-    serde?: InstanceType<typeof BaseCheckpointSaver>['serde']
+    serde?: InstanceType<typeof BaseCheckpointSaver>['serde'],
+    private defaultThreadId?: string
   ) {
     super(serde);
   }
@@ -74,6 +85,7 @@ export class WorkspaceCheckpointSaver extends BaseCheckpointSaver {
 
   async getTuple(config: RunnableConfig): Promise<CheckpointTuple | undefined> {
     const threadId = config.configurable?.thread_id;
+    if (threadId !== undefined) lastGetTupleThreadId = threadId;
     if (threadId === undefined) return undefined;
 
     const checkpointNs = config.configurable?.checkpoint_ns ?? '';
@@ -128,6 +140,7 @@ export class WorkspaceCheckpointSaver extends BaseCheckpointSaver {
     };
 
     if (checkpointId) {
+      threadIdByCheckpointKey.set(checkpointKey(checkpointNs, checkpointId), threadId);
       return readOne(checkpointId);
     }
 
@@ -192,8 +205,15 @@ export class WorkspaceCheckpointSaver extends BaseCheckpointSaver {
     metadata: CheckpointMetadata,
     _newVersions: ChannelVersions
   ): Promise<RunnableConfig> {
-    const threadId = config.configurable?.thread_id;
+    let threadId = config.configurable?.thread_id;
     const checkpointNs = config.configurable?.checkpoint_ns ?? '';
+    const parentCheckpointId = config.configurable?.checkpoint_id;
+    if (threadId === undefined && parentCheckpointId !== undefined) {
+      threadId = threadIdByCheckpointKey.get(checkpointKey(checkpointNs, parentCheckpointId));
+    }
+    if (threadId === undefined) {
+      threadId = lastGetTupleThreadId;
+    }
     if (threadId === undefined) {
       throw new Error('Failed to put checkpoint. The passed RunnableConfig is missing a required "thread_id" field in its "configurable" property.');
     }
@@ -216,6 +236,7 @@ export class WorkspaceCheckpointSaver extends BaseCheckpointSaver {
       JSON.stringify(stored, null, 0),
       'utf-8'
     );
+    threadIdByCheckpointKey.set(checkpointKey(checkpointNs, checkpoint.id), threadId);
 
     return {
       configurable: {
@@ -227,9 +248,15 @@ export class WorkspaceCheckpointSaver extends BaseCheckpointSaver {
   }
 
   async putWrites(config: RunnableConfig, writes: [string, unknown][], taskId: string): Promise<void> {
-    const threadId = config.configurable?.thread_id;
-    const checkpointNs = config.configurable?.checkpoint_ns;
+    let threadId = config.configurable?.thread_id;
+    const checkpointNs = config.configurable?.checkpoint_ns ?? '';
     const checkpointId = config.configurable?.checkpoint_id;
+    if (threadId === undefined && checkpointId !== undefined) {
+      threadId = threadIdByCheckpointKey.get(checkpointKey(checkpointNs, checkpointId));
+    }
+    if (threadId === undefined) {
+      threadId = lastGetTupleThreadId;
+    }
     if (threadId === undefined) {
       throw new Error('Failed to put writes. The passed RunnableConfig is missing a required "thread_id" field in its "configurable" property.');
     }

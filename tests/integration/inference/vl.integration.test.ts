@@ -1,5 +1,5 @@
 /**
- * Inference 层：VL 适配器，callVL 返回非空 content
+ * Inference 层：VL 适配器，callVL 返回非空 content（集成测试调用真实 VL 接口 DashScope/智谱）
  */
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -13,7 +13,6 @@ import type { VLAIConfig } from '#backend/domain/inference/types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const runIntegration = process.env.RUN_INTEGRATION_TESTS === 'true';
 const testProvider =
   process.env.TEST_API_PROVIDER === 'zhipu' || process.env.TEST_API_PROVIDER === 'dashscope'
     ? process.env.TEST_API_PROVIDER
@@ -46,7 +45,7 @@ async function createMinimalTestPng(): Promise<Buffer> {
 
 describe('Inference / VL', () => {
   beforeAll(async () => {
-    debugLog(`[VL] RUN_INTEGRATION_TESTS=${runIntegration} TEST_API_PROVIDER=${process.env.TEST_API_PROVIDER ?? '(未设置)'}`);
+    debugLog(`[VL] TEST_API_PROVIDER=${process.env.TEST_API_PROVIDER ?? '(未设置)'}`);
     try {
       const config = await loadConfig();
       const apiKeys = config.apiKeys as { dashscope?: string; zhipu?: string };
@@ -65,9 +64,7 @@ describe('Inference / VL', () => {
   });
 
   it('should return non-empty content from VL API (zhipu or dashscope)', async (ctx) => {
-    if (!hasKey || !runIntegration) {
-      ctx.skip();
-    }
+    if (!hasKey) ctx.skip();
     const cfg = (await getAIConfig('vl')) as VLAIConfig;
     const buf = await createMinimalTestPng();
     const dataUrl = `data:image/png;base64,${buf.toString('base64')}`;

@@ -185,6 +185,10 @@ export class ConfigLoader {
   loadMainConfig(configPath?: string): AgentConfig {
     const mainConfigPath = configPath || path.join(this.configDir, 'main_agent_config.yaml');
     const config = this.loadYaml<AgentConfig>(mainConfigPath);
+    // 确保 sub_agents 始终为对象，避免 YAML 缺失或打包后配置不完整导致 Object.entries 报错
+    if (config.sub_agents == null || typeof config.sub_agents !== 'object') {
+      config.sub_agents = {};
+    }
 
     // 加载工具配置（含 config_path 的从文件加载）
     if (config.tools) {
