@@ -21,7 +21,7 @@ import type {
 import type { ArtifactRepository } from '#backend/domain/workspace/repositories/artifact-repository.js';
 import { traceAiRun } from '../../agent/langsmith-trace.js';
 import { pcmToMp3, pcmToWav } from '../../services/audio-format.js';
-import type { VLPort, T2IPort, TTSSyncPort, TTSAsyncPort } from './create-ports.js';
+import type { VLPort, T2IPort, TTSSyncPort } from './create-ports.js';
 
 const DEFAULT_SESSION_ID = 'default';
 
@@ -30,10 +30,8 @@ const VL_FALLBACK_PROMPT = `你是一个有声绘本台词设计师，找出图�
 export interface MultimodalPortImplDeps {
   vlPort: VLPort;
   t2iPort: T2IPort;
-  /** 同步 TTS（智谱）；与 ttsAsyncPort 二选一 */
-  ttsSyncPort: TTSSyncPort | null;
-  /** 异步 TTS（通义）；与 ttsSyncPort 二选一 */
-  ttsAsyncPort: TTSAsyncPort | null;
+  /** 同步 TTS：智谱返回 PCM，通义返回 audioUrl */
+  ttsSyncPort: TTSSyncPort;
   vlCfg: VLAIConfig;
   t2iCfg: T2IAIConfig;
   ttsCfg: TTSAIConfig;
@@ -217,28 +215,25 @@ export class MultimodalPortImpl implements MultimodalPort {
     const audioPaths: string[] = [];
     const audioUris: string[] = [];
     const ttsSync = this.deps.ttsSyncPort;
-    const ttsAsync = this.deps.ttsAsyncPort;
-    if (!ttsSync && !ttsAsync) {
-      throw new Error('TTS 未配置：需提供 ttsSyncPort（智谱）或 ttsAsyncPort（通义）');
-    }
     for (let i = 0; i < items.length; i++) {
       if (i > 0) await new Promise((r) => setTimeout(r, delayMs));
       const { text, relativePath } = items[i];
+      const result = await ttsSync.execute({ text, voice });
       let buffer: Buffer;
-      if (ttsSync) {
-        const { pcmBuffer, sampleRate, channels } = await ttsSync.execute({ text, voice });
+      if ('audioUrl' in result && result.audioUrl) {
+        const res = await fetch(result.audioUrl);
+        if (!res.ok) {
+          throw new Error(`TTS audio download failed: ${res.status} ${res.statusText}`);
+        }
+        buffer = Buffer.from(await res.arrayBuffer());
+      } else if ('pcmBuffer' in result) {
+        const { pcmBuffer, sampleRate, channels } = result;
         buffer =
           format === 'wav'
             ? pcmToWav(pcmBuffer, { sampleRate, channels })
             : await pcmToMp3(pcmBuffer, { sampleRate, channels });
       } else {
-        const taskId = await ttsAsync!.submit({ text, voice });
-        const { audioUrl } = await ttsAsync!.poll(taskId);
-        const res = await fetch(audioUrl);
-        if (!res.ok) {
-          throw new Error(`TTS audio download failed: ${res.status} ${res.statusText}`);
-        }
-        buffer = Buffer.from(await res.arrayBuffer());
+        throw new Error('TTS sync port returned unexpected result shape');
       }
       await this.deps.artifactRepo.write(sessionId, relativePath, buffer);
       const absPath = this.deps.artifactRepo.resolvePath(sessionId, relativePath);

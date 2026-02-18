@@ -1,8 +1,10 @@
 /**
- * 通义 TTS 适配器：异步接口（endpoint 提交 + taskEndpoint 轮询），返回音频 URL
+ * 通义 TTS 适配器：同步接口（单次 POST 返回 output.audio.url，再 GET 下载音频）
+ * 文档：https://help.aliyun.com/zh/model-studio/qwen-tts-api
+ * 地址：https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
  */
 import type { TTSAIConfig } from '#backend/domain/inference/types.js';
-import { AsyncInferenceBase } from '../../bases/async-inference-base.js';
+import { SyncInferenceBase } from '../../bases/sync-inference-base.js';
 import type { TTSPortInput } from '../../port-types.js';
 
 const VOICE_MAP: Record<string, string> = {
@@ -20,22 +22,18 @@ export interface TtsDashScopeResult {
   audioUrl: string;
 }
 
-const POLL_INTERVAL_MS = 2000;
-const MAX_POLL_ATTEMPTS = 60;
-
-/** 异步提交 TTS 任务，返回 taskId（提交一次，不重试） */
-export async function submitTtsTaskDashScope(
-  cfg: TTSAIConfig & { taskEndpoint: string },
+/** 同步调用通义 TTS：POST 返回 JSON 中含 output.audio.url，再 GET 该 URL 下载由调用方完成 */
+export async function fetchTtsAudioUrlDashScope(
+  cfg: TTSAIConfig,
   text: string,
   voice: string
-): Promise<string> {
+): Promise<TtsDashScopeResult> {
   const voiceApi = VOICE_MAP[voice] || 'Cherry';
   const response = await fetch(cfg.endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${cfg.apiKey}`,
-      'X-DashScope-Async': 'enable',
     },
     body: JSON.stringify({
       model: cfg.model,
@@ -48,71 +46,25 @@ export async function submitTtsTaskDashScope(
   });
   if (!response.ok) {
     const body = await response.text().catch(() => '');
-    throw new Error(`TTS submit error: ${response.status} ${response.statusText} ${body}`);
+    throw new Error(`TTS API error: ${response.status} ${response.statusText} ${body}`);
   }
-  const data = (await response.json()) as { output?: { task_id?: string } };
-  const taskId = data?.output?.task_id;
-  if (!taskId) throw new Error('TTS submit did not return task_id');
-  return taskId;
+  const data = (await response.json()) as {
+    output?: { audio?: { url?: string }; id?: string; expires_at?: number };
+  };
+  const audioUrl = data?.output?.audio?.url;
+  if (!audioUrl) {
+    throw new Error('TTS API did not return output.audio.url');
+  }
+  return { audioUrl };
 }
 
-/** 轮询 TTS 任务结果，返回音频 URL；支持 429/503 重试 */
-export async function pollTtsResultDashScope(
-  cfg: TTSAIConfig & { taskEndpoint: string },
-  taskId: string
-): Promise<TtsDashScopeResult> {
-  const url = cfg.taskEndpoint.replace(/\/$/, '') + '/' + taskId;
-  let lastError: Error | null = null;
-  for (let attempt = 1; attempt <= MAX_POLL_ATTEMPTS; attempt++) {
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${cfg.apiKey}` },
-    });
-    if (res.status === 429 || res.status === 503) {
-      lastError = new Error(`TTS poll error: ${res.status}`);
-      continue;
-    }
-    if (!res.ok) throw new Error(`TTS poll failed: ${res.status} ${res.statusText}`);
-    const taskData = (await res.json()) as {
-      output?: {
-        task_status?: string;
-        message?: string;
-        output?: { audio?: { url?: string } };
-        audio?: { url?: string };
-      };
-    };
-    const status = taskData?.output?.task_status;
-    if (status === 'FAILED') {
-      const msg = taskData?.output?.message ?? 'Unknown error';
-      throw new Error(`TTS task failed: ${msg}`);
-    }
-    if (status === 'SUCCEEDED') {
-      const out = taskData?.output;
-      const audioUrl =
-        out?.output?.audio?.url ?? (out as { audio?: { url?: string } })?.audio?.url;
-      if (audioUrl) return { audioUrl };
-      throw new Error('TTS task succeeded but no audio URL in response');
-    }
-  }
-  throw lastError ?? new Error(`TTS task timeout after ${MAX_POLL_ATTEMPTS} attempts`);
-}
-
-/** 通义 TTS 异步端口适配器（需 cfg.taskEndpoint） */
-export class TTSDashScopePort extends AsyncInferenceBase<
-  TTSPortInput,
-  string,
-  TtsDashScopeResult
-> {
-  constructor(private readonly cfg: TTSAIConfig & { taskEndpoint: string }) {
+/** 通义 TTS 同步端口适配器（仅 endpoint，无 taskEndpoint） */
+export class TTSDashScopePort extends SyncInferenceBase<TTSPortInput, TtsDashScopeResult> {
+  constructor(private readonly cfg: TTSAIConfig) {
     super();
   }
 
-  protected async _submit(input: TTSPortInput): Promise<string> {
-    return submitTtsTaskDashScope(this.cfg, input.text, input.voice);
-  }
-
-  protected async _poll(taskId: string): Promise<TtsDashScopeResult> {
-    return pollTtsResultDashScope(this.cfg, taskId);
+  protected async _execute(input: TTSPortInput): Promise<TtsDashScopeResult> {
+    return fetchTtsAudioUrlDashScope(this.cfg, input.text, input.voice);
   }
 }

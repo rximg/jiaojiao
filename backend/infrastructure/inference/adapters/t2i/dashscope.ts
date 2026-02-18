@@ -5,8 +5,8 @@ import type { T2IAIConfig } from '#backend/domain/inference/types.js';
 import { AsyncInferenceBase } from '../../bases/async-inference-base.js';
 import type { T2IPortInput } from '../../port-types.js';
 
-const POLL_INTERVAL_MS = 2000;
-const MAX_ATTEMPTS = 60;
+const DEFAULT_POLL_INTERVAL_MS = 2000;
+const DEFAULT_MAX_ATTEMPTS = 60;
 
 export async function submitTaskDashScope(
   cfg: T2IAIConfig,
@@ -44,8 +44,10 @@ export async function pollForImageUrlDashScope(
   taskId: string
 ): Promise<string> {
   const url = cfg.taskEndpoint.replace(/\/$/, '') + '/' + taskId;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+  const intervalMs = cfg.poll_interval_ms ?? DEFAULT_POLL_INTERVAL_MS;
+  const maxAttempts = cfg.max_poll_attempts ?? DEFAULT_MAX_ATTEMPTS;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    await new Promise((r) => setTimeout(r, intervalMs));
     const res = await fetch(url, {
       method: 'GET',
       headers: { Authorization: `Bearer ${cfg.apiKey}` },
@@ -73,7 +75,7 @@ export async function pollForImageUrlDashScope(
       throw new Error('T2I task succeeded but no image URL in response');
     }
   }
-  throw new Error(`T2I task timeout after ${MAX_ATTEMPTS} attempts`);
+  throw new Error(`T2I task timeout after ${maxAttempts} attempts`);
 }
 
 /** 通义 T2I 异步端口适配器 */

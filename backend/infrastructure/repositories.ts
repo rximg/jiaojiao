@@ -16,7 +16,6 @@ import {
   createVLPort,
   createT2IPort,
   createTTSSyncPort,
-  createTTSAsyncPort,
 } from './inference/create-ports.js';
 
 let _sessionRepo: SessionRepository | null = null;
@@ -73,7 +72,6 @@ export async function createMultimodalPort(): Promise<MultimodalPort> {
     vlPort: createVLPort(vl),
     t2iPort: createT2IPort(t2i),
     ttsSyncPort: createTTSSyncPort(tts),
-    ttsAsyncPort: createTTSAsyncPort(tts),
     vlCfg: vl,
     t2iCfg: t2i,
     ttsCfg: tts,

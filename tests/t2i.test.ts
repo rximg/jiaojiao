@@ -4,7 +4,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { promises as fs } from 'fs';
 import { getMultimodalPortAsync } from '../backend/infrastructure/repositories.js';
 import { loadConfig, lastLoadedConfigPath } from '../backend/app-config';
-import { getWorkspaceFilesystem } from '../backend/services/fs';
+import { getWorkspaceFilesystem, resolveWorkspaceRoot } from '../backend/services/fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -103,8 +103,8 @@ describe('T2I generateImage()', () => {
     if (!hasKey || !runIntegration) {
       ctx.skip();
     }
-    const config = await loadConfig();
-    const workspaceFs = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
+    // 与 port 一致：使用无参 getWorkspaceFilesystem()，根目录为 cwd/outputs/workspaces
+    const workspaceFs = getWorkspaceFilesystem();
     await workspaceFs.writeFile(sessionId, 'image_prompt.txt', 'A cute cartoon cat on a sunny windowsill.', 'utf-8');
     const port = await getMultimodalPortAsync();
     const result = await port.generateImage({
@@ -115,7 +115,6 @@ describe('T2I generateImage()', () => {
 
     // record for cleanup
     createdFiles.push(result.imagePath);
-
     const exists = await fs
       .access(result.imagePath)
       .then(() => true)
@@ -123,8 +122,9 @@ describe('T2I generateImage()', () => {
 
     expect(exists).toBe(true);
 
-    const cfg = await loadConfig();
-    const expectedDir = path.join(cfg.storage.outputPath, 'workspaces', sessionId, 'images');
-    expect(result.imagePath.startsWith(path.resolve(expectedDir))).toBe(true);
+    // Port 使用 getWorkspaceFilesystem() 无参 → resolveWorkspaceRoot() 即 cwd/outputs/workspaces
+    const expectedDir = path.join(resolveWorkspaceRoot(), sessionId, 'images');
+    const resolvedImagePath = path.resolve(result.imagePath);
+    expect(resolvedImagePath.startsWith(path.resolve(expectedDir))).toBe(true);
   }, 120_000);
 });

@@ -107,11 +107,13 @@ export interface VLAIConfig extends AIConfigBase {
 
 /** 同步仅 endpoint；异步（如通义）需 endpoint + taskEndpoint */
 export interface TTSAIConfig extends AIConfigBase {
-  /** 同步：请求即返回；异步：提交任务 */
   endpoint: string;
-  /** 异步时必填：轮询任务结果 */
   taskEndpoint?: string;
   model: string;
+  /** 异步轮询间隔（毫秒），来自 ai_models.json */
+  poll_interval_ms?: number;
+  /** 异步轮询最大次数，来自 ai_models.json */
+  max_poll_attempts?: number;
 }
 
 /** 异步：endpoint（提交）+ taskEndpoint（轮询） */
@@ -120,6 +122,10 @@ export interface T2IAIConfig extends AIConfigBase {
   taskEndpoint: string;
   model: string;
   negativePrompt?: string;
+  /** 轮询间隔（毫秒），来自 ai_models.json */
+  poll_interval_ms?: number;
+  /** 轮询最大次数，来自 ai_models.json */
+  max_poll_attempts?: number;
 }
 
 export type AIConfig = LLMAIConfig | VLAIConfig | TTSAIConfig | T2IAIConfig;

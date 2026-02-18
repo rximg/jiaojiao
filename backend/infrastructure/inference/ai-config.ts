@@ -17,10 +17,12 @@ import type {
   ProviderAbilityModelsConfig,
 } from '#backend/domain/inference/types.js';
 
-/** 能力块在 ai_models.json 中可包含的 URL 字段（同步仅 endpoint，异步 endpoint + taskEndpoint） */
+/** 能力块在 ai_models.json 中可包含的 URL 与异步轮询配置 */
 interface AbilityBlockWithUrls extends ProviderAbilityModelsConfig {
   endpoint?: string;
   taskEndpoint?: string;
+  poll_interval_ms?: number;
+  max_poll_attempts?: number;
 }
 
 function getConfigDir(): string {
@@ -153,24 +155,32 @@ export async function getAIConfig(ability: AIAbility): Promise<AIConfig> {
       const taskEndpoint = abilityBlock.taskEndpoint?.trim()
         ? abilityBlock.taskEndpoint.replace(/\/$/, '')
         : undefined;
+      const poll_interval_ms = abilityBlock.poll_interval_ms;
+      const max_poll_attempts = abilityBlock.max_poll_attempts;
       const cfg: TTSAIConfig = {
         provider,
         apiKey,
         endpoint,
         ...(taskEndpoint && { taskEndpoint }),
         model,
+        ...(poll_interval_ms != null && { poll_interval_ms }),
+        ...(max_poll_attempts != null && { max_poll_attempts }),
       };
       return cfg;
     }
     case 't2i': {
       const endpoint = requireUrl(abilityBlock.endpoint, `${provider}.t2i.endpoint`);
       const taskEndpoint = requireUrl(abilityBlock.taskEndpoint, `${provider}.t2i.taskEndpoint`);
+      const poll_interval_ms = abilityBlock.poll_interval_ms;
+      const max_poll_attempts = abilityBlock.max_poll_attempts;
       const cfg: T2IAIConfig = {
         provider,
         apiKey,
         endpoint,
         taskEndpoint,
         model,
+        ...(poll_interval_ms != null && { poll_interval_ms }),
+        ...(max_poll_attempts != null && { max_poll_attempts }),
       };
       return cfg;
     }

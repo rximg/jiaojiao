@@ -4,6 +4,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { promises as fs } from 'fs';
 import { getMultimodalPortAsync } from '../backend/infrastructure/repositories.js';
 import { loadConfig, lastLoadedConfigPath } from '../backend/app-config';
+import { resolveWorkspaceRoot } from '../backend/services/fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -99,10 +100,9 @@ describe('TTS synthesizeSpeech()', () => {
       expect(exists).toBe(true);
     }
 
-    const cfg = await loadConfig();
-    const expectedDir = path.join(cfg.storage.outputPath, 'workspaces', sessionId, 'audio');
+    const expectedDir = path.join(resolveWorkspaceRoot(), sessionId, 'audio');
     for (const p of result.audioPaths) {
-      expect(p.startsWith(path.resolve(expectedDir))).toBe(true);
+      expect(path.resolve(p).startsWith(path.resolve(expectedDir))).toBe(true);
     }
   }, 180_000);
 });
