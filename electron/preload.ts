@@ -29,8 +29,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   // Agent 相关
   agent: {
-    sendMessage: (message: string, threadId?: string, sessionId?: string) =>
-      ipcRenderer.invoke('agent:sendMessage', message, threadId, sessionId),
+    sendMessage: (message: string, sessionId?: string) =>
+      ipcRenderer.invoke('agent:sendMessage', message, sessionId),
     onMessage: (callback: (data: any) => void) => {
       ipcRenderer.on('agent:message', (_event, data) => callback(data));
     },
@@ -108,7 +108,7 @@ declare global {
         saveBook: (book: any) => Promise<void>;
       };
       agent: {
-        sendMessage: (message: string, threadId?: string, sessionId?: string) => Promise<string>;
+        sendMessage: (message: string, sessionId?: string) => Promise<string>;
         onMessage: (callback: (data: any) => void) => void;
         onToolCall: (callback: (data: any) => void) => void;
         onTodoUpdate: (callback: (data: any) => void) => void;

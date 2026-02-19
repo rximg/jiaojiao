@@ -54,11 +54,10 @@ function isQuotaError(error: any): '403' | '429' | null {
 
 /**
  * 发送用户消息给 Agent 并流式返回结果。委托 InvokeAgentUseCase，IPC 仅负责 env、callbacks、错误与取消处理。
- * @returns 成功时返回 threadId；用户中止时返回 'stream-aborted'
+ * @returns 成功时返回 sessionId；用户中止时返回 'stream-aborted'
  */
 async function sendAgentMessage(
   message: string,
-  threadId?: string,
   sessionId?: string
 ): Promise<string> {
   const mainWindow = BrowserWindow.getAllWindows()[0];
@@ -105,14 +104,13 @@ async function sendAgentMessage(
     };
 
     try {
-      const newThreadId = await invokeAgentUseCase(deps, {
+      const returnedSessionId = await invokeAgentUseCase(deps, {
         message,
-        threadId,
         sessionId,
         signal: currentStreamController.signal,
         callbacks,
       });
-      return newThreadId;
+      return returnedSessionId;
     } catch (streamError: any) {
       if (streamError.name === 'AbortError') return 'stream-aborted';
       console.error('Stream error:', streamError);
@@ -122,12 +120,12 @@ async function sendAgentMessage(
         sendQuotaExceededAndThrow(mainWindow.webContents, streamError, quotaKind);
 
       if (isCancelledByUser(streamError)) {
-        const newThreadId = threadId ?? `thread-${Date.now()}`;
+        const resultSessionId = sessionId ?? `session-${Date.now()}`;
         mainWindow.webContents.send('agent:streamEnd', {
-          threadId: newThreadId,
+          threadId: resultSessionId,
           cancelled: true,
         });
-        return newThreadId;
+        return resultSessionId;
       }
       throw streamError;
     }
@@ -163,8 +161,8 @@ export function handleAgentIPC() {
 
   ipcMain.handle(
     'agent:sendMessage',
-    async (_event, message: string, threadId?: string, sessionId?: string) => {
-      return sendAgentMessage(message, threadId, sessionId);
+    async (_event, message: string, sessionId?: string) => {
+      return sendAgentMessage(message, sessionId);
     }
   );
 

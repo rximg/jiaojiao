@@ -14,15 +14,13 @@ interface ChatContextType {
   quotaError: { message: string; error: string } | null;
   agentError: AgentErrorState | null;
   isLoading: boolean;
-  currentThreadId: string | null;
   currentSessionId: string | null;
   lastArtifactTime: number; // 最后一次生成产物的时间戳，用于触发刷新
-  sendMessage: (text: string, threadId?: string) => Promise<void>;
+  sendMessage: (text: string) => Promise<void>;
   respondConfirm: (requestId: string, approved: boolean, editedPayload?: Record<string, unknown>, cancelReason?: string) => Promise<void>;
   dismissQuotaError: () => void;
   dismissAgentError: () => void;
   stopStream: () => Promise<void>;
-  setCurrentThreadId: (id: string | null) => void;
   createNewSession: (title?: string, prompt?: string, caseId?: string) => Promise<string>;
   loadSession: (sessionId: string) => Promise<void>;
   resetSession: () => void;
@@ -37,17 +35,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [quotaError, setQuotaError] = useState<{ message: string; error: string } | null>(null);
   const [agentError, setAgentError] = useState<AgentErrorState | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [lastArtifactTime, setLastArtifactTime] = useState<number>(0);
   const [isLoadingSession, setIsLoadingSession] = useState(false); // 防止并发切换 session
-  const threadRef = useRef<string | null>(null);
   const allMessagesRef = useRef<Message[]>([]);
   const pendingHitlRequestRef = useRef<typeof pendingHitlRequest>(null);
-
-  useEffect(() => {
-    threadRef.current = currentThreadId;
-  }, [currentThreadId]);
 
   useEffect(() => {
     pendingHitlRequestRef.current = pendingHitlRequest;
@@ -149,13 +141,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // 监听 Agent 消息
     const handleMessage = (data: any) => {
-      // 如果收到消息但threadId不匹配且当前threadId为空，则自动同步
-      if (!threadRef.current && data.threadId) {
-        console.log('[renderer] auto-syncing threadId from message:', data.threadId);
-        setCurrentThreadId(data.threadId);
-      }
-      
-      if (data.threadId === threadRef.current) {
+      // threadId 即 sessionId，直接使用
+      if (data.threadId === currentSessionId) {
         const newMessages = data.messages.map((msg: any) => ({
           id: msg.id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
           role: msg.role || 'assistant',
@@ -183,18 +170,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       
       const newTodos = data.todos || [];
       
-      // 如果收到todos但threadId不匹配且当前threadId为空，则自动同步
-      if (!threadRef.current && data.threadId) {
-        console.log('[renderer] auto-syncing threadId from todos:', data.threadId);
-        setCurrentThreadId(data.threadId);
-        // 立即更新todos并附加artifacts
-        console.log('[renderer] updating todos immediately:', newTodos);
-        setTodos(attachArtifactsToTodos(newTodos, allMessagesRef.current));
-      } else if (data.threadId === threadRef.current) {
+      // threadId 即 sessionId
+      if (data.threadId === currentSessionId) {
         console.log('[renderer] updating todos to:', newTodos);
         setTodos(attachArtifactsToTodos(newTodos, allMessagesRef.current));
       } else {
-        console.log('[renderer] skipping todo update, wrong thread:', data.threadId, 'vs', threadRef.current);
+        console.log('[renderer] skipping todo update, wrong session:', data.threadId, 'vs', currentSessionId);
       }
     };
 
@@ -204,7 +185,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
 
     const handleStepResult = (data: { threadId: string; messageId: string; stepResults: Array<{ type: 'image' | 'audio' | 'document'; payload: Record<string, unknown> }> }) => {
-      if (data.threadId !== threadRef.current) return;
+      if (data.threadId !== currentSessionId) return;
       const stepResults = data.stepResults as StepResult[];
       setMessages((prev) =>
         prev.map((m) => (m.id === data.messageId ? { ...m, stepResults } : m))
@@ -253,7 +234,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     return () => {
       // 无法移除监听，因为 preload 未暴露 off；依赖单次注册
     };
-  }, [attachArtifactsToTodos]);
+  }, [attachArtifactsToTodos, currentSessionId]);
 
   const respondConfirm = useCallback(async (requestId: string, approved: boolean, editedPayload?: Record<string, unknown>, cancelReason?: string) => {
     const pending = pendingHitlRequestRef.current;
@@ -306,7 +287,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       // 清空消息和todos
       setMessages([]);
       setTodos([]);
-      setCurrentThreadId(null);
       return sessionId;
     } catch (error) {
       console.error('Failed to create session:', error);
@@ -314,12 +294,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const sendMessage = useCallback(async (text: string, threadId?: string) => {
-    const thread = threadId || currentThreadId || undefined;
-
+  const sendMessage = useCallback(async (text: string) => {
     console.log('[ChatProvider] sendMessage called with:', {
       text,
-      threadId: thread,
       currentSessionId,
     });
 
@@ -342,14 +319,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     setAgentError(null);
     try {
-      const newThreadId = await window.electronAPI.agent.sendMessage(
-        text,
-        thread,
-        sessionId || undefined
-      );
-      console.log('[renderer] backend returned threadId:', newThreadId, 'current:', currentThreadId);
-      // Always update to the backend's threadId to keep in sync
-      setCurrentThreadId(newThreadId);
+      // 现在只需传递 sessionId，threadId 已统一
+      await window.electronAPI.agent.sendMessage(text, sessionId);
+      console.log('[renderer] message sent with sessionId:', sessionId);
     } catch (error) {
       console.error('Failed to send message:', error);
       // 异常时立即停止流式传输（直接调用 API，避免循环依赖）
@@ -371,7 +343,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [currentThreadId, currentSessionId]);
+  }, [currentSessionId]);
 
   const dismissAgentError = useCallback(() => {
     setAgentError(null);
@@ -429,8 +401,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       } else {
         setTodos([]);
       }
-      
-      setCurrentThreadId(null);
     } catch (error) {
       console.error('Failed to load session:', error);
       throw error;
@@ -455,7 +425,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setCurrentSessionId(null);
     setMessages([]);
     setTodos([]);
-    setCurrentThreadId(null);
     allMessagesRef.current = [];
   }, [currentSessionId]);
 
@@ -468,7 +437,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         quotaError,
         agentError,
         isLoading,
-        currentThreadId,
         currentSessionId,
         lastArtifactTime,
         sendMessage,
@@ -476,7 +444,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         dismissQuotaError,
         dismissAgentError,
         stopStream,
-        setCurrentThreadId,
         createNewSession,
         loadSession,
         resetSession,

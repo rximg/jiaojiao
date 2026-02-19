@@ -40,3 +40,6 @@ logs/audit/*
 .claude/skills/*
 outputs2/*
 logs/*
+findings.md
+task_plan.md
+progress.md

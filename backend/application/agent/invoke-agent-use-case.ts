@@ -23,7 +23,6 @@ export interface InvokeAgentUseCaseDeps {
 
 export interface InvokeAgentUseCaseParams {
   message: string;
-  threadId?: string;
   sessionId?: string;
   signal: AbortSignal;
   callbacks: InvokeAgentUseCaseCallbacks;
@@ -98,17 +97,18 @@ function extractStepResultsFromContent(content: string): StepResult[] {
 }
 
 /**
- * 执行流式调用。成功返回 threadId，用户中止返回 'stream-aborted'。
+ * 执行流式调用。成功返回 sessionId，用户中止返回 'stream-aborted'。
  */
 export async function invokeAgentUseCase(
   deps: InvokeAgentUseCaseDeps,
   params: InvokeAgentUseCaseParams
 ): Promise<string> {
   const { createAgent, getSessionMessages, resolveStepResultPaths } = deps;
-  const { message, threadId: paramThreadId, sessionId, signal, callbacks } = params;
+  const { message, sessionId, signal, callbacks } = params;
 
   const agent = await createAgent(sessionId);
-  const newThreadId = paramThreadId ?? `thread-${Date.now()}`;
+  // 统一使用 sessionId 作为 thread_id，如果没有则生成临时 ID
+  const effectiveSessionId = sessionId ?? `session-${Date.now()}`;
 
   let inputMessages: any[];
   if (sessionId) {
@@ -152,7 +152,7 @@ export async function invokeAgentUseCase(
       if (newMessages.length > 0) {
         const msg = newMessages[0];
         const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content ?? '');
-        const stableId: string = streamingAssistantId ?? (msg.id ?? `stream-${newThreadId}`);
+        const stableId: string = streamingAssistantId ?? (msg.id ?? `stream-${effectiveSessionId}`);
         streamingAssistantId = stableId;
         let stepResults = extractStepResultsFromContent(content);
         if (resolveStepResultPaths && stepResults.length > 0) {
@@ -166,9 +166,9 @@ export async function invokeAgentUseCase(
             ...(stepResults.length > 0 ? { stepResults } : {}),
           },
         ];
-        callbacks.onMessage(newThreadId, mapped);
+        callbacks.onMessage(effectiveSessionId, mapped);
         if (stepResults.length > 0 && callbacks.onStepResult) {
-          callbacks.onStepResult(newThreadId, stableId, stepResults);
+          callbacks.onStepResult(effectiveSessionId, stableId, stepResults);
         }
       }
     }
@@ -176,14 +176,14 @@ export async function invokeAgentUseCase(
     if (state?.tool_calls || state?.toolCalls) {
       const toolCalls = state.tool_calls ?? state.toolCalls;
       if (callbacks.onToolCall) {
-        callbacks.onToolCall(newThreadId, Array.isArray(toolCalls) ? toolCalls : [toolCalls]);
+        callbacks.onToolCall(effectiveSessionId, Array.isArray(toolCalls) ? toolCalls : [toolCalls]);
       }
     }
 
     if (state?.todos && Array.isArray(state.todos) && state.todos.length > 0 && callbacks.onTodoUpdate) {
-      callbacks.onTodoUpdate(newThreadId, state.todos);
+      callbacks.onTodoUpdate(effectiveSessionId, state.todos);
     }
   }
 
-  return newThreadId;
+  return effectiveSessionId;
 }

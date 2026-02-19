@@ -21,8 +21,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     saveBook: (book) => ipcRenderer.invoke('storage:saveBook', book),
   },
   agent: {
-    sendMessage: (message, threadId, sessionId) =>
-      ipcRenderer.invoke('agent:sendMessage', message, threadId, sessionId),
+    sendMessage: (message, sessionId) =>
+      ipcRenderer.invoke('agent:sendMessage', message, sessionId),
     onMessage: (callback) => {
       ipcRenderer.on('agent:message', (_event, data) => callback(data));
     },
