@@ -23,7 +23,7 @@ interface ChatContextType {
   dismissAgentError: () => void;
   stopStream: () => Promise<void>;
   setCurrentThreadId: (id: string | null) => void;
-  createNewSession: (title?: string) => Promise<string>;
+  createNewSession: (title?: string, prompt?: string, caseId?: string) => Promise<string>;
   loadSession: (sessionId: string) => Promise<void>;
   resetSession: () => void;
 }
@@ -40,6 +40,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [lastArtifactTime, setLastArtifactTime] = useState<number>(0);
+  const [isLoadingSession, setIsLoadingSession] = useState(false); // 防止并发切换 session
   const threadRef = useRef<string | null>(null);
   const allMessagesRef = useRef<Message[]>([]);
   const pendingHitlRequestRef = useRef<typeof pendingHitlRequest>(null);
@@ -293,12 +294,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setQuotaError(null);
   }, []);
 
-  const createNewSession = useCallback(async (title?: string) => {
+  const createNewSession = useCallback(async (title?: string, prompt?: string, caseId?: string) => {
     try {
       // 如果已经有 sessionId，先检查是否真的需要创建新 session
       // 这个检查由调用方负责，这里直接创建
-      console.log('[ChatProvider] Creating new session, title:', title);
-      const { sessionId } = await window.electronAPI.session.create(title);
+      console.log('[ChatProvider] Creating new session:', { title, caseId });
+      const result = await window.electronAPI.session.create(title, prompt, caseId);
+      const { sessionId } = result;
       console.log('[ChatProvider] Session created:', sessionId);
       setCurrentSessionId(sessionId);
       // 清空消息和todos
@@ -340,7 +342,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     setAgentError(null);
     try {
-      const newThreadId = await window.electronAPI.agent.sendMessage(text, thread, sessionId || undefined);
+      const newThreadId = await window.electronAPI.agent.sendMessage(
+        text,
+        thread,
+        sessionId || undefined
+      );
       console.log('[renderer] backend returned threadId:', newThreadId, 'current:', currentThreadId);
       // Always update to the backend's threadId to keep in sync
       setCurrentThreadId(newThreadId);
@@ -377,8 +383,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loadSession = useCallback(async (sessionId: string) => {
+    // 防止并发切换
+    if (isLoadingSession) {
+      console.warn('[ChatProvider] Already loading a session, ignoring request');
+      return;
+    }
+    
     try {
+      setIsLoadingSession(true);
       console.log('[ChatProvider] Loading session:', sessionId);
+      
+      // 单 session 模式：切换 session 前先关闭旧 runtime
+      if (currentSessionId && currentSessionId !== sessionId) {
+        try {
+          console.log('[ChatProvider] Closing old runtime:', currentSessionId);
+          await window.electronAPI.session.closeRuntime(currentSessionId);
+        } catch (error) {
+          console.error('[ChatProvider] Failed to close old runtime:', error);
+          // 不阻断流程，继续加载新 session
+        }
+      }
+      
       setCurrentSessionId(sessionId);
       
       // 从session加载历史数据
@@ -409,17 +434,30 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Failed to load session:', error);
       throw error;
+    } finally {
+      setIsLoadingSession(false);
     }
-  }, []);
+  }, [currentSessionId, isLoadingSession]);
 
-  const resetSession = useCallback(() => {
+  const resetSession = useCallback(async () => {
     console.log('[ChatProvider] Resetting session');
+    
+    // 显式关闭后端 runtime（如果有当前 session）
+    if (currentSessionId) {
+      try {
+        await window.electronAPI.session.closeRuntime(currentSessionId);
+        console.log('[ChatProvider] Runtime closed for session:', currentSessionId);
+      } catch (error) {
+        console.error('[ChatProvider] Failed to close runtime:', error);
+      }
+    }
+    
     setCurrentSessionId(null);
     setMessages([]);
     setTodos([]);
     setCurrentThreadId(null);
     allMessagesRef.current = [];
-  }, []);
+  }, [currentSessionId]);
 
   return (
     <ChatContext.Provider

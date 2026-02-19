@@ -12,12 +12,14 @@ import { useChat } from '../../providers/ChatProvider';
 
 interface ChatInterfaceProps {
   loadSessionId: string | null;
+  caseIdForNewSession: string | null;
   onBack: () => void;
   onConfigClick: () => void;
 }
 
 export default function ChatInterface({
   loadSessionId,
+  caseIdForNewSession,
   onBack,
   onConfigClick,
 }: ChatInterfaceProps) {
@@ -64,19 +66,23 @@ export default function ChatInterface({
       console.log('[ChatInterface] Creating new session (case clicked or first load)');
       createdForNullRef.current = true;
       isCreatingSessionRef.current = true;
-      resetSession();
-      createNewSession('新对话')
-        .then(() => {
+      
+      // resetSession 现在是 async，需要先等待关闭 runtime
+      (async () => {
+        await resetSession();
+        try {
+          await createNewSession('新对话', undefined, caseIdForNewSession || undefined);
           isCreatingSessionRef.current = false;
-        })
-        .catch((err) => {
+        } catch (err) {
           isCreatingSessionRef.current = false;
           createdForNullRef.current = false; // 失败后允许重试
           console.error('Failed to create session:', err);
-        });
+        }
+      })();
+      
       // 不在这里 setShowWelcome(false)，保留快捷选项，等用户发消息后再隐藏
     }
-  }, [loadSessionId, createNewSession, loadSession, resetSession]);
+  }, [loadSessionId, caseIdForNewSession, createNewSession, loadSession, resetSession]);
 
   const handleSubmit = useCallback(
     async (e?: FormEvent) => {

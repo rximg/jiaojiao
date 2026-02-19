@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import { DEFAULT_SESSION_ID, getWorkspaceFilesystem, resolveWorkspaceRoot } from '../services/fs.js';
 import { createAgentRuntime, type AgentRuntime } from '../services/runtime-manager.js';
 import { createTool } from '../tools/index.js';
+import { resolveMainAgentConfigPath } from './case-config-resolver.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,11 +42,16 @@ export class AgentFactory {
     this.projectRoot = projectRoot;
     this.configLoader = new ConfigLoader(configDir, projectRoot);
 
-    // 加载主配置（configDir 应与 Electron getBackendConfigDir() 一致，打包后为 resources/backend/config）
-    const mainConfigPath = configPath ?? path.join(configDir, 'main_agent_config.yaml');
-    this.agentConfig = this.configLoader.loadMainConfig(configPath);
+    // 加载主配置（优先显式 configPath；其次按 AGENT_CASE_ID 读取 config/agent_cases/{caseId}.yaml；最后回退 main_agent_config.yaml）
+    const caseIdFromEnv = process.env.AGENT_CASE_ID?.trim();
+    const resolvedConfigPath = configPath ?? resolveMainAgentConfigPath(configDir, caseIdFromEnv);
+    if (caseIdFromEnv && !configPath) {
+      console.log(`[AgentFactory] 当前案例: ${caseIdFromEnv}，加载配置: ${resolvedConfigPath}`);
+    }
+
+    this.agentConfig = this.configLoader.loadMainConfig(resolvedConfigPath);
     if (this.agentConfig.sub_agents == null || typeof this.agentConfig.sub_agents !== 'object') {
-      console.warn('[AgentFactory] 主配置缺少 sub_agents，请检查是否加载了正确的 main_agent_config.yaml:', mainConfigPath);
+      console.warn('[AgentFactory] 主配置缺少 sub_agents，请检查是否加载了正确配置:', resolvedConfigPath);
       this.agentConfig.sub_agents = {};
     }
 

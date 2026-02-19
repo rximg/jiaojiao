@@ -4,6 +4,7 @@
 export interface SessionMeta {
   title?: string;
   prompt?: string;
+  caseId?: string;
   createdAt?: string;
   updatedAt?: string;
 }

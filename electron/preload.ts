@@ -74,13 +74,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   // 会话管理相关
   session: {
-    create: (title?: string, prompt?: string) =>
-      ipcRenderer.invoke('session:create', title, prompt),
+    create: (title?: string, prompt?: string, caseId?: string) =>
+      ipcRenderer.invoke('session:create', title, prompt, caseId),
     list: () => ipcRenderer.invoke('session:list'),
     get: (sessionId: string) => ipcRenderer.invoke('session:get', sessionId),
     update: (sessionId: string, updates: any) =>
       ipcRenderer.invoke('session:update', sessionId, updates),
     delete: (sessionId: string) => ipcRenderer.invoke('session:delete', sessionId),
+    closeRuntime: (sessionId: string) => ipcRenderer.invoke('session:closeRuntime', sessionId),
   },
 });
 
@@ -128,11 +129,12 @@ declare global {
         grep: (sessionId: string, pattern: string, globPattern?: string) => Promise<{ matches: any[] }>;
       };
       session: {
-        create: (title?: string, prompt?: string) => Promise<{ sessionId: string; meta: any }>;
+        create: (title?: string, prompt?: string, caseId?: string) => Promise<{ sessionId: string; meta: any }>;
         list: () => Promise<{ sessions: any[] }>;
         get: (sessionId: string) => Promise<{ meta: any; messages: any[]; todos: any[]; files: any }>;
         update: (sessionId: string, updates: any) => Promise<{ meta: any }>;
         delete: (sessionId: string) => Promise<{ success: boolean }>;
+        closeRuntime: (sessionId: string) => Promise<{ success: boolean }>;
       };
     };
   }

@@ -28,7 +28,11 @@ export function registerSessionRoutes(app: Express) {
   app.post('/api/sessions', async (req: Request, res: Response) => {
     try {
       const deps = sessionUseCaseDeps();
-      const result = await createSessionUseCase(deps, { title: req.body?.title, prompt: req.body?.prompt });
+      const result = await createSessionUseCase(deps, {
+        title: req.body?.title,
+        prompt: req.body?.prompt,
+        caseId: req.body?.caseId,
+      });
       res.json(result);
     } catch (error) {
       console.error('Failed to create session:', error);

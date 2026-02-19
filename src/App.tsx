@@ -14,6 +14,7 @@ function AppContent() {
   const { config, updateConfig, needApiKeyConfig, isLoading } = useConfig();
   const [view, setView] = useState<View>('welcome');
   const [loadSessionId, setLoadSessionId] = useState<string | null>(null);
+  const [newSessionCaseId, setNewSessionCaseId] = useState<string | null>(null);
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -22,21 +23,24 @@ function AppContent() {
     }
   }, [isLoading, needApiKeyConfig, config]);
 
-  const handleCaseClick = () => {
+  const handleCaseClick = (caseId: string) => {
     // 点击案例：清空loadSessionId，ChatInterface会创建新session
     setLoadSessionId(null);
+    setNewSessionCaseId(caseId);
     setView('chat');
   };
 
   const handleHistoryClick = (sessionId: string) => {
     // 点击历史记录：设置loadSessionId，ChatInterface会加载该session
     setLoadSessionId(sessionId);
+    setNewSessionCaseId(null);
     setView('chat');
   };
 
   const handleBackToWelcome = () => {
     setView('welcome');
     setLoadSessionId(null);
+    setNewSessionCaseId(null);
   };
 
   const handleConfigSave = async (newConfig: Partial<AppConfig>) => {
@@ -82,6 +86,7 @@ function AppContent() {
           ) : (
             <ChatInterface
               loadSessionId={loadSessionId}
+              caseIdForNewSession={newSessionCaseId}
               onBack={handleBackToWelcome}
               onConfigClick={() => setConfigDialogOpen(true)}
             />

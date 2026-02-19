@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow, type WebContents } from 'electron';
 import { getBackendConfigDir } from './config.js';
 import { workspaceNotifier } from '../../backend/workspace-notifier.js';
-import { getSessionMessages } from './session.js';
+import { getCachedSessionCaseId, getSessionMessages } from './session.js';
 import { invokeAgentUseCase } from '../../backend/application/agent/index.js';
 import { resolveStepResultPaths } from '../../backend/application/helpers/resolve-step-result-paths.js';
 
@@ -65,12 +65,22 @@ async function sendAgentMessage(
   if (!mainWindow) throw new Error('Main window not found');
 
   const previousSessionId = process.env.AGENT_SESSION_ID;
+  const previousCaseId = process.env.AGENT_CASE_ID;
   try {
     currentStreamController = new AbortController();
     if (sessionId) {
       process.env.AGENT_SESSION_ID = sessionId;
       console.log(`[agent] Set AGENT_SESSION_ID to: ${sessionId}`);
     }
+
+    const cachedCaseId = sessionId ? getCachedSessionCaseId(sessionId) : undefined;
+    if (typeof cachedCaseId === 'string' && cachedCaseId.trim().length > 0) {
+      process.env.AGENT_CASE_ID = cachedCaseId.trim();
+      console.log(`[agent] Set AGENT_CASE_ID to: ${process.env.AGENT_CASE_ID}`);
+    } else {
+      delete process.env.AGENT_CASE_ID;
+    }
+
     process.env.AGENT_CONFIG_DIR = getBackendConfigDir();
 
     const { createMainAgent } = await import('../../backend/agent/AgentFactory.js');
@@ -135,6 +145,12 @@ async function sendAgentMessage(
       process.env.AGENT_SESSION_ID = previousSessionId;
     } else {
       delete process.env.AGENT_SESSION_ID;
+    }
+
+    if (previousCaseId !== undefined) {
+      process.env.AGENT_CASE_ID = previousCaseId;
+    } else {
+      delete process.env.AGENT_CASE_ID;
     }
   }
 }

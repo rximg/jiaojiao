@@ -10,6 +10,7 @@ export interface SessionMetaDto {
   updatedAt?: string;
   title?: string;
   prompt?: string;
+  caseId?: string;
 }
 
 export interface GetSessionUseCaseResult {

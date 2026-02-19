@@ -1,0 +1,146 @@
+name: main_agent
+version: 1.0.0
+description: 有声绘本制作系统
+
+agent:
+  name: picture_book_agent
+  version: 1.0.0
+  type: main_agent
+  
+  system_prompt: |
+    你是有声绘本制作助手：根据用户输入生成绘本图片与音频，并总结返回。
+
+    ## Todo 列表（固定 6 项，与下方步骤一一对应）
+    开始时用 write_todos 创建 6 项，每项的 content **必须严格使用**下面之一（不要改写、不要加入用户主题如「消防车」）：
+    第1项 content: 「生成文生图提示词（传入用户回答）」；第2项: 「生成绘本图片」；第3项: 「生成台词」；第4项: 「将台词合成语音」；第5项: 「在图片上添加数字标注」；第6项: 「完成工作流并返回结果」。
+    后续只按「第 n 项」更新 status 为 completed，不要修改 content；这样前端能正确识别每一步进度。
+
+    ## 工作流程（与上述 6 项一一对应，每步完成后立即 write_todos 将对应项标 completed）
+
+    1. **提示词**（第 1 项）：task 委派 prompt_generator，在 description 中传入用户回答（即用户本轮输入或用户描述），子代理会 write_file 到 image_prompt.txt
+    2. **图片**（第 2 项）：generate_image(promptFile: "image_prompt.txt", size: "960*1280", count: 1)，勿用 prompt 参数
+    3. **台词**（第 3 项）：generate_script_from_image(imagePath: 步骤2的图片路径)
+    4. **语音**（第 4 项）：synthesize_speech(texts: 步骤3的 lines[].text, voice: "chinese_female", format: "mp3")
+    5. **标注**（第 5 项）：annotate_image_numbers(imagePath: 步骤2路径, lines: 步骤3的 lines)，输出 xxx_annotated.png
+    6. **收尾**（第 6 项）：① 调用 finalize_workflow(...)；② 调用 write_todos 将第 6 项标为 completed；③ 向用户展示完成摘要
+
+    ## 要求
+    - 严格按 1→6 顺序执行。
+    - **每步完成后必须立即调用 write_todos**：完成步骤 1（task 返回）→ 立即 write_todos 将第 1 项标 completed → 再执行步骤 2；依此类推。不要连续执行多步后再统一更新 todos。
+    - 第 6 步：finalize_workflow 成功后立即 write_todos 将第 6 项标为 completed，再回复用户。
+    - 6 步 todos 的 content 必须与上述 Todo 列表一致，最后给出清晰摘要。
+
+    ## 重新打开会话或从某步重做
+    - 当用户**重新打开已有会话**或在对话中说「重新生成台词」「从第 3 步开始」「只重做第 4 步」等时，说明当前会话已有 checkpoint 状态（可能包含已完成的步骤和 todos）。
+    - 此时应**先根据当前对话/状态理解已完成到哪一步**，再用 write_todos 生成一份 todo：**已完成步骤的项保持 completed，从用户指定步骤开始及之后的项设为 pending**，然后**只执行用户要求的那一步或从该步起往后**，不要从头再跑 1→6。
+    - 例如：用户说「重新生成台词，按原序号保存」时，若前 2 步已完成，则 write_todos 使第 1、2 项为 completed，第 3～6 项为 pending，然后只执行第 3 步（生成台词）；不要重新创建 6 项或重新执行步骤 1、2。
+  
+  storage:
+    type: local
+    path: ./outputs
+  
+  llm:
+    model: qwen3-max-2026-01-23
+    temperature: 0.1
+    max_tokens: 20000
+  
+  # 调试配置（详细追踪请用 LangSmith，此处仅保留简短控制台信息）
+  debug:
+    log_llm_calls: false
+    save_llm_calls: false
+
+# 主 Agent 工具配置（统一 tools，含内置与 AI 能力）
+tools:
+  finalize_workflow: {}      # 检查文件并完成流程
+  annotate_image_numbers: {} # 按坐标在图上画白底数字标签
+  delete_artifacts: {}       # 删除 session 下产物，重新生成前需先删除
+  generate_image:
+    enable: true
+    config_path: ./tools/t2i.yaml
+  synthesize_speech:
+    enable: true
+    config_path: ./tools/tts.yaml
+  generate_script_from_image:
+    enable: true
+    config_path: ./tools/vl_script.yaml
+
+# SubAgent配置
+sub_agents:
+  prompt_generator:
+    enable: true
+    name: prompt_generator
+    description: 根据用户回答生成文生图提示词
+    config_path: ./sub_agents/prompt_gen.yaml
+
+# 工作流配置
+workflow:
+  steps:
+    - id: 1
+      name: 生成文生图提示词（传入用户回答）
+      subagent: prompt_generator
+      required: true
+    
+    - id: 2
+      name: 生成绘本图片
+      tool: generate_image
+      required: true
+    
+    - id: 3
+      name: 生成台词
+      tool: generate_script_from_image
+      required: true
+    
+    - id: 4
+      name: 生成语音
+      tool: synthesize_speech
+      required: true
+    
+    - id: 5
+      name: 标注图片序号
+      tool: annotate_image_numbers
+      required: true
+    
+    - id: 6
+      name: 完成工作流并返回结果
+      tool: finalize_workflow
+      required: true
+
+# UI配置
+ui:
+  welcome:
+    title: 欢迎使用儿童科普绘本生成助手
+    subtitle: 我可以帮您为不同年龄段的儿童生成包含图片和语音的百科类科普绘本
+    
+    instructions:
+      title: 请告诉我
+      items:
+        - 对象：想要了解的事物（如：老虎、挖掘机、向日葵）
+        - 年龄：目标儿童的年龄段（如：2岁、5岁、8岁）
+        - 风格：绘画风格（可选，如：卡通、手绘、写实）
+    
+    footer: 或者直接点击下方的快捷选项开始！
+    
+  quick_options:
+    - label: 2岁宝宝看的老虎
+      description: 适合低幼儿童的卡通风格
+      prompt: 给2岁宝宝生成老虎的绘本
+    
+    - label: 5岁孩子的挖掘机
+      description: 工程机械科普
+      prompt: 给5岁孩子生成挖掘机的科普图
+    
+    - label: 3岁宝宝的恐龙
+      description: 史前生物探索
+      prompt: 3岁宝宝看的霸王龙
+    
+    - label: 7岁孩子的太阳系
+      description: 天文知识启蒙
+      prompt: 给7岁孩子生成太阳系的科普图
+    
+    - label: 4岁孩子的向日葵
+      description: 植物生长过程
+      prompt: 4岁孩子看的向日葵
+    
+    - label: 6岁孩子的消防车
+      description: 特种车辆认知
+      prompt: 给6岁孩子生成消防车的绘本

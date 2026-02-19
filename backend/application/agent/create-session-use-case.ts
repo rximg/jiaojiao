@@ -9,11 +9,12 @@ import type { Session } from '#backend/domain/session/index.js';
 export interface CreateSessionUseCaseParams {
   title?: string;
   prompt?: string;
+  caseId?: string;
 }
 
 export interface CreateSessionUseCaseResult {
   sessionId: string;
-  meta: { sessionId: string; createdAt: string; updatedAt: string; title?: string; prompt?: string };
+  meta: { sessionId: string; createdAt: string; updatedAt: string; title?: string; prompt?: string; caseId?: string };
 }
 
 export interface CreateSessionUseCaseDeps {
@@ -35,6 +36,7 @@ export async function createSessionUseCase(
     updatedAt: now,
     title: params.title ?? '新对话',
     prompt: params.prompt ?? '',
+    ...(params.caseId ? { caseId: params.caseId } : {}),
   };
 
   await deps.createAgentRuntime(sessionId);
@@ -50,6 +52,7 @@ export async function createSessionUseCase(
     action: 'session_created',
     title: meta.title,
     prompt: meta.prompt,
+    caseId: meta.caseId,
   });
 
   return { sessionId, meta };

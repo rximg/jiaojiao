@@ -68,12 +68,17 @@ export async function shutdownServices(): Promise<void> {
   console.log('[ServiceInit] Shutting down services...');
 
   try {
+    const { getRuntimeManager } = await import('./runtime-manager.js');
+    const runtimeManager = getRuntimeManager();
     const logManager = getLogManager();
+    
+    // 关闭所有活跃的 runtime
+    await runtimeManager.closeAllRuntimes();
+    console.log('[ServiceInit] ✓ All runtimes closed');
     
     // 记录系统关闭日志
     await logManager.logSystem('info', 'DeepAgentUI shutting down');
 
-    // RuntimeManager 会自动清理
     console.log('[ServiceInit] ✓ Services shutdown complete');
     
     initialized = false;

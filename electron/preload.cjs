@@ -63,12 +63,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('fs:grep', sessionId, pattern, globPattern),
   },
   session: {
-    create: (title, prompt) =>
-      ipcRenderer.invoke('session:create', title, prompt),
+    create: (title, prompt, caseId) =>
+      ipcRenderer.invoke('session:create', title, prompt, caseId),
     list: () => ipcRenderer.invoke('session:list'),
     get: (sessionId) => ipcRenderer.invoke('session:get', sessionId),
     update: (sessionId, updates) =>
       ipcRenderer.invoke('session:update', sessionId, updates),
     delete: (sessionId) => ipcRenderer.invoke('session:delete', sessionId),
+    closeRuntime: (sessionId) => ipcRenderer.invoke('session:closeRuntime', sessionId),
   },
 });

@@ -139,10 +139,17 @@ app.whenReady().then(async () => {
   });
 });
 
+// 在应用退出前优雅关闭所有 runtime
+app.on('before-quit', async (event) => {
+  event.preventDefault();
+  console.log('[Electron] before-quit: shutting down services...');
+  await shutdownServices();
+  console.log('[Electron] Services shutdown complete');
+  app.exit(0);
+});
+
 app.on('window-all-closed', async () => {
   if (process.platform !== 'darwin') {
-    // 清理服务（新增）
-    await shutdownServices();
     app.quit();
   }
 });
