@@ -16,7 +16,8 @@ export interface LineNumbersData {
 const AUDIO_RECORD_FILENAME = 'audio_record.json';
 
 /**
- * 读取 workspaces 根下的 audio_record.json（全局路径）；若不存在或为空，则 nextNumber = ttsStartNumber ?? 6000，entries = []。
+ * 读取 workspaces 根下的 audio_record.json（全局路径）；若不存在或为空，则初始化并返回默认值。
+ * 懒初始化：若文件不存在，自动创建初始结构，避免后续 appendEntries 写入失败。
  */
 export async function readLineNumbers(ttsStartNumber: number = 6000): Promise<LineNumbersData> {
   const workspace = getWorkspaceFilesystem();
@@ -30,7 +31,14 @@ export async function readLineNumbers(ttsStartNumber: number = 6000): Promise<Li
   } catch (err: unknown) {
     const code = (err as NodeJS.ErrnoException)?.code;
     if (code === 'ENOENT') {
-      return { nextNumber: ttsStartNumber, entries: [] };
+      // 懒初始化：文件不存在时，直接创建初始结构（避免后续追加时失败）
+      const initial: LineNumbersData = { nextNumber: ttsStartNumber, entries: [] };
+      try {
+        await workspace.writeFileAtomic(null, AUDIO_RECORD_FILENAME, JSON.stringify(initial, null, 2), 'utf-8');
+      } catch {
+        // 如果初始化写入失败（权限、目录问题等），仍然返回内存对象，让调用方继续
+      }
+      return initial;
     }
     if (typeof (err as Error).message === 'string' && (err as Error).message.includes('JSON')) {
       return { nextNumber: ttsStartNumber, entries: [] };
