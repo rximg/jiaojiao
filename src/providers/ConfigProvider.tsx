@@ -4,6 +4,7 @@ import type { AppConfig } from '../types/types';
 interface ConfigContextType {
   config: AppConfig | null;
   updateConfig: (newConfig: Partial<AppConfig>) => Promise<void>;
+  reloadUIForCase: (caseId: string) => Promise<void>;
   isLoading: boolean;
   /** 无 config.json 或未配置 API Key 时需弹出配置窗口 */
   needApiKeyConfig: boolean;
@@ -20,7 +21,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     loadConfig();
   }, []);
 
-  const loadConfig = async () => {
+  const loadConfig = async (caseId?: string) => {
     try {
       if (!window.electronAPI?.config) {
         console.warn('electronAPI.config not available, using default config');
@@ -28,7 +29,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
         return;
       }
-      const raw = await window.electronAPI.config.get();
+      const raw = await window.electronAPI.config.get(caseId);
       const resolved =
         raw && typeof raw === 'object' && 'config' in raw
           ? (raw as { config: AppConfig; isFirstRun?: boolean })
@@ -43,6 +44,22 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
       setNeedApiKeyConfig(true);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const reloadUIForCase = async (caseId: string) => {
+    try {
+      if (!window.electronAPI?.config) return;
+      const raw = await window.electronAPI.config.get(caseId);
+      const resolved =
+        raw && typeof raw === 'object' && 'config' in raw
+          ? (raw as { config: AppConfig }).config
+          : (raw as AppConfig);
+      if (resolved) {
+        setConfig((prev) => prev ? { ...prev, ui: resolved.ui } : resolved);
+      }
+    } catch (error) {
+      console.error('Failed to reload UI config for case:', caseId, error);
     }
   };
 
@@ -71,7 +88,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <ConfigContext.Provider value={{ config, updateConfig, isLoading, needApiKeyConfig }}>
+    <ConfigContext.Provider value={{ config, updateConfig, reloadUIForCase, isLoading, needApiKeyConfig }}>
       {children}
     </ConfigContext.Provider>
   );

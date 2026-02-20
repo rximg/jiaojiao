@@ -1,1 +1,151 @@
-{"dashscope":{"llm":{"default":"qwen-plus-2025-12-01","endpoint":"https://dashscope.aliyuncs.com/compatible-mode/v1","models":[{"id":"qwen-plus","label":"通义 Qwen Plus"},{"id":"qwen-plus-latest","label":"通义 Qwen Plus 最新版"},{"id":"qwen-plus-2025-12-01","label":"通义 Qwen Plus 2025-12-01"},{"id":"qwen-plus-2025-09-11","label":"通义 Qwen Plus 2025-09-11"},{"id":"qwen-plus-2025-07-28","label":"通义 Qwen Plus 2025-07-28"},{"id":"qwen-plus-2025-07-14","label":"通义 Qwen Plus 2025-07-14"},{"id":"qwen-plus-2025-04-28","label":"通义 Qwen Plus 2025-04-28"},{"id":"qwen-plus-2025-01-25","label":"通义 Qwen Plus 2025-01-25"},{"id":"qwen-max","label":"通义 Qwen Max"},{"id":"qwen-max-latest","label":"通义 Qwen Max 最新版"},{"id":"qwen-max-2025-01-25","label":"通义 Qwen Max 2025-01-25"},{"id":"qwen-max-long","label":"通义 Qwen Max Long"}]},"vl":{"default":"qwen3-vl-plus","endpoint":"https://dashscope.aliyuncs.com/compatible-mode/v1","models":[{"id":"qwen3-vl-plus","label":"通义 VL Plus"}]},"tts":{"default":"qwen-tts","endpoint":"https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation","taskEndpoint":"https://dashscope.aliyuncs.com/api/v1/tasks","models":[{"id":"qwen-tts","label":"通义 TTS"}],"poll_interval_ms":2000,"max_poll_attempts":60},"t2i":{"default":"wan2.6-t2i","endpoint":"https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation","taskEndpoint":"https://dashscope.aliyuncs.com/api/v1/tasks","models":[{"id":"wan2.6-t2i","label":"通义万相"}],"poll_interval_ms":2000,"max_poll_attempts":60}},"zhipu":{"llm":{"default":"glm-4.7","endpoint":"https://open.bigmodel.cn/api/paas/v4","models":[{"id":"glm-4.5","label":"智谱 GLM-4.5"},{"id":"glm-4.5-flash","label":"智谱 GLM-4.5 Flash"},{"id":"glm-4.6","label":"智谱 GLM-4.6"},{"id":"glm-4.7","label":"智谱 GLM-4.7"}]},"vl":{"default":"glm-4.6v","endpoint":"https://open.bigmodel.cn/api/paas/v4","models":[{"id":"glm-4.6v","label":"智谱 GLM-4.6V"}]},"tts":{"default":"glm-tts","endpoint":"https://open.bigmodel.cn/api/paas/v4/audio/speech","models":[{"id":"glm-tts","label":"智谱 TTS"}]},"t2i":{"default":"glm-image","endpoint":"https://open.bigmodel.cn/api/paas/v4/async/images/generations","taskEndpoint":"https://open.bigmodel.cn/api/paas/v4/async-result","models":[{"id":"glm-image","label":"智谱文生图"}],"poll_interval_ms":3000,"max_poll_attempts":60}}}
+{
+    "dashscope": {
+        "llm": {
+            "default": "qwen-plus-2025-12-01",
+            "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "models": [
+                {
+                    "id": "qwen-plus",
+                    "label": "通义 Qwen Plus"
+                },
+                {
+                    "id": "qwen-plus-latest",
+                    "label": "通义 Qwen Plus 最新版"
+                },
+                {
+                    "id": "qwen-plus-2025-12-01",
+                    "label": "通义 Qwen Plus 2025-12-01"
+                },
+                {
+                    "id": "qwen-plus-2025-09-11",
+                    "label": "通义 Qwen Plus 2025-09-11"
+                },
+                {
+                    "id": "qwen-plus-2025-07-28",
+                    "label": "通义 Qwen Plus 2025-07-28"
+                },
+                {
+                    "id": "qwen-plus-2025-07-14",
+                    "label": "通义 Qwen Plus 2025-07-14"
+                },
+                {
+                    "id": "qwen-plus-2025-04-28",
+                    "label": "通义 Qwen Plus 2025-04-28"
+                },
+                {
+                    "id": "qwen-plus-2025-01-25",
+                    "label": "通义 Qwen Plus 2025-01-25"
+                },
+                {
+                    "id": "qwen-max",
+                    "label": "通义 Qwen Max"
+                },
+                {
+                    "id": "qwen-max-latest",
+                    "label": "通义 Qwen Max 最新版"
+                },
+                {
+                    "id": "qwen-max-2025-01-25",
+                    "label": "通义 Qwen Max 2025-01-25"
+                },
+                {
+                    "id": "qwen-max-long",
+                    "label": "通义 Qwen Max Long"
+                }
+            ]
+        },
+        "vl": {
+            "default": "qwen3-vl-plus",
+            "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "models": [
+                {
+                    "id": "qwen3-vl-plus",
+                    "label": "通义 VL Plus"
+                }
+            ]
+        },
+        "tts": {
+            "default": "qwen-tts",
+            "endpoint": "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+            "taskEndpoint": "https://dashscope.aliyuncs.com/api/v1/tasks",
+            "models": [
+                {
+                    "id": "qwen-tts",
+                    "label": "通义 TTS"
+                }
+            ],
+            "poll_interval_ms": 2000,
+            "max_poll_attempts": 60
+        },
+        "t2i": {
+            "default": "wan2.6-t2i",
+            "endpoint": "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation",
+            "taskEndpoint": "https://dashscope.aliyuncs.com/api/v1/tasks",
+            "models": [
+                {
+                    "id": "wan2.6-t2i",
+                    "label": "通义万相"
+                }
+            ],
+            "poll_interval_ms": 2000,
+            "max_poll_attempts": 60
+        }
+    },
+    "zhipu": {
+        "llm": {
+            "default": "glm-4.7",
+            "endpoint": "https://open.bigmodel.cn/api/paas/v4",
+            "models": [
+                {
+                    "id": "glm-4.5",
+                    "label": "智谱 GLM-4.5"
+                },
+                {
+                    "id": "glm-4.5-flash",
+                    "label": "智谱 GLM-4.5 Flash"
+                },
+                {
+                    "id": "glm-4.6",
+                    "label": "智谱 GLM-4.6"
+                },
+                {
+                    "id": "glm-4.7",
+                    "label": "智谱 GLM-4.7"
+                }
+            ]
+        },
+        "vl": {
+            "default": "glm-4.6v",
+            "endpoint": "https://open.bigmodel.cn/api/paas/v4",
+            "models": [
+                {
+                    "id": "glm-4.6v",
+                    "label": "智谱 GLM-4.6V"
+                }
+            ]
+        },
+        "tts": {
+            "default": "glm-tts",
+            "endpoint": "https://open.bigmodel.cn/api/paas/v4/audio/speech",
+            "models": [
+                {
+                    "id": "glm-tts",
+                    "label": "智谱 TTS"
+                }
+            ]
+        },
+        "t2i": {
+            "default": "glm-image",
+            "endpoint": "https://open.bigmodel.cn/api/paas/v4/async/images/generations",
+            "taskEndpoint": "https://open.bigmodel.cn/api/paas/v4/async-result",
+            "models": [
+                {
+                    "id": "glm-image",
+                    "label": "智谱文生图"
+                }
+            ],
+            "poll_interval_ms": 3000,
+            "max_poll_attempts": 60
+        }
+    }
+}

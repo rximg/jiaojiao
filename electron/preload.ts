@@ -8,10 +8,11 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('electronAPI', {
   // 配置相关
   config: {
-    get: () => ipcRenderer.invoke('config:get'),
+    get: (caseId?: string) => ipcRenderer.invoke('config:get', caseId),
     getAiModels: () => ipcRenderer.invoke('config:getAiModels'),
     set: (config: any) => ipcRenderer.invoke('config:set', config),
     getWorkspaceDir: () => ipcRenderer.invoke('config:getWorkspaceDir'),
+    getCases: () => ipcRenderer.invoke('config:getCases'),
     openConfigDir: () => ipcRenderer.invoke('config:openConfigDir'),
     showOutputPathDialog: (defaultPath?: string) => ipcRenderer.invoke('config:showOutputPathDialog', defaultPath),
     openFolder: (dirPath: string) => ipcRenderer.invoke('config:openFolder', dirPath),
@@ -90,10 +91,11 @@ declare global {
   interface Window {
     electronAPI: {
       config: {
-        get: () => Promise<any>;
+        get: (caseId?: string) => Promise<any>;
         getAiModels: () => Promise<Record<string, { default: string; models: Array<{ id: string; label: string }> }>>;
         set: (config: any) => Promise<void>;
         getWorkspaceDir: () => Promise<string>;
+        getCases: () => Promise<Array<{ id: string; title: string; description: string; cover: string | null; order: number }>>;
         openConfigDir: () => Promise<void>;
         showOutputPathDialog: (defaultPath?: string) => Promise<string | null>;
         openFolder: (dirPath: string) => Promise<void>;

@@ -30,8 +30,8 @@ yarn-error.log*
 
 # Outputs
 outputs/
-*.png
-*.jpg
+# *.png
+# *.jpg
 *.mp3
 *.wav
 release/*
@@ -43,3 +43,4 @@ logs/*
 findings.md
 task_plan.md
 progress.md
+build/*

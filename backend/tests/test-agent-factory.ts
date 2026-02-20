@@ -23,7 +23,7 @@ async function testAgentFactory() {
 
     // 2. 加载主Agent
     console.log('\n[步骤 2] 加载主Agent配置...');
-    console.log('配置路径:', path.join(__dirname, '../../backend/config/main_agent_config.yaml'));
+    console.log('配置路径:', path.join(__dirname, '../../backend/config/agent_cases/encyclopedia.yaml'));
     
     const mainAgent = await factory.createMainAgent();
     console.log('✅ 主Agent创建成功');

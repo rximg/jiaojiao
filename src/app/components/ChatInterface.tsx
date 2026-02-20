@@ -158,12 +158,17 @@ export default function ChatInterface({
     [pendingHitlRequest, respondConfirm]
   );
 
+  const handleBackClick = useCallback(async () => {
+    await resetSession();
+    onBack();
+  }, [onBack, resetSession]);
+
   return (
     <div className="flex h-screen flex-col">
       {/* 配置栏 */}
       <header className="flex h-16 items-center justify-between border-b border-border bg-card/80 px-6 shadow-sm">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={onBack}>
+          <Button variant="ghost" size="sm" onClick={handleBackClick}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             返回
           </Button>

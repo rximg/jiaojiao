@@ -94,52 +94,105 @@ function getStore(): Store<Record<string, unknown>> {
   return store;
 }
 
-/** 解析 backend/config/main_agent_config.yaml 的路径：打包后从 extraResources（resources/backend），开发时从项目 backend */
-function resolveMainAgentConfigPath(): string {
+/** 案例元数据 */
+interface CaseMeta {
+  id: string;
+  title: string;
+  description: string;
+  cover: string | null;
+  order: number;
+}
+
+/** 读取所有 agent_cases/*.yaml 的 case 元数据，按 order 排序 */
+function loadCaseMetas(configDir: string): CaseMeta[] {
+  try {
+    const casesDir = path.join(configDir, 'agent_cases');
+    const files = fs.readdirSync(casesDir).filter((f) => f.endsWith('.yaml'));
+    const metas: CaseMeta[] = files.map((file) => {
+      const id = path.basename(file, '.yaml');
+      try {
+        const content = fs.readFileSync(path.join(casesDir, file), 'utf-8');
+        const parsed = yaml.load(content) as any;
+        return {
+          id,
+          title: parsed?.case?.title ?? id,
+          description: parsed?.case?.description ?? '',
+          cover: parsed?.case?.cover ?? null,
+          order: typeof parsed?.case?.order === 'number' ? (parsed.case.order as number) : 99,
+        };
+      } catch {
+        return { id, title: id, description: '', cover: null, order: 99 };
+      }
+    });
+    return metas.sort((a, b) => a.order - b.order);
+  } catch (error) {
+    log.error('[config] loadCaseMetas failed:', error);
+    return [];
+  }
+}
+
+/** 默认案例 ID */
+const DEFAULT_CASE_ID = 'encyclopedia';
+
+/** 解析 backend/config 目录路径：打包后从 extraResources（resources/backend/config），开发时从项目 backend/config */
+function resolveBackendConfigDir(): string {
   // 打包后：backend 通过 extraResources 复制到 resources/backend/
   if (app.isPackaged && process.resourcesPath) {
-    const fromResources = path.join(process.resourcesPath, 'backend', 'config', 'main_agent_config.yaml');
+    const fromResources = path.join(process.resourcesPath, 'backend', 'config');
     if (fs.existsSync(fromResources)) {
-      log.info('[config] main_agent_config.yaml from extraResources:', fromResources);
+      log.info('[config] backend/config from extraResources:', fromResources);
       return fromResources;
     }
-    log.info('[config] extraResources path not found:', fromResources);
+    log.info('[config] extraResources config dir not found:', fromResources);
   }
   const appRoot = app.getAppPath();
-  const fromAppRoot = path.join(appRoot, 'backend', 'config', 'main_agent_config.yaml');
+  const fromAppRoot = path.join(appRoot, 'backend', 'config');
   if (fs.existsSync(fromAppRoot)) {
-    log.info('[config] main_agent_config.yaml from appRoot:', fromAppRoot);
+    log.info('[config] backend/config from appRoot:', fromAppRoot);
     return fromAppRoot;
   }
   // 开发：可能在 electron/ipc（源码）或 dist-electron/ipc（Vite 编译），先试一层再试两层
-  const oneUp = path.resolve(__dirname, '..', 'backend', 'config', 'main_agent_config.yaml');
+  const oneUp = path.resolve(__dirname, '..', 'backend', 'config');
   if (fs.existsSync(oneUp)) {
-    log.info('[config] main_agent_config.yaml from __dirname+1:', oneUp);
+    log.info('[config] backend/config from __dirname+1:', oneUp);
     return oneUp;
   }
-  const twoUp = path.resolve(__dirname, '..', '..', 'backend', 'config', 'main_agent_config.yaml');
-  log.info('[config] main_agent_config.yaml from __dirname+2:', twoUp);
+  const twoUp = path.resolve(__dirname, '..', '..', 'backend', 'config');
+  log.info('[config] backend/config from __dirname+2:', twoUp);
   return twoUp;
 }
 
 /** 返回 backend/config 目录（供 AgentFactory 等使用，打包后指向 resources/backend/config） */
 export function getBackendConfigDir(): string {
-  return path.dirname(resolveMainAgentConfigPath());
+  return resolveBackendConfigDir();
 }
 
-// 加载 main_agent_config.yaml 中的 UI 配置（仅在此处调用，get 时合并到返回值）
-function loadUIConfigFromYaml(): Record<string, unknown> {
+/**
+ * 加载案例 YAML 中的 UI 配置（welcome / quick_options 等）
+ * @param caseId 案例 ID（默认 encyclopedia）
+ */
+function loadUIConfigFromYaml(caseId?: string): Record<string, unknown> {
   try {
-    const configPath = resolveMainAgentConfigPath();
+    const configDir = resolveBackendConfigDir();
+    const effectiveCaseId = caseId?.trim() || DEFAULT_CASE_ID;
+    const configPath = path.join(configDir, 'agent_cases', `${effectiveCaseId}.yaml`);
     if (!fs.existsSync(configPath)) {
-      log.warn('[config] main_agent_config.yaml not found:', configPath);
-      return {};
+      log.warn(`[config] Case YAML not found: ${configPath}, trying default case`);
+      // 回退到默认案例
+      const fallbackPath = path.join(configDir, 'agent_cases', `${DEFAULT_CASE_ID}.yaml`);
+      if (!fs.existsSync(fallbackPath)) {
+        log.warn('[config] Default case YAML not found:', fallbackPath);
+        return {};
+      }
+      const content = fs.readFileSync(fallbackPath, 'utf-8');
+      const config = yaml.load(content) as any;
+      return config?.ui || {};
     }
     const fileContent = fs.readFileSync(configPath, 'utf-8');
     const config = yaml.load(fileContent) as any;
     const uiKeys = config?.ui ? Object.keys(config.ui) : [];
-    log.info('[config] YAML UI loaded, keys:', uiKeys.length ? uiKeys.join(', ') : '(none)');
-    return config.ui || {};
+    log.info(`[config] Case UI loaded (${effectiveCaseId}), keys:`, uiKeys.length ? uiKeys.join(', ') : '(none)');
+    return config?.ui || {};
   } catch (error) {
     log.error('[config] loadUIConfigFromYaml failed:', error);
     return {};
@@ -168,14 +221,14 @@ function getFallbackAiModels(): Record<string, { default: string; models: Array<
 }
 
 export function handleConfigIPC() {
-  ipcMain.handle('config:get', async () => {
+  ipcMain.handle('config:get', async (_event, caseId?: string) => {
     const userDataDir = app.getPath('userData');
     const configPath = path.join(userDataDir, 'config.json');
     const isFirstRun = !fs.existsSync(configPath);
     log.info('[config] config:get userDataDir=', userDataDir, 'configPath=', configPath, 'isFirstRun=', isFirstRun);
 
     const s = getStore();
-    const latestUIConfig = loadUIConfigFromYaml();
+    const latestUIConfig = loadUIConfigFromYaml(caseId);
     const currentStore = s.store as any;
     const storedOutput = (currentStore?.storage as any)?.outputPath;
     const storedSync = (currentStore?.storage as any)?.syncTargetPath;
@@ -307,6 +360,12 @@ export function handleConfigIPC() {
 
   /** 返回工作目录路径（userData/workspace，固定不可配置） */
   ipcMain.handle('config:getWorkspaceDir', async () => path.join(app.getPath('userData'), 'workspace'));
+
+  /** 返回所有案例元数据（id / title / description / cover / order） */
+  ipcMain.handle('config:getCases', async () => {
+    const configDir = resolveBackendConfigDir();
+    return loadCaseMetas(configDir);
+  });
 
   /** 打开用户配置所在文件夹（userData，内含 config.json） */
   ipcMain.handle('config:openConfigDir', async () => {

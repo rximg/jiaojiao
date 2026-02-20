@@ -11,7 +11,7 @@ import type { AppConfig } from './types/types';
 type View = 'welcome' | 'chat';
 
 function AppContent() {
-  const { config, updateConfig, needApiKeyConfig, isLoading } = useConfig();
+  const { config, updateConfig, reloadUIForCase, needApiKeyConfig, isLoading } = useConfig();
   const [view, setView] = useState<View>('welcome');
   const [loadSessionId, setLoadSessionId] = useState<string | null>(null);
   const [newSessionCaseId, setNewSessionCaseId] = useState<string | null>(null);
@@ -27,6 +27,7 @@ function AppContent() {
     // 点击案例：清空loadSessionId，ChatInterface会创建新session
     setLoadSessionId(null);
     setNewSessionCaseId(caseId);
+    reloadUIForCase(caseId);
     setView('chat');
   };
 

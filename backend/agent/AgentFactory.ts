@@ -42,7 +42,7 @@ export class AgentFactory {
     this.projectRoot = projectRoot;
     this.configLoader = new ConfigLoader(configDir, projectRoot);
 
-    // 加载主配置（优先显式 configPath；其次按 AGENT_CASE_ID 读取 config/agent_cases/{caseId}.yaml；最后回退 main_agent_config.yaml）
+    // 加载主配置（优先显式 configPath；其次按 AGENT_CASE_ID 读取 config/agent_cases/{caseId}.yaml；默认 encyclopedia.yaml）
     const caseIdFromEnv = process.env.AGENT_CASE_ID?.trim();
     const resolvedConfigPath = configPath ?? resolveMainAgentConfigPath(configDir, caseIdFromEnv);
     if (caseIdFromEnv && !configPath) {
@@ -92,7 +92,7 @@ export class AgentFactory {
     }
     const result = await this.runtime.hitlService.requestApproval(actionType, payload);
     if (result === null) {
-      throw new Error(`${actionType} was rejected or cancelled`);
+      throw new Error(`${actionType} cancelled by user`);
     }
     return result;
   }

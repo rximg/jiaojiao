@@ -19,7 +19,7 @@ export async function submitTaskZhipu(
     prompt,
     size: size.includes('*') ? size.replace('*', 'x') : size,
     quality: parameters.quality ?? 'hd',
-    watermark_enabled: true,
+    watermark_enabled: false,
   };
   if (parameters.negative_prompt?.trim()) {
     body.negative_prompt = parameters.negative_prompt.trim();

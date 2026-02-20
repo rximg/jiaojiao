@@ -23,7 +23,7 @@ interface ChatContextType {
   stopStream: () => Promise<void>;
   createNewSession: (title?: string, prompt?: string, caseId?: string) => Promise<string>;
   loadSession: (sessionId: string) => Promise<void>;
-  resetSession: () => void;
+  resetSession: () => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -411,6 +411,26 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const resetSession = useCallback(async () => {
     console.log('[ChatProvider] Resetting session');
+
+    // 先结束可能挂起的 HITL 等待，避免流式调用悬挂
+    const pending = pendingHitlRequestRef.current;
+    if (pending && typeof window.electronAPI.hitl?.respond === 'function') {
+      try {
+        await window.electronAPI.hitl.respond(pending.requestId, {
+          approved: false,
+          reason: 'Cancelled by navigation',
+        });
+      } catch (error) {
+        console.warn('[ChatProvider] Failed to cancel pending HITL on reset:', error);
+      }
+    }
+
+    // 再中止当前流式执行，避免切回欢迎页后旧请求占用状态
+    try {
+      await window.electronAPI.agent.stopStream();
+    } catch (error) {
+      console.warn('[ChatProvider] Failed to stop stream on reset:', error);
+    }
     
     // 显式关闭后端 runtime（如果有当前 session）
     if (currentSessionId) {
@@ -423,6 +443,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
     
     setCurrentSessionId(null);
+    setPendingHitlRequest(null);
+    setIsLoading(false);
     setMessages([]);
     setTodos([]);
     allMessagesRef.current = [];

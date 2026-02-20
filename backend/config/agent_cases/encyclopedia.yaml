@@ -2,6 +2,14 @@ name: main_agent
 version: 1.0.0
 description: 有声绘本制作系统
 
+# 案例元数据（供前端 CaseList 展示）
+case:
+  id: encyclopedia
+  title: 百科绘本
+  description: 生成包含图片、文字和语音的百科类绘本
+  cover: 科普百科海报.png
+  order: 1
+
 agent:
   name: picture_book_agent
   version: 1.0.0

@@ -183,7 +183,7 @@ export class ConfigLoader {
    * 加载主配置并递归加载所有子配置
    */
   loadMainConfig(configPath?: string): AgentConfig {
-    const mainConfigPath = configPath || path.join(this.configDir, 'main_agent_config.yaml');
+    const mainConfigPath = configPath || path.join(this.configDir, 'agent_cases', 'encyclopedia.yaml');
     const config = this.loadYaml<AgentConfig>(mainConfigPath);
     // 确保 sub_agents 始终为对象，避免 YAML 缺失或打包后配置不完整导致 Object.entries 报错
     if (config.sub_agents == null || typeof config.sub_agents !== 'object') {

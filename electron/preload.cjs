@@ -3,10 +3,11 @@ const { contextBridge, ipcRenderer } = require('electron');
 // 暴露安全的 API 给渲染进程（与 preload.ts 保持一致，Electron 预加载必须用 CJS）
 contextBridge.exposeInMainWorld('electronAPI', {
   config: {
-    get: () => ipcRenderer.invoke('config:get'),
+    get: (caseId) => ipcRenderer.invoke('config:get', caseId),
     getAiModels: () => ipcRenderer.invoke('config:getAiModels'),
     set: (config) => ipcRenderer.invoke('config:set', config),
     getWorkspaceDir: () => ipcRenderer.invoke('config:getWorkspaceDir'),
+    getCases: () => ipcRenderer.invoke('config:getCases'),
     openConfigDir: () => ipcRenderer.invoke('config:openConfigDir'),
     showOutputPathDialog: (defaultPath) => ipcRenderer.invoke('config:showOutputPathDialog', defaultPath),
     openFolder: (dirPath) => ipcRenderer.invoke('config:openFolder', dirPath),

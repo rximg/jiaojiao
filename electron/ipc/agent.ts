@@ -31,9 +31,22 @@ function sendQuotaExceededAndThrow(
 
 /** 判断是否为用户取消 HITL 导致的错误 */
 function isCancelledByUser(error: any): boolean {
-  return (
-    error?.message?.includes('cancelled by user') ||
-    error?.cause?.message?.includes('cancelled by user')
+  const messages: string[] = [];
+  let cursor: any = error;
+  let depth = 0;
+
+  while (cursor && depth < 5) {
+    if (typeof cursor.message === 'string') {
+      messages.push(cursor.message.toLowerCase());
+    }
+    cursor = cursor.cause;
+    depth += 1;
+  }
+
+  return messages.some(
+    (msg) =>
+      msg.includes('cancelled by user') ||
+      msg.includes('rejected or cancelled')
   );
 }
 
