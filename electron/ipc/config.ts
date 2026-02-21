@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { log } from '../logger.js';
 import { fileURLToPath } from 'url';
+import { loadConfig, saveConfig } from '../../backend/app-config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -299,11 +300,11 @@ export function handleConfigIPC() {
   ipcMain.handle('config:set', async (_event, config: any) => {
     log.info('[config] config:set called');
     try {
-      const s = getStore();
       const userDataDir = app.getPath('userData');
       const writePath = path.join(userDataDir, 'config.json');
       log.info('[config] config:set writePath=', writePath, 'userDataWritable=', Boolean(userDataDir));
 
+      // 适配层：将前端 DTO 规范化为应用配置形状（含 legacy 路径过滤等）
       const def = DEFAULTS as Record<string, Record<string, unknown>>;
       const normalized = {
         configVersion: getAppVersion(),
@@ -341,15 +342,11 @@ export function handleConfigIPC() {
         },
       };
 
-      s.set('configVersion', normalized.configVersion);
-      s.set('apiKeys', normalized.apiKeys);
-      s.set('multimodalApiKeys', normalized.multimodalApiKeys);
-      s.set('agent', normalized.agent);
-      s.set('storage', normalized.storage);
-      s.set('ui', normalized.ui);
+      // DDD：持久化统一走 backend saveConfig（含 electron-store 写入与 audio_record.json 等副作用）
+      await saveConfig(normalized as Parameters<typeof saveConfig>[0]);
 
       log.info('[config] config:set ok, path=', writePath);
-      return s.store;
+      return loadConfig();
     } catch (error: any) {
       const msg = error?.message ?? String(error);
       const stack = error?.stack ?? '';

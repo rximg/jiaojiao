@@ -1,7 +1,7 @@
 import path from 'path';
 import { promises as fs } from 'fs';
 import sharp from 'sharp';
-import { DEFAULT_SESSION_ID, getWorkspaceFilesystem } from '../services/fs.js';
+import { DEFAULT_SESSION_ID, getWorkspaceFilesystem } from './fs.js';
 
 export interface AnnotationPoint {
   number: number;
@@ -45,9 +45,6 @@ const LABEL_HEIGHT = 24;
 const FONT_SIZE = 16;
 const PADDING = 8;
 
-/**
- * 在图片上按坐标绘制白底数字标签，保存为新图 images/{原basename}_annotated.png
- */
 export async function annotateImageNumbers(
   params: AnnotateImageNumbersParams
 ): Promise<AnnotateImageNumbersResult> {
@@ -63,7 +60,6 @@ export async function annotateImageNumbers(
   const width = meta.width ?? 1024;
   const height = meta.height ?? 1024;
 
-  // 为每个标注生成白底数字的 SVG 片段（圆角矩形 + 数字）
   const labelElements = params.annotations.map((a) => {
     const x = Math.max(0, Math.min(a.x, width - LABEL_WIDTH));
     const y = Math.max(0, Math.min(a.y, height - LABEL_HEIGHT));

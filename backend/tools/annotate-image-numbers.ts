@@ -5,8 +5,8 @@ import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { loadConfig } from '../app-config.js';
 import { getWorkspaceFilesystem } from '../services/fs.js';
+import { annotateImageNumbers } from '../services/image-annotation.js';
 import { readLineNumbers } from './line-numbers.js';
-import { annotateImageNumbers } from './annotate-numbers.js';
 import type { ToolConfig, ToolContext } from './registry.js';
 import { registerTool } from './registry.js';
 

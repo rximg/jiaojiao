@@ -6,6 +6,9 @@
 import path from 'path';
 import type { AppConfig } from '@/types/types';
 import Store from 'electron-store';
+import { getWorkspaceFilesystem } from './services/fs.js';
+
+const AUDIO_RECORD_FILENAME = 'audio_record.json';
 
 /** 非 Electron 环境下使用的 userData 目录，与应用配置路径一致：…/Roaming/jiaojiao（对应 config.json 所在目录） */
 function getDefaultUserDataDir(): string {
@@ -146,12 +149,30 @@ export async function loadConfig(): Promise<AppConfig> {
  */
 export async function saveConfig(updates: Partial<AppConfig>): Promise<void> {
   const store = getConfigStore();
-  if (typeof (store as { set?: (k: string, v: unknown) => void }).set !== 'function') return;
-  const set = (store as { set: (k: string, v: unknown) => void }).set;
+  const setFn = (store as { set?: (k: string, v: unknown) => void }).set;
+  if (typeof setFn !== 'function') return;
   const keys = ['apiKeys', 'multimodalApiKeys', 'agent', 'storage', 'ui', 'configVersion'] as const;
   for (const key of keys) {
     if (key in updates && (updates as Record<string, unknown>)[key] !== undefined) {
-      set(key, (updates as Record<string, unknown>)[key]);
+      setFn.call(store, key, (updates as Record<string, unknown>)[key]);
     }
+  }
+  // 保存后确保 workspace 下存在 audio_record.json，避免生成音频时无序号
+  try {
+    const config = await loadConfig();
+    const workspace = getWorkspaceFilesystem({ outputPath: config.storage.outputPath });
+    try {
+      await workspace.readFile(null, AUDIO_RECORD_FILENAME, 'utf-8');
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException)?.code;
+      const msg = (err as Error)?.message ?? '';
+      const notFound = code === 'ENOENT' || (typeof msg === 'string' && msg.includes('File not found'));
+      if (notFound) {
+        const initial = { nextNumber: config.storage.ttsStartNumber, entries: [] };
+        await workspace.writeFileAtomic(null, AUDIO_RECORD_FILENAME, JSON.stringify(initial, null, 2), 'utf-8');
+      }
+    }
+  } catch {
+    // 不阻断配置保存
   }
 }

@@ -24,7 +24,8 @@
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write .",
     "gen-icons": "node scripts/gen-icons.mjs",
-    "gen-favicon": "node scripts/gen-favicon.mjs"
+    "gen-favicon": "node scripts/gen-favicon.mjs",
+    "backup:userdata": "powershell -ExecutionPolicy Bypass -File scripts/backup-userdata-jiaojiao.ps1"
   },
   "dependencies": {
     "@langchain/core": "^1.1.0",

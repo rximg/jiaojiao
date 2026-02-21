@@ -1,9 +1,21 @@
 {
     "dashscope": {
         "llm": {
-            "default": "qwen-plus-2025-12-01",
+            "default": "qwen3.5-plus",
             "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1",
             "models": [
+                {
+                    "id": "qwen3.5-plus",
+                    "label": "通义 Qwen3.5 Plus"
+                },
+                {
+                    "id": "qwen3.5-plus-2026-02-15",
+                    "label": "通义 Qwen3.5 Plus 2026-02-15"
+                },
+                {
+                    "id": "qwen3.5-397b-a17b",
+                    "label": "通义 Qwen3.5 397B A17B"
+                },
                 {
                     "id": "qwen-plus",
                     "label": "通义 Qwen Plus"
@@ -35,18 +47,6 @@
                 {
                     "id": "qwen-plus-2025-01-25",
                     "label": "通义 Qwen Plus 2025-01-25"
-                },
-                {
-                    "id": "qwen-max",
-                    "label": "通义 Qwen Max"
-                },
-                {
-                    "id": "qwen-max-latest",
-                    "label": "通义 Qwen Max 最新版"
-                },
-                {
-                    "id": "qwen-max-2025-01-25",
-                    "label": "通义 Qwen Max 2025-01-25"
                 },
                 {
                     "id": "qwen-max-long",
