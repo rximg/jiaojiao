@@ -68,6 +68,8 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
       }, {} as Record<string, FileEntry[]>);
 
       setFiles(newFiles);
+      // 当文件列表更新时，清除旧的图片预览（防止显示过时的图片）
+      setPreviewUrl(null);
     } finally {
       setLoading(false);
     }
@@ -102,8 +104,12 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
       );
 
       if (category === 'images') {
-        // 图片预览 - 使用local-file协议
-        setPreviewUrl(`local-file://${fullPath}`);
+        // 图片预览 - 使用local-file协议，强制刷新通过先清空再设置
+        setPreviewUrl(null);
+        // 使用setTimeout确保先清空后再设置新的URL
+        setTimeout(() => {
+          setPreviewUrl(`local-file://${fullPath}`);
+        }, 10);
       } else if (category === 'llm_logs') {
         // 日志查看 - 读取内容后显示
         const { content } = await window.electronAPI.fs.readFile(
@@ -154,6 +160,15 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
       const res = await window.electronAPI?.sync?.syncAudioToStore?.(sessionId);
       if (res?.success !== undefined) {
         if (res.success) {
+          // 记录同步操作到会话元数据
+          try {
+            await window.electronAPI.session.update(sessionId, {
+              lastSyncAudioAt: new Date().toISOString(),
+            });
+          } catch (error) {
+            console.warn('Failed to update sync timestamp:', error);
+            // 不阻断同步流程
+          }
           alert(res.message ?? `已同步 ${res.copied ?? 0} 个 mp3`);
         } else {
           alert(res.message ?? '同步失败');
@@ -380,6 +395,7 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
         open={printDialogOpen}
         onOpenChange={setPrintDialogOpen}
         images={printableImages}
+        sessionId={sessionId}
       />
     </div>
   );

@@ -54,6 +54,11 @@ export default function ChatInterface({
 
     if (loadSessionId) {
       // 点击历史记录：加载指定的 session
+      // 如果当前已经是这个session，跳过重新加载（避免覆盖用户刚输入的消息）
+      if (currentSessionId === loadSessionId) {
+        console.log('[ChatInterface] Already in session:', loadSessionId, 'skipping reload');
+        return;
+      }
       createdForNullRef.current = false;
       console.log('[ChatInterface] Loading session:', loadSessionId);
       loadSession(loadSessionId).catch(console.error);
@@ -82,7 +87,7 @@ export default function ChatInterface({
       
       // 不在这里 setShowWelcome(false)，保留快捷选项，等用户发消息后再隐藏
     }
-  }, [loadSessionId, caseIdForNewSession, createNewSession, loadSession, resetSession]);
+  }, [loadSessionId, caseIdForNewSession, currentSessionId, createNewSession, loadSession, resetSession]);
 
   const handleSubmit = useCallback(
     async (e?: FormEvent) => {

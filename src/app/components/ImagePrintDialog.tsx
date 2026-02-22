@@ -17,6 +17,7 @@ interface ImagePrintDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   images: Array<{ name: string; path: string }>;
+  sessionId?: string; // 会话ID，用于记录打印操作
 }
 
 const LOCAL_STORAGE_KEY = 'image-print-layout-v1';
@@ -55,7 +56,7 @@ function probeImageRatio(filePath: string): Promise<PrintableImage['ratioClass']
   });
 }
 
-export default function ImagePrintDialog({ open, onOpenChange, images }: ImagePrintDialogProps) {
+export default function ImagePrintDialog({ open, onOpenChange, images, sessionId }: ImagePrintDialogProps) {
   const [items, setItems] = useState<PrintableImage[]>([]);
   const [selectedMap, setSelectedMap] = useState<Record<string, boolean>>({});
   const [layout, setLayout] = useState<PrintLayoutConfig>(DEFAULT_PRINT_LAYOUT);
@@ -157,6 +158,17 @@ export default function ImagePrintDialog({ open, onOpenChange, images }: ImagePr
   const handlePrint = () => {
     if (!validateBeforePrint()) return;
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(layout));
+    
+    // 记录打印操作到会话元数据
+    if (sessionId) {
+      window.electronAPI.session.update(sessionId, {
+        lastPrintAt: new Date().toISOString(),
+      }).catch((error) => {
+        console.warn('Failed to update print timestamp:', error);
+        // 不阻断打印流程
+      });
+    }
+    
     window.print();
   };
 
@@ -385,26 +397,53 @@ export default function ImagePrintDialog({ open, onOpenChange, images }: ImagePr
 
         <style>{`
           @media print {
+            @page {
+              size: A4 ${layout.orientation === 'portrait' ? 'portrait' : 'landscape'};
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            * {
+              margin: 0 !important;
+              padding: 0 !important;
+              box-sizing: border-box !important;
+            }
+            html, body {
+              width: 100% !important;
+              height: 100% !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              display: block !important;
+            }
             body * {
               visibility: hidden !important;
             }
             .ipd-print-root,
             .ipd-print-root * {
               visibility: visible !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
             }
             .ipd-print-root {
-              position: absolute;
-              top: 0;
-              left: 0;
-              width: 100%;
+              position: fixed !important;
+              top: 0 !important;
+              left: 0 !important;
+              width: 100% !important;
+              height: 100% !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              display: block !important;
             }
             .ipd-print-page {
-              page-break-after: always;
-              break-after: page;
+              width: 100% !important;
+              page-break-after: always !important;
+              break-after: page !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              overflow: hidden !important;
             }
             .ipd-print-page:last-child {
-              page-break-after: auto;
-              break-after: auto;
+              page-break-after: auto !important;
+              break-after: auto !important;
             }
           }
           @media screen {

@@ -97,7 +97,7 @@ export function handleSessionIPC() {
   });
 
   // 更新会话元数据
-  ipcMain.handle('session:update', async (_event, sessionId: string, updates: { title?: string; prompt?: string; messages?: any[]; todos?: any[] }) => {
+  ipcMain.handle('session:update', async (_event, sessionId: string, updates: { title?: string; prompt?: string; messages?: any[]; todos?: any[]; lastSyncAudioAt?: string; lastPrintAt?: string }) => {
     try {
       const deps = sessionUseCaseDeps();
       return await updateSessionUseCase(deps, sessionId, updates);

@@ -66,8 +66,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
     };
     
-    // 延迟保存，避免频繁写入
-    const timer = setTimeout(saveSession, 1000);
+    // 减少延迟保存时间，从1000ms改为300ms，确保用户消息快速持久化
+    const timer = setTimeout(saveSession, 300);
     return () => clearTimeout(timer);
   }, [currentSessionId, messages, todos, isLoadingSession]);
 
@@ -320,6 +320,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       timestamp: new Date(),
     };
     setMessages((prev) => [...prev, userMessage]);
+    allMessagesRef.current = [...allMessagesRef.current, userMessage];
 
     setIsLoading(true);
     setAgentError(null);

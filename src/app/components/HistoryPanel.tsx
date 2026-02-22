@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Clock, Image as ImageIcon, Trash2, Volume2 } from 'lucide-react';
+import { Clock, Image as ImageIcon, Trash2, Volume2, Download, Printer } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -12,6 +12,8 @@ interface Session {
   firstImage?: string;
   hasImage?: boolean;
   hasAudio?: boolean;
+  lastSyncAudioAt?: string;
+  lastPrintAt?: string;
 }
 
 interface HistoryPanelProps {
@@ -21,10 +23,23 @@ interface HistoryPanelProps {
 export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [lastRefreshTime, setLastRefreshTime] = useState<number>(0);
 
   useEffect(() => {
     loadHistory();
   }, []);
+
+  // 监听会话元数据变化，每2秒检查一次是否需要刷新
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // 仅当距离上次刷新超过1秒时触发刷新
+      if (Date.now() - lastRefreshTime >= 1000) {
+        loadHistory();
+        setLastRefreshTime(Date.now());
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [lastRefreshTime]);
 
   const loadHistory = async () => {
     try {
@@ -113,15 +128,29 @@ export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
                         {session.firstMessage}
                       </div>
                     )}
+                    {/* 时间信息 */}
                     <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                       <Clock className="h-3 w-3" />
                       <span className="whitespace-nowrap">{formatDate(session.updatedAt)}</span>
-                      <span className={`inline-flex items-center gap-1 ${session.hasImage ? 'text-foreground' : 'opacity-40'}`} title={session.hasImage ? '已生成图片' : '未生成图片'}>
+                    </div>
+                    {/* 图标状态行 */}
+                    <div className="flex items-center gap-2 mt-1 text-xs">
+                      <span className={`inline-flex items-center gap-1 ${session.hasImage ? 'text-foreground' : 'text-muted-foreground opacity-40'}`} title={session.hasImage ? '已生成图片' : '未生成图片'}>
                         <ImageIcon className="h-3 w-3" />
                       </span>
-                      <span className={`inline-flex items-center gap-1 ${session.hasAudio ? 'text-foreground' : 'opacity-40'}`} title={session.hasAudio ? '已生成音频' : '未生成音频'}>
+                      <span className={`inline-flex items-center gap-1 ${session.hasAudio ? 'text-foreground' : 'text-muted-foreground opacity-40'}`} title={session.hasAudio ? '已生成音频' : '未生成音频'}>
                         <Volume2 className="h-3 w-3" />
                       </span>
+                      {session.lastSyncAudioAt && (
+                        <span className="inline-flex items-center gap-1 text-foreground" title={`最近同步于 ${formatDate(session.lastSyncAudioAt)}`}>
+                          <Download className="h-3 w-3" />
+                        </span>
+                      )}
+                      {session.lastPrintAt && (
+                        <span className="inline-flex items-center gap-1 text-foreground" title={`最近打印于 ${formatDate(session.lastPrintAt)}`}>
+                          <Printer className="h-3 w-3" />
+                        </span>
+                      )}
                     </div>
                   </div>
                 </button>
