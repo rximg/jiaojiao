@@ -12,6 +12,8 @@ export interface SessionListItem {
   prompt?: string;
   firstMessage?: string;
   firstImage?: string;
+  hasImage?: boolean;
+  hasAudio?: boolean;
 }
 
 export interface ListSessionsUseCaseResult {
@@ -31,6 +33,8 @@ export async function listSessionsUseCase(
     sessions.map(async (session): Promise<SessionListItem> => {
       let firstMessage = '';
       let firstImage = '';
+      let hasImage = false;
+      let hasAudio = false;
       try {
         const messagesContent = await deps.artifactRepo.read(session.sessionId, 'meta/messages.json');
         const messages = JSON.parse(
@@ -46,7 +50,16 @@ export async function listSessionsUseCase(
       try {
         const imageEntries = await deps.artifactRepo.list(session.sessionId, 'images');
         const imageFile = imageEntries.find((e) => /\.(png|jpg|jpeg|gif|webp)$/i.test(e.name));
-        if (imageFile) firstImage = imageFile.path;
+        if (imageFile) {
+          firstImage = imageFile.path;
+          hasImage = true;
+        }
+      } catch {
+        // ignore
+      }
+      try {
+        const audioEntries = await deps.artifactRepo.list(session.sessionId, 'audio');
+        hasAudio = audioEntries.some((e) => /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(e.name));
       } catch {
         // ignore
       }
@@ -59,6 +72,8 @@ export async function listSessionsUseCase(
         prompt: m.prompt as string | undefined,
         firstMessage,
         firstImage,
+        hasImage,
+        hasAudio,
       };
     })
   );

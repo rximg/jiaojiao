@@ -40,7 +40,7 @@ export default function WelcomePage({
         {/* 主内容区 */}
         <div className="flex flex-1 overflow-hidden">
           {/* 历史记录面板 */}
-          <div className="w-64 border-r border-border">
+          <div className="w-80 border-r border-border">
             <HistoryPanel onSessionClick={onHistoryClick} />
           </div>
 

@@ -21,7 +21,7 @@
     "test:tools:zhipu": "npx cross-env TEST_API_PROVIDER=zhipu vitest run tests/integration/tools",
     "test:tools:dashscope": "npx cross-env TEST_API_PROVIDER=dashscope vitest run tests/integration/tools",
     "test:agent": "vitest run tests/integration/agent",
-    "lint": "eslint . --ext .ts,.tsx",
+    "lint": "eslint .",
     "format": "prettier --write .",
     "gen-icons": "node scripts/gen-icons.mjs",
     "gen-favicon": "node scripts/gen-favicon.mjs",

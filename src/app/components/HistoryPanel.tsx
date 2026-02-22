@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Clock, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { Clock, Image as ImageIcon, Trash2, Volume2 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -10,6 +10,8 @@ interface Session {
   updatedAt: string;
   firstMessage?: string;
   firstImage?: string;
+  hasImage?: boolean;
+  hasAudio?: boolean;
 }
 
 interface HistoryPanelProps {
@@ -66,8 +68,15 @@ export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
           </div>
         ) : (
           <div className="space-y-1">
-            {sessions.map((session) => (
-              <div
+            {sessions.map((session) => {
+              const normalizedTitle = (session.title ?? '').trim();
+              const isGenericTitle = normalizedTitle === '新对话' || normalizedTitle === '未命名对话' || normalizedTitle.length === 0;
+              const fallbackTitle = (session.firstMessage ?? '').trim().replace(/\s+/g, ' ').slice(0, 30);
+              const displayTitle = isGenericTitle ? (fallbackTitle || '未命名') : normalizedTitle;
+              const showSnippet = Boolean(session.firstMessage && !isGenericTitle);
+
+              return (
+                <div
                 key={session.sessionId}
                 className="group flex items-center gap-2 p-2 rounded-xl hover:bg-accent/80 transition-colors"
               >
@@ -98,15 +107,21 @@ export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
                   
                   {/* 文字信息 */}
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm truncate">{session.title}</div>
-                    {session.firstMessage && (
+                    <div className="font-medium text-sm truncate">{displayTitle}</div>
+                    {showSnippet && (
                       <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
                         {session.firstMessage}
                       </div>
                     )}
-                    <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                       <Clock className="h-3 w-3" />
-                      {formatDate(session.updatedAt)}
+                      <span className="whitespace-nowrap">{formatDate(session.updatedAt)}</span>
+                      <span className={`inline-flex items-center gap-1 ${session.hasImage ? 'text-foreground' : 'opacity-40'}`} title={session.hasImage ? '已生成图片' : '未生成图片'}>
+                        <ImageIcon className="h-3 w-3" />
+                      </span>
+                      <span className={`inline-flex items-center gap-1 ${session.hasAudio ? 'text-foreground' : 'opacity-40'}`} title={session.hasAudio ? '已生成音频' : '未生成音频'}>
+                        <Volume2 className="h-3 w-3" />
+                      </span>
                     </div>
                   </div>
                 </button>
@@ -121,8 +136,9 @@ export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

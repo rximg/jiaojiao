@@ -38,6 +38,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [lastArtifactTime, setLastArtifactTime] = useState<number>(0);
   const [isLoadingSession, setIsLoadingSession] = useState(false); // 防止并发切换 session
+  const skipNextAutoSaveRef = useRef(false);
   const allMessagesRef = useRef<Message[]>([]);
   const pendingHitlRequestRef = useRef<typeof pendingHitlRequest>(null);
 
@@ -47,7 +48,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // 自动保存消息和todos到session
   useEffect(() => {
-    if (!currentSessionId || messages.length === 0) return;
+    if (!currentSessionId || messages.length === 0 || isLoadingSession) return;
+    if (skipNextAutoSaveRef.current) {
+      skipNextAutoSaveRef.current = false;
+      return;
+    }
     
     const saveSession = async () => {
       try {
@@ -64,7 +69,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     // 延迟保存，避免频繁写入
     const timer = setTimeout(saveSession, 1000);
     return () => clearTimeout(timer);
-  }, [currentSessionId, messages, todos]);
+  }, [currentSessionId, messages, todos, isLoadingSession]);
 
   // 从消息内容中提取artifacts
   const extractArtifacts = useCallback((content: string): TodoItem['artifacts'] | undefined => {
@@ -377,6 +382,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
       
       setCurrentSessionId(sessionId);
+      // 仅查看历史会话时不应触发 updatedAt 刷新
+      skipNextAutoSaveRef.current = true;
       
       // 从session加载历史数据
       const sessionData = await window.electronAPI.session.get(sessionId);
