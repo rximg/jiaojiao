@@ -10,6 +10,8 @@ export interface SessionMetaUpdate {
   prompt?: string;
   messages?: any[];
   todos?: any[];
+  lastSyncAudioAt?: string;
+  lastPrintAt?: string;
 }
 
 export interface UpdateSessionUseCaseResult {

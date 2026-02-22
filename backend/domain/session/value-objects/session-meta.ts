@@ -7,4 +7,6 @@ export interface SessionMeta {
   caseId?: string;
   createdAt?: string;
   updatedAt?: string;
+  lastSyncAudioAt?: string; // 最后一次同步音频的时间戳
+  lastPrintAt?: string; // 最后一次打印的时间戳
 }

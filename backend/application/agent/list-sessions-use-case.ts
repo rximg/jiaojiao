@@ -14,6 +14,8 @@ export interface SessionListItem {
   firstImage?: string;
   hasImage?: boolean;
   hasAudio?: boolean;
+  lastSyncAudioAt?: string;
+  lastPrintAt?: string;
 }
 
 export interface ListSessionsUseCaseResult {
@@ -74,6 +76,8 @@ export async function listSessionsUseCase(
         firstImage,
         hasImage,
         hasAudio,
+        lastSyncAudioAt: m.lastSyncAudioAt as string | undefined,
+        lastPrintAt: m.lastPrintAt as string | undefined,
       };
     })
   );
