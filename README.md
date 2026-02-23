@@ -233,4 +233,4 @@ npm install --legacy-peer-deps
 
 ## 许可证
 
-MIT
+本项目采用 [BSD 3-Clause License](LICENCE)。Copyright (c) 2026, rximg/jiaojiao。
