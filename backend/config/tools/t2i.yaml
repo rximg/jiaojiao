@@ -1,5 +1,5 @@
 # T2I 工具层配置（default_params、negative_prompt 等）
 default_params:
-  size: "1472*1104"
+  size: "1472*1120"
   count: 1
 negative_prompt: "模糊文字, 模糊字体, 文字模糊, 多余元素, 杂乱背景, 水印, 低质量, 变形, 扭曲, 模糊, 噪点"

@@ -1,6 +1,6 @@
 {
   "name": "jiaojiao",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "基于 deepagents.js 的有声绘本智能生成应用",
   "author": "",
   "main": "dist-electron/main.js",

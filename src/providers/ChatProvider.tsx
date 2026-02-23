@@ -370,6 +370,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     try {
       setIsLoadingSession(true);
       console.log('[ChatProvider] Loading session:', sessionId);
+
+      // 切换会话前停止流式请求并清理加载状态，避免输入框被锁住
+      try {
+        await window.electronAPI.agent.stopStream();
+      } catch (error) {
+        console.warn('[ChatProvider] Failed to stop stream on loadSession:', error);
+      }
+      setIsLoading(false);
+      setAgentError(null);
+      setPendingHitlRequest(null);
       
       // 单 session 模式：切换 session 前先关闭旧 runtime
       if (currentSessionId && currentSessionId !== sessionId) {
@@ -411,6 +421,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('Failed to load session:', error);
+      setIsLoadingSession(false);
+      
+      // 会话元数据不存在，弹窗提示并清理状态
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Session not found')) {
+        alert(`会话加载失败：该会话的元数据已损坏或丢失\n\n会话ID: ${sessionId}\n\n请返回主页重新开始。`);
+      } else {
+        alert(`会话加载失败：${errorMessage}`);
+      }
+      
+      // 清理状态
+      setCurrentSessionId(null);
+      setMessages([]);
+      setTodos([]);
+      allMessagesRef.current = [];
+      
       throw error;
     } finally {
       setIsLoadingSession(false);

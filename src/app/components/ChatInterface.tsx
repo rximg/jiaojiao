@@ -61,7 +61,11 @@ export default function ChatInterface({
       }
       createdForNullRef.current = false;
       console.log('[ChatInterface] Loading session:', loadSessionId);
-      loadSession(loadSessionId).catch(console.error);
+      loadSession(loadSessionId).catch((error) => {
+        console.error('[ChatInterface] Failed to load session:', error);
+        // 加载失败，返回欢迎页
+        onBack();
+      });
       setShowWelcome(false);
     } else {
       // loadSessionId === null：点击案例或从欢迎页进入，一律重置并创建新 session
