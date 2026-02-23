@@ -177,7 +177,7 @@ export class MultimodalPortImpl implements MultimodalPort {
   }
 
   async synthesizeSpeech(params: SynthesizeSpeechParams): Promise<SynthesizeSpeechResult> {
-    const { items, voice = 'chinese_female', format = 'mp3', sessionId = DEFAULT_SESSION_ID, rateLimitMs } = params;
+    const { items, voice = 'chinese_female', format = 'mp3', sessionId = DEFAULT_SESSION_ID, rateLimitMs, onProgress } = params;
     const cfg = this.deps.ttsCfg;
 
     const inputs = {
@@ -194,7 +194,7 @@ export class MultimodalPortImpl implements MultimodalPort {
       'inference.tts',
       'tool',
       inputs,
-      () => this.synthesizeSpeechImpl(items, voice, format, sessionId, delayMs),
+      () => this.synthesizeSpeechImpl(items, voice, format, sessionId, delayMs, onProgress),
       (result) => ({
         audioPathsCount: result.audioPaths.length,
         audioPaths: result.audioPaths,
@@ -210,7 +210,8 @@ export class MultimodalPortImpl implements MultimodalPort {
     voice: string,
     format: string,
     sessionId: string,
-    delayMs: number
+    delayMs: number,
+    onProgress?: (current: number, total: number, path: string) => void
   ): Promise<SynthesizeSpeechResult> {
     const audioPaths: string[] = [];
     const audioUris: string[] = [];
@@ -239,6 +240,9 @@ export class MultimodalPortImpl implements MultimodalPort {
       const absPath = this.deps.artifactRepo.resolvePath(sessionId, relativePath);
       audioPaths.push(absPath);
       audioUris.push(pathToFileURL(absPath).href);
+      if (onProgress) {
+        onProgress(i + 1, items.length, absPath);
+      }
     }
 
     const numbers = items.map((it) => it.number).filter((n): n is number => n !== undefined);

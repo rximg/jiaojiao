@@ -51,6 +51,8 @@ export interface SynthesizeSpeechParams {
   sessionId?: string;
   /** 条间延迟（毫秒），由 tools 从 config/tools/tts.yaml 传入，属业务配置 */
   rateLimitMs?: number;
+  /** 每完成一个文件时调用，用于前端显示 TTS 进度 */
+  onProgress?: (current: number, total: number, path: string) => void;
 }
 
 export interface SynthesizeSpeechResult {

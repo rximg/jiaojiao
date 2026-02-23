@@ -6,7 +6,7 @@
 import { WorkspaceFilesystem, resolveWorkspaceRoot } from './fs.js';
 import { PersistenceService } from './persistence-service.js';
 import { getLogManager } from './log-manager.js';
-import { initRuntimeManager } from './runtime-manager.js';
+import { initRuntimeManager, getRuntimeManager } from './runtime-manager.js';
 
 let initialized = false;
 
@@ -68,7 +68,6 @@ export async function shutdownServices(): Promise<void> {
   console.log('[ServiceInit] Shutting down services...');
 
   try {
-    const { getRuntimeManager } = await import('./runtime-manager.js');
     const runtimeManager = getRuntimeManager();
     const logManager = getLogManager();
     

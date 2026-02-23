@@ -31,6 +31,11 @@ export default function ChatMessage({ message }: ChatMessageProps) {
         )}
       >
         <div className="whitespace-pre-wrap break-words">{message.content}</div>
+        {message.ttsProgress && message.ttsProgress.total > 0 && (
+          <div className="mt-2 text-xs opacity-70">
+            已生成 {message.ttsProgress.current} / {message.ttsProgress.total} 份文件
+          </div>
+        )}
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="mt-2 space-y-1">
             {message.toolCalls.map((toolCall) => (

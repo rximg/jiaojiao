@@ -38,6 +38,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onToolCall: (callback: (data: any) => void) => {
       ipcRenderer.on('agent:toolCall', (_event, data) => callback(data));
     },
+    onTtsProgress: (callback: (data: { threadId: string; messageId?: string; toolCallId?: string; current: number; total: number; path: string }) => void) => {
+      ipcRenderer.on('agent:ttsProgress', (_event, data) => callback(data));
+    },
     onTodoUpdate: (callback: (data: any) => void) => {
       ipcRenderer.on('agent:todoUpdate', (_event, data) => callback(data));
     },
@@ -113,6 +116,7 @@ declare global {
         sendMessage: (message: string, sessionId?: string) => Promise<string>;
         onMessage: (callback: (data: any) => void) => void;
         onToolCall: (callback: (data: any) => void) => void;
+        onTtsProgress: (callback: (data: { threadId: string; messageId?: string; toolCallId?: string; current: number; total: number; path: string }) => void) => void;
         onTodoUpdate: (callback: (data: any) => void) => void;
         onStepResult: (callback: (data: { threadId: string; messageId: string; stepResults: Array<{ type: 'image' | 'audio' | 'document'; payload: Record<string, unknown> }> }) => void) => void;
         onQuotaExceeded: (callback: (data: any) => void) => void;

@@ -2,6 +2,8 @@
  * 调用 Agent 用例：创建 Agent、加载历史、流式执行并通过回调推送消息/步骤/工具调用/todos
  * 不依赖 Electron，由 IPC 注入 createAgent、getSessionMessages 与 callbacks
  */
+import { runWithContextAsync, setCurrentRunContext, type RunContext } from './run-context.js';
+
 export type StepResult =
   | { type: 'image'; payload: { path: string; prompt?: string } }
   | { type: 'audio'; payload: { path: string; text?: string } }
@@ -11,6 +13,8 @@ export interface InvokeAgentUseCaseCallbacks {
   onMessage: (threadId: string, messages: Array<{ id: string; role: string; content: string; stepResults?: StepResult[] }>) => void;
   onStepResult?: (threadId: string, messageId: string, stepResults: StepResult[]) => void;
   onToolCall?: (threadId: string, toolCalls: any[]) => void;
+  /** TTS 每完成一个文件时推送，用于前端显示「已生成 x/n 份文件」 */
+  onTtsProgress?: (threadId: string, messageId: string | undefined, toolCallId: string | undefined, current: number, total: number, path: string) => void;
   onTodoUpdate?: (threadId: string, todos: any[]) => void;
 }
 
@@ -136,6 +140,14 @@ export async function invokeAgentUseCase(
 
   const stream = await (agent as any).stream({ messages: fixedMessages }, runConfig);
 
+  const runCtx: RunContext = {
+    threadId: effectiveSessionId,
+    onTtsProgress: callbacks.onTtsProgress,
+  };
+
+  setCurrentRunContext(runCtx);
+  try {
+  return await runWithContextAsync(runCtx, async () => {
   let streamingAssistantId: string | null = null;
   for await (const chunk of stream) {
     if (signal.aborted) break;
@@ -174,9 +186,13 @@ export async function invokeAgentUseCase(
     }
 
     if (state?.tool_calls || state?.toolCalls) {
-      const toolCalls = state.tool_calls ?? state.toolCalls;
+      const toolCallsRaw = state.tool_calls ?? state.toolCalls;
+      const toolCalls = Array.isArray(toolCallsRaw) ? toolCallsRaw : [toolCallsRaw];
+      runCtx.messageId = streamingAssistantId ?? undefined;
+      const ttsCall = toolCalls.find((tc: any) => tc.name === 'synthesize_speech');
+      runCtx.toolCallId = ttsCall?.id ?? toolCalls[0]?.id;
       if (callbacks.onToolCall) {
-        callbacks.onToolCall(effectiveSessionId, Array.isArray(toolCalls) ? toolCalls : [toolCalls]);
+        callbacks.onToolCall(effectiveSessionId, toolCalls);
       }
     }
 
@@ -186,4 +202,8 @@ export async function invokeAgentUseCase(
   }
 
   return effectiveSessionId;
+  });
+  } finally {
+    setCurrentRunContext(null);
+  }
 }

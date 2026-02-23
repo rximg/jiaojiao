@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, FormEvent, useEffect } from 'react';
-import { ArrowUp, Square, Settings, ArrowLeft } from 'lucide-react';
+import { ArrowUp, Square, Settings, ArrowLeft, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import ChatMessage from './ChatMessage';
@@ -37,7 +37,7 @@ export default function ChatInterface({
   useEffect(() => {
     adjustTextareaHeight();
   }, [input, adjustTextareaHeight]);
-  const { messages, todos, isLoading, sendMessage, stopStream, currentSessionId, createNewSession, loadSession, resetSession, lastArtifactTime, pendingHitlRequest, respondConfirm } = useChat();
+  const { messages, todos, isLoading, sendMessage, stopStream, currentSessionId, createNewSession, loadSession, resetSession, lastArtifactTime, pendingHitlRequest, respondConfirm, ttsProgressLive } = useChat();
   const waitingForConfirmation = Boolean(pendingHitlRequest);
   const [showWelcome, setShowWelcome] = useState(true);
   const [showWorkspace] = useState(true);
@@ -224,6 +224,16 @@ export default function ChatInterface({
                 )}
               </React.Fragment>
             ))}
+            {ttsProgressLive && ttsProgressLive.total > 0 && (
+              <div className="flex gap-4 justify-start">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Bot className="h-4 w-4 text-primary" />
+                </div>
+                <div className="max-w-[80%] rounded-2xl px-4 py-3 shadow-sm bg-muted text-muted-foreground">
+                  <span className="text-sm">TTS 进度：已生成 {ttsProgressLive.current} / {ttsProgressLive.total} 份文件</span>
+                </div>
+              </div>
+            )}
             {pendingHitlRequest && (
               <HitlConfirmBlock
                 request={pendingHitlRequest}

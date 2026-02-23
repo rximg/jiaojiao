@@ -48,6 +48,8 @@ export interface Message {
   toolCalls?: ToolCall[];
   /** 与该条消息关联的步骤结果（文档/图片/音频），由 agent:stepResult 写入 */
   stepResults?: StepResult[];
+  /** TTS 进度：调用 synthesize_speech 时实时更新，前端显示「已生成 x/n 份文件」 */
+  ttsProgress?: { current: number; total: number };
   /** 已结束的 HITL 确认块，用于在历史中显示并保留「继续/取消」结果 */
   hitlBlock?: HitlBlockRecord;
 }

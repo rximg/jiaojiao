@@ -9,6 +9,8 @@ export interface ToolContext {
   getDefaultSessionId: () => string;
   /** Phase 5：Agent 模块使用 FilesystemBackend。按 session 返回 Backend，供 tools 做 session 内文本读写（二进制可保留 WorkspaceFilesystem） */
   getSessionBackend?: (sessionId: string) => FilesystemBackend;
+  /** 当前 run 的上下文，供 synthesize_speech 等工具上报 TTS 进度 */
+  getRunContext?: () => import('../application/agent/run-context.js').RunContext | undefined;
 }
 
 export interface ToolConfig {

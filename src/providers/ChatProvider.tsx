@@ -16,6 +16,8 @@ interface ChatContextType {
   isLoading: boolean;
   currentSessionId: string | null;
   lastArtifactTime: number; // 最后一次生成产物的时间戳，用于触发刷新
+  /** 当前会话下 TTS 实时进度（聊天框内独立一行显示），流结束或会话切换时清空 */
+  ttsProgressLive: { current: number; total: number } | null;
   sendMessage: (text: string) => Promise<void>;
   respondConfirm: (requestId: string, approved: boolean, editedPayload?: Record<string, unknown>, cancelReason?: string) => Promise<void>;
   dismissQuotaError: () => void;
@@ -37,6 +39,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [lastArtifactTime, setLastArtifactTime] = useState<number>(0);
+  /** TTS 进度：在聊天框内单独显示一行「已生成 x/n 份文件」，流结束清空 */
+  const [ttsProgressLive, setTtsProgressLive] = useState<{ current: number; total: number } | null>(null);
   const [isLoadingSession, setIsLoadingSession] = useState(false); // 防止并发切换 session
   const skipNextAutoSaveRef = useRef(false);
   const allMessagesRef = useRef<Message[]>([]);
@@ -205,10 +209,32 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       console.log('[ChatProvider] Tool called:', data);
     };
 
+    const handleTtsProgress = (data: { threadId: string; messageId?: string; toolCallId?: string; current: number; total: number; path: string }) => {
+      if (data.threadId !== currentSessionId) return;
+      setTtsProgressLive({ current: data.current, total: data.total });
+      setMessages((prev) => {
+        const lastAssistantIdx = prev.map((m, i) => (m.role === 'assistant' ? i : -1)).filter((i) => i >= 0).pop() ?? -1;
+        if (lastAssistantIdx < 0) return prev;
+        const targetId = data.messageId ?? prev[lastAssistantIdx].id;
+        return prev.map((m) => {
+          if (m.role !== 'assistant' || m.id !== targetId) return m;
+          return { ...m, ttsProgress: { current: data.current, total: data.total } };
+        });
+      });
+      allMessagesRef.current = allMessagesRef.current.map((m) => {
+        if (m.role !== 'assistant') return m;
+        const lastId = allMessagesRef.current.filter((x) => x.role === 'assistant').pop()?.id;
+        const targetId = data.messageId ?? lastId;
+        if (m.id !== targetId) return m;
+        return { ...m, ttsProgress: { current: data.current, total: data.total } };
+      });
+    };
+
     const handleQuotaExceeded = (data: any) => {
       console.error('[ChatProvider] Quota exceeded:', data);
       setQuotaError(data);
       setIsLoading(false);
+      setTtsProgressLive(null);
     };
 
     window.electronAPI.agent.onMessage(handleMessage);
@@ -221,7 +247,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setLastArtifactTime(Date.now());
     });
     window.electronAPI.agent.onToolCall(handleToolCall);
-    
+    if (typeof window.electronAPI.agent.onTtsProgress === 'function') {
+      window.electronAPI.agent.onTtsProgress(handleTtsProgress);
+    }
+
     if (typeof window.electronAPI.agent.onQuotaExceeded === 'function') {
       window.electronAPI.agent.onQuotaExceeded(handleQuotaExceeded);
     }
@@ -346,8 +375,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         },
       });
       setIsLoading(false); // 确保停止加载状态
+      setTtsProgressLive(null);
     } finally {
       setIsLoading(false);
+      setTtsProgressLive(null);
     }
   }, [currentSessionId]);
 
@@ -358,6 +389,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const stopStream = useCallback(async () => {
     await window.electronAPI.agent.stopStream();
     setIsLoading(false);
+    setTtsProgressLive(null);
   }, []);
 
   const loadSession = useCallback(async (sessionId: string) => {
@@ -380,6 +412,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
       setAgentError(null);
       setPendingHitlRequest(null);
+      setTtsProgressLive(null);
       
       // 单 session 模式：切换 session 前先关闭旧 runtime
       if (currentSessionId && currentSessionId !== sessionId) {
@@ -479,6 +512,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setCurrentSessionId(null);
     setPendingHitlRequest(null);
     setIsLoading(false);
+    setTtsProgressLive(null);
     setMessages([]);
     setTodos([]);
     allMessagesRef.current = [];
@@ -495,6 +529,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         isLoading,
         currentSessionId,
         lastArtifactTime,
+        ttsProgressLive,
         sendMessage,
         respondConfirm,
         dismissQuotaError,

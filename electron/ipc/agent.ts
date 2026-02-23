@@ -111,6 +111,9 @@ async function sendAgentMessage(
       onToolCall: (newThreadId: string, toolCalls: any[]) => {
         mainWindow.webContents.send('agent:toolCall', { threadId: newThreadId, toolCalls });
       },
+      onTtsProgress: (newThreadId: string, messageId: string | undefined, toolCallId: string | undefined, current: number, total: number, path: string) => {
+        mainWindow.webContents.send('agent:ttsProgress', { threadId: newThreadId, messageId, toolCallId, current, total, path });
+      },
       onTodoUpdate: (newThreadId: string, todos: any[]) => {
         mainWindow.webContents.send('agent:todoUpdate', { threadId: newThreadId, todos });
       },

@@ -51,12 +51,20 @@ function create(config: ToolConfig, context: ToolContext) {
       });
 
       const port = await getMultimodalPortAsync();
+      const runCtx = context.getRunContext?.();
+      const onProgress =
+        runCtx?.onTtsProgress && runCtx.threadId
+          ? (current: number, total: number, path: string) => {
+              runCtx.onTtsProgress!(runCtx.threadId!, runCtx.messageId, runCtx.toolCallId, current, total, path);
+            }
+          : undefined;
       const result = await port.synthesizeSpeech({
         items,
         voice,
         format,
         sessionId,
         rateLimitMs,
+        ...(onProgress ? { onProgress } : {}),
       });
 
       const newEntries: LineNumberEntry[] = items.map((p) => ({

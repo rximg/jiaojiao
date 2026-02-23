@@ -11,6 +11,7 @@ import { DEFAULT_SESSION_ID, getWorkspaceFilesystem, resolveWorkspaceRoot } from
 import { createAgentRuntime, type AgentRuntime } from '../services/runtime-manager.js';
 import { createTool } from '../tools/index.js';
 import { resolveMainAgentConfigPath } from './case-config-resolver.js';
+import { getRunContext } from '../application/agent/run-context.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -242,6 +243,7 @@ export class AgentFactory {
           rootDir: path.join(workspaceRoot, sid || DEFAULT_SESSION_ID),
           virtualMode: true,
         }),
+      getRunContext,
     };
 
     const tools: any[] = [];
