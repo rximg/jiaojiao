@@ -14,11 +14,11 @@ export interface AgentConfig {
     system_prompt: string | {
       path: string;
     };
-    storage: {
+    storage?: {
       type: string;
       path: string;
     };
-    llm: {
+    llm?: {
       model: string;
       temperature: number;
       max_tokens: number;
@@ -249,9 +249,6 @@ export class ConfigLoader {
                                (typeof config.agent.system_prompt === 'object' && config.agent.system_prompt?.path);
       if (!hasSystemPrompt) {
         errors.push('缺少主agent提示词');
-      }
-      if (!config.agent.storage?.path) {
-        errors.push('缺少存储路径配置');
       }
     }
 

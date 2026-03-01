@@ -21,19 +21,6 @@ agent:
   # 如果 Skill 中已有完整 system prompt，可省略；否则可补充
   system_prompt: ""
 
-storage:
-  type: local
-  path: ./outputs
-
-llm:
-  model: qwen3-max-2026-01-23
-  temperature: 0.1
-  max_tokens: 20000
-
-debug:
-  log_llm_calls: false
-  save_llm_calls: false
-
 tools:
   finalize_workflow: {}
   annotate_image_numbers: {}
@@ -53,38 +40,6 @@ tools:
 
 # 可选：子代理配置（如需要）
 sub_agents: {}
-
-workflow:
-  steps:
-    - id: 1
-      name: 生成故事大纲
-      skill_step: outline
-      required: true
-
-    - id: 2
-      name: 设计角色并生成角色图片
-      skill_step: characters
-      required: true
-
-    - id: 3
-      name: 生成分镜图
-      skill_step: scenes
-      required: true
-
-    - id: 4
-      name: 生成台词与配音
-      skill_step: scripts
-      required: true
-
-    - id: 5
-      name: 整合素材并完成绘本
-      skill_step: finalize
-      required: true
-
-    - id: 6
-      name: 向用户展示完成结果
-      skill_step: complete
-      required: true
 
 ui:
   welcome:

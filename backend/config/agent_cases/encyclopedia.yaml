@@ -43,19 +43,6 @@ agent:
     - 此时应**先根据当前对话/状态理解已完成到哪一步**，再用 write_todos 生成一份 todo：**已完成步骤的项保持 completed，从用户指定步骤开始及之后的项设为 pending**，然后**只执行用户要求的那一步或从该步起往后**，不要从头再跑 1→6。
     - 例如：用户说「重新生成台词，按原序号保存」时，若前 2 步已完成，则 write_todos 使第 1、2 项为 completed，第 3～6 项为 pending，然后只执行第 3 步（生成台词）；不要重新创建 6 项或重新执行步骤 1、2。
   
-  storage:
-    type: local
-    path: ./outputs
-  
-  llm:
-    model: qwen3-max-2026-01-23
-    temperature: 0.1
-    max_tokens: 20000
-  
-  # 调试配置（详细追踪请用 LangSmith，此处仅保留简短控制台信息）
-  debug:
-    log_llm_calls: false
-    save_llm_calls: false
 
 # 主 Agent 工具配置（统一 tools，含内置与 AI 能力）
 tools:
@@ -79,39 +66,6 @@ sub_agents:
     name: prompt_generator
     description: 根据用户回答生成文生图提示词
     config_path: ./sub_agents/prompt_gen.yaml
-
-# 工作流配置
-workflow:
-  steps:
-    - id: 1
-      name: 生成文生图提示词（传入用户回答）
-      subagent: prompt_generator
-      required: true
-    
-    - id: 2
-      name: 生成绘本图片
-      tool: generate_image
-      required: true
-    
-    - id: 3
-      name: 生成台词
-      tool: generate_script_from_image
-      required: true
-    
-    - id: 4
-      name: 生成语音
-      tool: synthesize_speech
-      required: true
-    
-    - id: 5
-      name: 标注图片序号
-      tool: annotate_image_numbers
-      required: true
-    
-    - id: 6
-      name: 完成工作流并返回结果
-      tool: finalize_workflow
-      required: true
 
 # UI配置
 ui:
