@@ -113,6 +113,40 @@ function resolveImageOutputRelativePath(
   return path.posix.join(fixedDir, finalName);
 }
 
+function buildImagePathCandidates(
+  imagePath: string,
+  sessionId: string,
+  workspaceRoot: string
+): string[] {
+  const candidates = [resolveImageAbsolutePath(imagePath, sessionId, workspaceRoot)];
+  const normalized = imagePath.replace(/\\/g, '/').replace(/^\/+/, '');
+  const isOutputsRelative = /^outputs\/workspaces\//.test(normalized);
+  const basename = normalized.split('/').pop()?.trim();
+
+  if (!path.isAbsolute(imagePath) && !isOutputsRelative && basename) {
+    if (normalized.startsWith('scenes/')) {
+      candidates.push(path.join(workspaceRoot, sessionId, 'images', basename));
+    }
+    if (normalized.startsWith('characters/')) {
+      candidates.push(path.join(workspaceRoot, sessionId, 'images', basename));
+    }
+  }
+
+  return Array.from(new Set(candidates));
+}
+
+async function resolveFirstExistingImagePath(candidates: string[]): Promise<string> {
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch {
+      // try next
+    }
+  }
+  throw new Error(`Image file not found: ${candidates[0]}`);
+}
+
 export class MultimodalPortImpl implements MultimodalPort {
   private readonly workspaceFsLike = {
     sessionPath: (sessionId: string, rel: string) =>
@@ -276,12 +310,9 @@ export class MultimodalPortImpl implements MultimodalPort {
         const workspaceRoot = this.deps.getWorkspaceRoot();
         const imageDataUrls: string[] = [];
         for (const imagePath of params.imagePaths) {
-          const absolutePath = resolveImageAbsolutePath(imagePath, sessionId, workspaceRoot);
-          try {
-            await fs.access(absolutePath);
-          } catch {
-            throw new Error(`Image file not found: ${absolutePath}`);
-          }
+          const absolutePath = await resolveFirstExistingImagePath(
+            buildImagePathCandidates(imagePath, sessionId, workspaceRoot)
+          );
           const { base64, mime } = await readImageAsBase64(absolutePath);
           imageDataUrls.push(`data:${mime};base64,${base64}`);
         }
@@ -304,7 +335,7 @@ export class MultimodalPortImpl implements MultimodalPort {
           throw new Error(`Edited image download failed: ${imageRes.status} ${imageRes.statusText}`);
         }
         const buffer = Buffer.from(await imageRes.arrayBuffer());
-        const relativePath = resolveImageOutputRelativePath(params.imageName, 'scenes', 'scene');
+        const relativePath = resolveImageOutputRelativePath(params.imageName, 'images', 'scene');
         await this.deps.artifactRepo.write(sessionId, relativePath, buffer);
         const imagePath = this.deps.artifactRepo.resolvePath(sessionId, relativePath);
         const imageUri = pathToFileURL(imagePath).href;
@@ -407,12 +438,9 @@ export class MultimodalPortImpl implements MultimodalPort {
   ): Promise<GenerateScriptFromImageResult> {
     const sessionId = params.sessionId ?? DEFAULT_SESSION_ID;
     const workspaceRoot = this.deps.getWorkspaceRoot();
-    const absolutePath = resolveImageAbsolutePath(params.imagePath, sessionId, workspaceRoot);
-    try {
-      await fs.access(absolutePath);
-    } catch {
-      throw new Error(`Image file not found: ${absolutePath}`);
-    }
+    const absolutePath = await resolveFirstExistingImagePath(
+      buildImagePathCandidates(params.imagePath, sessionId, workspaceRoot)
+    );
 
     const { base64, mime } = await readImageAsBase64(absolutePath);
     const dataUrl = `data:${mime};base64,${base64}`;

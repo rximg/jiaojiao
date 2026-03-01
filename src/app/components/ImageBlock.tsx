@@ -1,15 +1,50 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ZoomIn } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface ImageBlockProps {
   path: string;
   prompt?: string;
+  sessionId?: string | null;
 }
 
-export default function ImageBlock({ path, prompt }: ImageBlockProps) {
+function isAbsolutePath(input: string): boolean {
+  if (!input) return false;
+  if (input.startsWith('local-file://')) return true;
+  return /^[a-zA-Z]:[\\/]/.test(input) || input.startsWith('/');
+}
+
+export default function ImageBlock({ path, prompt, sessionId }: ImageBlockProps) {
   const [open, setOpen] = useState(false);
-  const encodedPath = encodeURIComponent(path);
+  const [resolvedPath, setResolvedPath] = useState(path);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const resolvePath = async () => {
+      if (isAbsolutePath(path) || !sessionId || typeof window.electronAPI?.fs?.getFilePath !== 'function') {
+        if (!cancelled) setResolvedPath(path);
+        return;
+      }
+
+      try {
+        const { path: fullPath } = await window.electronAPI.fs.getFilePath(sessionId, path);
+        if (!cancelled) setResolvedPath(fullPath || path);
+      } catch {
+        if (!cancelled) setResolvedPath(path);
+      }
+    };
+
+    resolvePath();
+    return () => {
+      cancelled = true;
+    };
+  }, [path, sessionId]);
+
+  const imageSrc = useMemo(() => {
+    if (resolvedPath.startsWith('local-file://')) return resolvedPath;
+    return `local-file://${encodeURIComponent(resolvedPath)}`;
+  }, [resolvedPath]);
 
   return (
     <>
@@ -21,7 +56,7 @@ export default function ImageBlock({ path, prompt }: ImageBlockProps) {
         onKeyDown={(e) => e.key === 'Enter' && setOpen(true)}
       >
         <img
-          src={`local-file://${encodedPath}`}
+          src={imageSrc}
           alt={prompt ?? '图像'}
           className="w-full h-full object-cover"
         />
@@ -36,7 +71,7 @@ export default function ImageBlock({ path, prompt }: ImageBlockProps) {
           </DialogHeader>
           <div className="space-y-4">
             <img
-              src={`local-file://${encodedPath}`}
+              src={imageSrc}
               alt={prompt ?? '图像预览'}
               className="w-full rounded-lg"
             />

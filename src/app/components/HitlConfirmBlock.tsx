@@ -242,14 +242,14 @@ export default function HitlConfirmBlock({ request, sessionId, onContinue, onCan
         const up = typeof payload.userPrompt === 'string' ? payload.userPrompt : null;
         return (
           <div className="space-y-2">
-            {imagePath ? <ImageBlock path={imagePath} /> : <div className="text-sm opacity-80">无图片路径</div>}
+            {imagePath ? <ImageBlock path={imagePath} sessionId={sessionId} /> : <div className="text-sm opacity-80">无图片路径</div>}
             {up ? <DocumentBlock pathOrContent={up} title="用户补充/修改" /> : null}
           </div>
         );
       }
       return (
         <div className="space-y-2">
-          {imagePath ? <ImageBlock path={imagePath} /> : <div className="text-sm opacity-80">无图片路径</div>}
+          {imagePath ? <ImageBlock path={imagePath} sessionId={sessionId} /> : <div className="text-sm opacity-80">无图片路径</div>}
           <EditableDocumentBlock
             value={editableVlUserPrompt}
             onChange={setEditableVlUserPrompt}
@@ -265,9 +265,9 @@ export default function HitlConfirmBlock({ request, sessionId, onContinue, onCan
       if (resolved) {
         const ann = Array.isArray(payload.annotations) ? payload.annotations : [];
         if (imagePath && ann.length > 0) {
-          return <ImageBlock path={imagePath} />;
+          return <ImageBlock path={imagePath} sessionId={sessionId} />;
         }
-        return imagePath ? <ImageBlock path={imagePath} /> : <div className="text-sm opacity-80">无图片路径</div>;
+        return imagePath ? <ImageBlock path={imagePath} sessionId={sessionId} /> : <div className="text-sm opacity-80">无图片路径</div>;
       }
       if (imagePath && labelAnnotations.length > 0) {
         return (
