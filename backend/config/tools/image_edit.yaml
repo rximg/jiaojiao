@@ -1,0 +1,4 @@
+# 图像编辑工具配置
+default_params:
+  strength: 0.7
+  size: "1472*1120"

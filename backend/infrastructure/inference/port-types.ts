@@ -12,6 +12,19 @@ export interface T2IPortInput {
   parameters: Record<string, unknown>;
 }
 
+export interface EditImagePortInput {
+  model?: string;
+  prompt: string;
+  imageDataUrls: string[];
+  parameters: {
+    size: string;
+    n: number;
+    prompt_extend: boolean;
+    watermark: boolean;
+    enable_interleave: boolean;
+  };
+}
+
 export interface TTSPortInput {
   text: string;
   voice: string;

@@ -4,6 +4,8 @@
 import type {
   GenerateImageParams,
   GenerateImageResult,
+  EditImageParams,
+  EditImageResult,
   SynthesizeSpeechParams,
   SynthesizeSpeechResult,
   GenerateScriptFromImageParams,
@@ -12,6 +14,7 @@ import type {
 
 export interface MultimodalPort {
   generateImage(params: GenerateImageParams): Promise<GenerateImageResult>;
+  editImage(params: EditImageParams): Promise<EditImageResult>;
   synthesizeSpeech(params: SynthesizeSpeechParams): Promise<SynthesizeSpeechResult>;
   generateScriptFromImage(params: GenerateScriptFromImageParams): Promise<GenerateScriptFromImageResult>;
 }

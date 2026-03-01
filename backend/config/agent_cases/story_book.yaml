@@ -1,0 +1,114 @@
+name: story_book_agent
+version: 1.0.0
+description: 绘本故事生成系统 - 生成多图片长故事绘本，保证角色一致性
+
+# Skill 配置（新增）
+skill_path: .claude/skills/picture-book-story
+
+# 案例元数据
+case:
+  id: story_book
+  title: 绘本故事
+  description: 生成多图片长故事绘本，保证角色一致性
+  cover: 绘本故事封面.png
+  order: 2
+
+agent:
+  name: story_book_agent
+  version: 1.0.0
+  type: main_agent
+
+  # 如果 Skill 中已有完整 system prompt，可省略；否则可补充
+  system_prompt: ""
+
+storage:
+  type: local
+  path: ./outputs
+
+llm:
+  model: qwen3-max-2026-01-23
+  temperature: 0.1
+  max_tokens: 20000
+
+debug:
+  log_llm_calls: false
+  save_llm_calls: false
+
+tools:
+  finalize_workflow: {}
+  annotate_image_numbers: {}
+  delete_artifacts: {}
+  generate_image:
+    enable: true
+    config_path: ./tools/t2i.yaml
+  synthesize_speech:
+    enable: true
+    config_path: ./tools/tts.yaml
+  generate_script_from_image:
+    enable: true
+    config_path: ./tools/vl_script.yaml
+  edit_image:
+    enable: true
+    config_path: ./tools/image_edit.yaml
+
+# 可选：子代理配置（如需要）
+sub_agents: {}
+
+workflow:
+  steps:
+    - id: 1
+      name: 生成故事大纲
+      skill_step: outline
+      required: true
+
+    - id: 2
+      name: 设计角色并生成角色图片
+      skill_step: characters
+      required: true
+
+    - id: 3
+      name: 生成分镜图
+      skill_step: scenes
+      required: true
+
+    - id: 4
+      name: 生成台词与配音
+      skill_step: scripts
+      required: true
+
+    - id: 5
+      name: 整合素材并完成绘本
+      skill_step: finalize
+      required: true
+
+    - id: 6
+      name: 向用户展示完成结果
+      skill_step: complete
+      required: true
+
+ui:
+  welcome:
+    title: 欢迎使用绘本故事生成助手
+    subtitle: 我可以帮您生成完整的多页绘本故事，保证角色形象一致
+
+    instructions:
+      title: 请告诉我
+      items:
+        - 主题：想要讲述的故事（如：小兔子找妈妈、小熊学本领）
+        - 年龄：目标儿童的年龄段（如：3-6岁）
+        - 页数：想要生成的页数（建议8-16页）
+
+    footer: 或者直接点击下方的快捷选项开始！
+
+  quick_options:
+    - label: 小兔子勇敢之旅
+      description: 适合3-6岁儿童
+      prompt: 给5岁孩子生成小兔子勇敢面对困难的绘本，10页
+
+    - label: 小猫找妈妈
+      description: 温馨亲情故事
+      prompt: 给4岁孩子生成小猫找妈妈的绘本，8页
+
+    - label: 小熊学本领
+      description: 成长励志故事
+      prompt: 给6岁孩子生成小熊学习新本领的绘本，12页

@@ -7,6 +7,8 @@ export type {
   ScriptLine,
   GenerateImageParams,
   GenerateImageResult,
+  EditImageParams,
+  EditImageResult,
   SynthesizeSpeechParams,
   SynthesizeSpeechResult,
   GenerateScriptFromImageParams,

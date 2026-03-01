@@ -5,6 +5,7 @@ import './finalize-workflow.js';
 import './annotate-image-numbers.js';
 import './delete-artifacts.js';
 import './generate-image.js';
+import './edit-image.js';
 import './synthesize-speech.js';
 import './generate-script-from-image.js';
 

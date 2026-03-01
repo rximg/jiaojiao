@@ -6,6 +6,7 @@ import { getAIConfig } from '../infrastructure/inference/ai-config.js';
 import { createLLMFromAIConfig } from '../infrastructure/inference/adapters/llm/index.js';
 import type { LLMAIConfig } from '#backend/domain/inference/types.js';
 import * as path from 'path';
+import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 import { DEFAULT_SESSION_ID, getWorkspaceFilesystem, resolveWorkspaceRoot } from '../services/fs.js';
 import { createAgentRuntime, type AgentRuntime } from '../services/runtime-manager.js';
@@ -271,14 +272,35 @@ export class AgentFactory {
       });
     }
 
-    // 加载主Agent提示词（已嵌入配置）
-    const mainSystemPrompt = typeof this.agentConfig.agent.system_prompt === 'string'
-      ? this.agentConfig.agent.system_prompt
-      : this.agentConfig.agent.system_prompt.path 
-        ? this.configLoader.loadPromptFromYaml(
-            path.resolve(this.projectRoot, this.agentConfig.agent.system_prompt.path.replace('../', ''))
-          )
-        : '';
+    // 加载主Agent提示词
+    // 优先级：1) skill_path 对应 SKILL.md；2) YAML 中的 agent.system_prompt
+    let mainSystemPrompt = '';
+
+    if (this.agentConfig.skill_path) {
+      const skillPath = path.isAbsolute(this.agentConfig.skill_path)
+        ? this.agentConfig.skill_path
+        : path.resolve(this.projectRoot, this.agentConfig.skill_path);
+      const skillFilePath = path.join(skillPath, 'SKILL.md');
+
+      if (fs.existsSync(skillFilePath)) {
+        const skillContent = fs.readFileSync(skillFilePath, 'utf-8');
+        const frontmatterMatch = skillContent.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+        mainSystemPrompt = frontmatterMatch ? frontmatterMatch[2].trim() : skillContent.trim();
+        console.log(`[AgentFactory] 从 Skill 加载 system prompt: ${skillFilePath}`);
+      } else {
+        console.warn(`[AgentFactory] Skill 文件不存在: ${skillFilePath}`);
+      }
+    }
+
+    if (!mainSystemPrompt) {
+      mainSystemPrompt = typeof this.agentConfig.agent.system_prompt === 'string'
+        ? this.agentConfig.agent.system_prompt
+        : this.agentConfig.agent.system_prompt.path
+          ? this.configLoader.loadPromptFromYaml(
+              path.resolve(this.projectRoot, this.agentConfig.agent.system_prompt.path.replace('../', ''))
+            )
+          : '';
+    }
 
     if (!mainSystemPrompt) {
       throw new Error('主Agent系统提示词未配置');
@@ -295,6 +317,11 @@ export class AgentFactory {
       checkpointer = new WorkspaceCheckpointSaver(workspace);
     }
 
+    // 如果配置了 skill_path，传给 deepagents 以启用 Skill 运行时能力
+    const skillSources = this.agentConfig.skill_path
+      ? [this.agentConfig.skill_path]
+      : undefined;
+
     // 创建主Agent
     // 注意：不在主 Agent 中添加 FilesystemMiddleware，因为 prompt_generator 子代理已经通过 createAgent 添加了
     // 这样可以避免 middleware 重复定义的错误
@@ -305,6 +332,7 @@ export class AgentFactory {
       systemPrompt: mainSystemPrompt,
       subagents: subAgents,
       ...(checkpointer ? { checkpointer } : {}),
+      ...(skillSources ? { skills: skillSources } : {}),
     });
 
     return agent;

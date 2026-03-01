@@ -6,6 +6,7 @@ export interface AgentConfig {
   name: string;
   version: string;
   description: string;
+  skill_path?: string;
   agent: {
     name: string;
     version: string;

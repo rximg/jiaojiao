@@ -15,6 +15,7 @@ import { getAIConfig } from './inference/ai-config.js';
 import {
   createVLPort,
   createT2IPort,
+  createEditImagePort,
   createTTSSyncPort,
 } from './inference/create-ports.js';
 
@@ -71,6 +72,7 @@ export async function createMultimodalPort(): Promise<MultimodalPort> {
   return new MultimodalPortImpl({
     vlPort: createVLPort(vl),
     t2iPort: createT2IPort(t2i),
+    editImagePort: createEditImagePort(t2i),
     ttsSyncPort: createTTSSyncPort(tts),
     vlCfg: vl,
     t2iCfg: t2i,

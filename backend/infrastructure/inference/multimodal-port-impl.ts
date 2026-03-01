@@ -9,6 +9,8 @@ import type {
   MultimodalPort,
   GenerateImageParams,
   GenerateImageResult,
+  EditImageParams,
+  EditImageResult,
   SynthesizeSpeechParams,
   SynthesizeSpeechResult,
   GenerateScriptFromImageParams,
@@ -21,7 +23,7 @@ import type {
 import type { ArtifactRepository } from '#backend/domain/workspace/repositories/artifact-repository.js';
 import { traceAiRun } from '../../agent/langsmith-trace.js';
 import { pcmToMp3, pcmToWav } from '../../services/audio-format.js';
-import type { VLPort, T2IPort, TTSSyncPort } from './create-ports.js';
+import type { VLPort, T2IPort, EditImagePort, TTSSyncPort } from './create-ports.js';
 
 const DEFAULT_SESSION_ID = 'default';
 
@@ -30,6 +32,7 @@ const VL_FALLBACK_PROMPT = `你是一个有声绘本台词设计师，找出图�
 export interface MultimodalPortImplDeps {
   vlPort: VLPort;
   t2iPort: T2IPort;
+  editImagePort: EditImagePort;
   /** 同步 TTS：智谱返回 PCM，通义返回 audioUrl */
   ttsSyncPort: TTSSyncPort;
   vlCfg: VLAIConfig;
@@ -201,6 +204,95 @@ export class MultimodalPortImpl implements MultimodalPort {
         numbers: result.numbers,
         sessionId: result.sessionId,
         _note: 'audio blob not recorded',
+      })
+    );
+  }
+
+  async editImage(params: EditImageParams): Promise<EditImageResult> {
+    const sessionId = params.sessionId ?? DEFAULT_SESSION_ID;
+    if (!Array.isArray(params.imagePaths) || params.imagePaths.length === 0) {
+      throw new Error('edit_image requires at least one image path');
+    }
+
+    const promptStr = await resolvePromptInput(
+      params.prompt,
+      sessionId,
+      this.workspaceFsLike
+    );
+
+    const size = params.size ?? '1280*1280';
+    const count = Math.max(1, Math.min(4, params.count ?? 1));
+    const promptExtend = params.promptExtend ?? true;
+    const watermark = params.watermark ?? false;
+
+    const cfg = this.deps.t2iCfg;
+    const inputs = {
+      promptLength: promptStr.length,
+      imageCount: params.imagePaths.length,
+      size,
+      count,
+      promptExtend,
+      watermark,
+      sessionId,
+      provider: cfg.provider,
+      model: cfg.model,
+    };
+
+    return traceAiRun(
+      'inference.image_edit',
+      'tool',
+      inputs,
+      async () => {
+        const workspaceRoot = this.deps.getWorkspaceRoot();
+        const imageDataUrls: string[] = [];
+        for (const imagePath of params.imagePaths) {
+          const absolutePath = resolveImageAbsolutePath(imagePath, sessionId, workspaceRoot);
+          try {
+            await fs.access(absolutePath);
+          } catch {
+            throw new Error(`Image file not found: ${absolutePath}`);
+          }
+          const { base64, mime } = await readImageAsBase64(absolutePath);
+          imageDataUrls.push(`data:${mime};base64,${base64}`);
+        }
+
+        const result = await this.deps.editImagePort.execute({
+          model: params.model,
+          prompt: promptStr,
+          imageDataUrls,
+          parameters: {
+            size,
+            n: count,
+            prompt_extend: promptExtend,
+            watermark,
+            enable_interleave: false,
+          },
+        });
+
+        const imageRes = await fetch(result.imageUrl);
+        if (!imageRes.ok) {
+          throw new Error(`Edited image download failed: ${imageRes.status} ${imageRes.statusText}`);
+        }
+        const buffer = Buffer.from(await imageRes.arrayBuffer());
+        const imageFileName = `edited_${Date.now()}_${Math.random().toString(36).slice(2, 9)}.png`;
+        const relativePath = path.posix.join('images', imageFileName);
+        await this.deps.artifactRepo.write(sessionId, relativePath, buffer);
+        const imagePath = this.deps.artifactRepo.resolvePath(sessionId, relativePath);
+        const imageUri = pathToFileURL(imagePath).href;
+
+        return {
+          imagePath,
+          imageUri,
+          imageUrl: result.imageUrl,
+          sessionId,
+        };
+      },
+      (result) => ({
+        imagePath: result.imagePath,
+        imageUri: result.imageUri,
+        imageUrl: result.imageUrl,
+        sessionId: result.sessionId,
+        _note: 'blob not recorded',
       })
     );
   }

@@ -35,6 +35,26 @@ export interface GenerateImageResult {
   sessionId: string;
 }
 
+export interface EditImageParams {
+  /** 编辑指令：统一为 PromptInput，直接内容或从文件加载 */
+  prompt: PromptInput;
+  /** 参考图路径（支持 1..N 张） */
+  imagePaths: ArtifactFilePath[];
+  size?: string;
+  count?: number;
+  model?: string;
+  promptExtend?: boolean;
+  watermark?: boolean;
+  sessionId?: string;
+}
+
+export interface EditImageResult {
+  imagePath: ArtifactFilePath;
+  imageUri: ArtifactFileUri;
+  imageUrl?: RemoteUrl;
+  sessionId: string;
+}
+
 /** 单条 TTS 条目（由 tools 规划好 relativePath、可选 number 后传入端口） */
 export interface SynthesizeSpeechItem {
   text: string;
