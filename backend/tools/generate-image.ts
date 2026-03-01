@@ -20,6 +20,7 @@ function create(config: ToolConfig, context: ToolContext) {
     async (params: {
       prompt?: string;
       promptFile?: string;
+      imageName?: string;
       size?: string;
       style?: string;
       count?: number;
@@ -37,6 +38,7 @@ function create(config: ToolConfig, context: ToolContext) {
       const port = await getMultimodalPortAsync();
       return port.generateImage({
         prompt: promptInput,
+        imageName: (merged.imageName as string | undefined)?.trim() || undefined,
         size: (merged.size as string) ?? (defaultParams.size as string) ?? '1024*1024',
         style: merged.style as string | undefined,
         count: (merged.count as number) ?? (defaultParams.count as number) ?? 1,
@@ -51,6 +53,7 @@ function create(config: ToolConfig, context: ToolContext) {
       schema: z.object({
         prompt: z.string().optional().describe('文生图提示词（与promptFile二选一）'),
         promptFile: z.string().optional().describe('提示词文件路径（workspace相对路径，与prompt二选一）'),
+        imageName: z.string().optional().describe('输出文件名，如 rabbit_角色.png（不含路径）'),
         size: z.string().optional().default((defaultParams.size as string) ?? '1024*1024').describe('图片尺寸'),
         style: z.string().optional().describe('图片风格'),
         count: z.number().optional().default((defaultParams.count as number) ?? 1).describe('生成数量'),

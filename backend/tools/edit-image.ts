@@ -1,5 +1,5 @@
 /**
- * edit_image：图像编辑，调用 MultimodalPort（DashScope wan2.6-image 同步接口）
+ * edit_image：图像编辑，调用 MultimodalPort（DashScope wan2.6-image 异步接口）
  */
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
@@ -9,10 +9,36 @@ import type { EditImageParams } from '#backend/domain/inference/types.js';
 import type { ToolConfig, ToolContext } from './registry.js';
 import { registerTool } from './registry.js';
 
+const MIN_PIXELS = 589_824;
+const MAX_PIXELS = 1_638_400;
+const SAFE_DEFAULT_SIZE = '1472*1104';
+
+function normalizeEditImageSize(size: string | undefined): string {
+  const candidate = (size ?? '').trim();
+  const match = candidate.match(/^(\d+)\*(\d+)$/);
+  if (!match) return SAFE_DEFAULT_SIZE;
+
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return SAFE_DEFAULT_SIZE;
+  }
+
+  const totalPixels = width * height;
+  if (totalPixels < MIN_PIXELS || totalPixels > MAX_PIXELS) {
+    return SAFE_DEFAULT_SIZE;
+  }
+
+  return `${width}*${height}`;
+}
+
 function create(config: ToolConfig, context: ToolContext) {
   const toolName = config.name ?? 'edit_image';
   const description = config.description ?? '编辑现有图片并生成新图';
-  const serviceConfig = config.serviceConfig as { default_params?: Record<string, unknown> } | undefined;
+  const serviceConfig = config.serviceConfig as {
+    model?: string;
+    default_params?: Record<string, unknown>;
+  } | undefined;
   const defaultParams = serviceConfig?.default_params ?? {};
 
   return tool(
@@ -21,6 +47,7 @@ function create(config: ToolConfig, context: ToolContext) {
       promptFile?: string;
       imagePath?: string;
       imagePaths?: string[];
+      imageName?: string;
       size?: string;
       count?: number;
       model?: string;
@@ -51,12 +78,23 @@ function create(config: ToolConfig, context: ToolContext) {
       }
 
       const port = await getMultimodalPortAsync();
+      const modelFromConfig =
+        (serviceConfig?.model as string | undefined) ??
+        (defaultParams.model as string | undefined);
+      const requestedSize =
+        (merged.size as string | undefined) ??
+        (defaultParams.size as string | undefined) ??
+        SAFE_DEFAULT_SIZE;
       return port.editImage({
         prompt: promptInput,
         imagePaths,
-        size: (merged.size as string) ?? (defaultParams.size as string) ?? '1280*1280',
+        imageName: (merged.imageName as string | undefined)?.trim() || undefined,
+        size: normalizeEditImageSize(requestedSize),
         count: (merged.count as number) ?? (defaultParams.count as number) ?? 1,
-        model: merged.model as string | undefined,
+        model:
+          (merged.model as string | undefined) ??
+          modelFromConfig ??
+          'wan2.6-image',
         promptExtend:
           (merged.promptExtend as boolean | undefined) ??
           (defaultParams.prompt_extend as boolean | undefined) ??
@@ -76,9 +114,10 @@ function create(config: ToolConfig, context: ToolContext) {
         promptFile: z.string().optional().describe('提示词文件路径（workspace相对路径，与prompt二选一）'),
         imagePath: z.string().optional().describe('单张参考图片路径（workspace相对路径）'),
         imagePaths: z.array(z.string()).optional().describe('多张参考图片路径（workspace相对路径）'),
-        size: z.string().optional().default((defaultParams.size as string) ?? '1280*1280').describe('输出图片尺寸，如 1280*1280'),
+        imageName: z.string().optional().describe('输出文件名，如 scene_01.png（不含路径）'),
+        size: z.string().optional().default((defaultParams.size as string) ?? SAFE_DEFAULT_SIZE).describe('输出图片尺寸，如 1280*1280（总像素需在 589824 到 1638400 之间）'),
         count: z.number().optional().default((defaultParams.count as number) ?? 1).describe('输出图片数量（1-4，默认1）'),
-        model: z.string().optional().describe('模型名称（默认使用 AI 配置中的模型）'),
+        model: z.string().optional().describe('模型名称（默认 wan2.6-image）'),
         strength: z.number().optional().describe('兼容参数，当前接口未使用'),
         promptExtend: z.boolean().optional().describe('是否启用提示词智能改写（默认true）'),
         watermark: z.boolean().optional().describe('是否添加水印（默认false）'),

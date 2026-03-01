@@ -108,7 +108,7 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
         setPreviewUrl(null);
         // 使用setTimeout确保先清空后再设置新的URL
         setTimeout(() => {
-          setPreviewUrl(`local-file://${fullPath}`);
+          setPreviewUrl(`local-file://${encodeURIComponent(fullPath)}`);
         }, 10);
       } else if (category === 'llm_logs') {
         // 日志查看 - 读取内容后显示
@@ -308,7 +308,7 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
                       >
                         <div className="w-12 h-12 flex-shrink-0 rounded-lg border border-border overflow-hidden bg-muted">
                           <img
-                            src={`local-file://${file.path}`}
+                            src={`local-file://${encodeURIComponent(file.path)}`}
                             alt={file.name}
                             className="w-full h-full object-cover"
                             loading="lazy"
@@ -338,7 +338,7 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
                           className="w-full h-8"
                           style={{ maxHeight: '32px' }}
                         >
-                          <source src={`local-file://${file.path}`} type="audio/mpeg" />
+                          <source src={`local-file://${encodeURIComponent(file.path)}`} type="audio/mpeg" />
                           您的浏览器不支持音频播放
                         </audio>
                       </div>

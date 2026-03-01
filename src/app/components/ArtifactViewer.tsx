@@ -46,7 +46,7 @@ export default function ArtifactViewer({ artifacts }: ArtifactViewerProps) {
                 onClick={() => setSelectedImage(img)}
               >
                 <img
-                  src={`local-file://${img.path}`}
+                  src={`local-file://${encodeURIComponent(img.path)}`}
                   alt={img.prompt || '图像'}
                   className="w-full h-full object-cover"
                 />
@@ -95,7 +95,7 @@ export default function ArtifactViewer({ artifacts }: ArtifactViewerProps) {
                   </Button>
                   <audio
                     id={audioId}
-                    src={`local-file://${audio.path}`}
+                    src={`local-file://${encodeURIComponent(audio.path)}`}
                     className="flex-1 h-8"
                     controls
                     onEnded={() => handleAudioPause()}
@@ -136,7 +136,7 @@ export default function ArtifactViewer({ artifacts }: ArtifactViewerProps) {
             </DialogHeader>
             <div className="space-y-4">
               <img
-                src={`local-file://${selectedImage.path}`}
+                src={`local-file://${encodeURIComponent(selectedImage.path)}`}
                 alt={selectedImage.prompt || '图像预览'}
                 className="w-full rounded-lg"
               />

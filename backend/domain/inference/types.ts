@@ -19,6 +19,8 @@ export type RemoteUrl = string;
 export interface GenerateImageParams {
   /** 提示词：统一为 PromptInput，直接内容或从文件加载 */
   prompt: PromptInput;
+  /** 输出文件名（可选），例如 rabbit_角色.png */
+  imageName?: string;
   size?: string;
   style?: string;
   count?: number;
@@ -40,6 +42,8 @@ export interface EditImageParams {
   prompt: PromptInput;
   /** 参考图路径（支持 1..N 张） */
   imagePaths: ArtifactFilePath[];
+  /** 输出文件名（可选），例如 scene_01.png */
+  imageName?: string;
   size?: string;
   count?: number;
   model?: string;

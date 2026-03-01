@@ -40,8 +40,12 @@ export async function submitEditImageDashScope(
     ...input.imageDataUrls.map((dataUrl) => ({ image: dataUrl })),
   ];
 
+  const resolvedModel =
+    input.model?.trim() ||
+    (cfg.model === 'wan2.6-t2i' ? 'wan2.6-image' : cfg.model);
+
   const body = {
-    model: input.model ?? cfg.model,
+    model: resolvedModel,
     input: {
       messages: [
         {

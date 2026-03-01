@@ -52,7 +52,7 @@ function probeImageRatio(filePath: string): Promise<PrintableImage['ratioClass']
       }
     };
     image.onerror = () => resolve('unknown');
-    image.src = `local-file://${filePath}`;
+    image.src = `local-file://${encodeURIComponent(filePath)}`;
   });
 }
 
@@ -197,7 +197,7 @@ export default function ImagePrintDialog({ open, onOpenChange, images, sessionId
             >
               {cell.image ? (
                 <img
-                  src={`local-file://${cell.image.path}`}
+                  src={`local-file://${encodeURIComponent(cell.image.path)}`}
                   alt={cell.image.name}
                   className="h-full w-full"
                   style={{ objectFit: layout.fitMode === 'contain' ? 'contain' : 'fill' }}
@@ -249,7 +249,7 @@ export default function ImagePrintDialog({ open, onOpenChange, images, sessionId
                         }))
                       }
                     />
-                    <img src={`local-file://${item.path}`} alt={item.name} className="h-10 w-10 rounded object-cover border border-border" />
+                    <img src={`local-file://${encodeURIComponent(item.path)}`} alt={item.name} className="h-10 w-10 rounded object-cover border border-border" />
                     <div className="min-w-0 flex-1">
                       <div className="text-xs truncate">{item.name}</div>
                       <div className="text-[11px] text-muted-foreground">

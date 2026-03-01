@@ -1,4 +1,5 @@
 # 图像编辑工具配置
 default_params:
+  model: "wan2.6-image"
   strength: 0.7
-  size: "1472*1120"
+  size: "1280*960"

@@ -104,7 +104,7 @@ export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
                   {session.firstImage ? (
                     <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-muted flex items-center justify-center relative">
                       <img 
-                        src={`local-file://${session.firstImage}`} 
+                        src={`local-file://${encodeURIComponent(session.firstImage)}`} 
                         alt="预览" 
                         className="w-full h-full object-cover relative z-10"
                         onError={(e) => {

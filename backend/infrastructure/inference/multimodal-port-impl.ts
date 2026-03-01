@@ -93,6 +93,26 @@ async function readImageAsBase64(absolutePath: string): Promise<{ base64: string
   return { base64: buffer.toString('base64'), mime };
 }
 
+function resolveImageOutputRelativePath(
+  imageName: string | undefined,
+  fixedDir: string,
+  fallbackPrefix: string
+): string {
+  const raw = (imageName ?? '').trim();
+  const baseName = raw.replace(/\\/g, '/').split('/').pop()?.trim() ?? '';
+
+  if (!baseName) {
+    return path.posix.join(
+      fixedDir,
+      `${fallbackPrefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}.png`
+    );
+  }
+
+  const ext = path.posix.extname(baseName);
+  const finalName = ext ? baseName : `${baseName}.png`;
+  return path.posix.join(fixedDir, finalName);
+}
+
 export class MultimodalPortImpl implements MultimodalPort {
   private readonly workspaceFsLike = {
     sessionPath: (sessionId: string, rel: string) =>
@@ -114,6 +134,7 @@ export class MultimodalPortImpl implements MultimodalPort {
 
     const inputs = {
       promptLength: promptStr.length,
+      imageName: params.imageName,
       size,
       count,
       sessionId,
@@ -125,7 +146,15 @@ export class MultimodalPortImpl implements MultimodalPort {
       'inference.t2i',
       'tool',
       inputs,
-      async () => this.generateImageImpl(promptStr, sessionId, size, count, negativePrompt),
+      async () =>
+        this.generateImageImpl(
+          promptStr,
+          sessionId,
+          size,
+          count,
+          negativePrompt,
+          params.imageName
+        ),
       (result) => ({
         imagePath: result.imagePath,
         imageUri: result.imageUri,
@@ -141,7 +170,8 @@ export class MultimodalPortImpl implements MultimodalPort {
     sessionId: string,
     size: string,
     count: number,
-    negativePrompt?: string
+    negativePrompt?: string,
+    imageName?: string
   ): Promise<GenerateImageResult> {
     const cfg = this.deps.t2iCfg;
     const parameters: Record<string, unknown> =
@@ -165,8 +195,7 @@ export class MultimodalPortImpl implements MultimodalPort {
       throw new Error(`T2I image download failed: ${imageRes.status} ${imageRes.statusText}`);
     }
     const buffer = Buffer.from(await imageRes.arrayBuffer());
-    const imageFileName = `image_${Date.now()}_${Math.random().toString(36).slice(2, 9)}.png`;
-    const relativePath = path.posix.join('images', imageFileName);
+    const relativePath = resolveImageOutputRelativePath(imageName, 'images', 'image');
     await this.deps.artifactRepo.write(sessionId, relativePath, buffer);
     const imagePath = this.deps.artifactRepo.resolvePath(sessionId, relativePath);
     const imageUri = pathToFileURL(imagePath).href;
@@ -229,6 +258,7 @@ export class MultimodalPortImpl implements MultimodalPort {
     const inputs = {
       promptLength: promptStr.length,
       imageCount: params.imagePaths.length,
+      imageName: params.imageName,
       size,
       count,
       promptExtend,
@@ -274,8 +304,7 @@ export class MultimodalPortImpl implements MultimodalPort {
           throw new Error(`Edited image download failed: ${imageRes.status} ${imageRes.statusText}`);
         }
         const buffer = Buffer.from(await imageRes.arrayBuffer());
-        const imageFileName = `edited_${Date.now()}_${Math.random().toString(36).slice(2, 9)}.png`;
-        const relativePath = path.posix.join('images', imageFileName);
+        const relativePath = resolveImageOutputRelativePath(params.imageName, 'scenes', 'scene');
         await this.deps.artifactRepo.write(sessionId, relativePath, buffer);
         const imagePath = this.deps.artifactRepo.resolvePath(sessionId, relativePath);
         const imageUri = pathToFileURL(imagePath).href;

@@ -34,6 +34,7 @@ export default function ImageWithBoundingBoxes({
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const latestRef = useRef<LabelAnnotation[]>(annotations);
+  const encodedImagePath = encodeURIComponent(imagePath);
 
   useEffect(() => {
     setLocalAnnotations(annotations);
@@ -131,7 +132,7 @@ export default function ImageWithBoundingBoxes({
         <div className="overflow-hidden rounded-lg">
           <img
             ref={imgRef}
-            src={`local-file://${imagePath}`}
+            src={`local-file://${encodedImagePath}`}
             alt="标注图"
             className="w-full h-auto block"
             onLoad={handleImageLoad}

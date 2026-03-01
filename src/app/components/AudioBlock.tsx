@@ -10,6 +10,7 @@ interface AudioBlockProps {
 export default function AudioBlock({ path, text }: AudioBlockProps) {
   const [playing, setPlaying] = useState(false);
   const audioId = `audio-${path.replace(/[^a-zA-Z0-9]/g, '-')}`;
+  const encodedPath = encodeURIComponent(path);
 
   const togglePlay = () => {
     const el = document.getElementById(audioId) as HTMLAudioElement | null;
@@ -34,7 +35,7 @@ export default function AudioBlock({ path, text }: AudioBlockProps) {
       </Button>
       <audio
         id={audioId}
-        src={`local-file://${path}`}
+        src={`local-file://${encodedPath}`}
         className="flex-1 h-8 min-w-0"
         controls
         onEnded={() => setPlaying(false)}

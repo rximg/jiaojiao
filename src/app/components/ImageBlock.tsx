@@ -9,6 +9,7 @@ interface ImageBlockProps {
 
 export default function ImageBlock({ path, prompt }: ImageBlockProps) {
   const [open, setOpen] = useState(false);
+  const encodedPath = encodeURIComponent(path);
 
   return (
     <>
@@ -20,7 +21,7 @@ export default function ImageBlock({ path, prompt }: ImageBlockProps) {
         onKeyDown={(e) => e.key === 'Enter' && setOpen(true)}
       >
         <img
-          src={`local-file://${path}`}
+          src={`local-file://${encodedPath}`}
           alt={prompt ?? '图像'}
           className="w-full h-full object-cover"
         />
@@ -35,7 +36,7 @@ export default function ImageBlock({ path, prompt }: ImageBlockProps) {
           </DialogHeader>
           <div className="space-y-4">
             <img
-              src={`local-file://${path}`}
+              src={`local-file://${encodedPath}`}
               alt={prompt ?? '图像预览'}
               className="w-full rounded-lg"
             />
