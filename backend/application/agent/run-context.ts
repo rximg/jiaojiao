@@ -4,6 +4,8 @@
  */
 import { AsyncLocalStorage } from 'async_hooks';
 
+import type { BatchProgress } from '../../tools/types.js';
+
 export interface RunContext {
   threadId: string;
   onTtsProgress?: (
@@ -13,6 +15,13 @@ export interface RunContext {
     current: number,
     total: number,
     path: string
+  ) => void;
+  /** 统一批量进度回调（替代 onTtsProgress，覆盖所有批量工具） */
+  onBatchProgress?: (
+    threadId: string,
+    messageId: string | undefined,
+    toolCallId: string | undefined,
+    progress: BatchProgress
   ) => void;
   messageId?: string;
   toolCallId?: string;

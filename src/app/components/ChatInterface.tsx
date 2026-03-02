@@ -218,7 +218,7 @@ export default function ChatInterface({
                   <HitlConfirmBlock request={message.hitlBlock} />
                 ) : (
                   <>
-                    <ChatMessage message={message} />
+                    <ChatMessage message={message} sessionId={currentSessionId} />
                     {message.hitlBlock && <HitlConfirmBlock request={message.hitlBlock} />}
                   </>
                 )}

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
-import type { Message, TodoItem, StepResult } from '../types/types';
+import type { Message, TodoItem, StepResult, BatchProgress } from '../types/types';
 
 interface AgentErrorState {
   message: string;
@@ -237,6 +237,50 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setTtsProgressLive(null);
     };
 
+    const handleBatchProgress = (data: { threadId: string; messageId?: string; toolCallId?: string; progress: BatchProgress }) => {
+      if (data.threadId !== currentSessionId) return;
+      const { progress } = data;
+
+      setMessages((prev) => {
+        // 找到关联的 assistant 消息
+        const lastAssistantMsg = prev.filter((m) => m.role === 'assistant').pop();
+        const targetId = data.messageId ?? lastAssistantMsg?.id;
+        if (!targetId) return prev;
+
+        return prev.map((m) => {
+          if (m.id !== targetId) return m;
+
+          const existing = m.batchOperation;
+
+          // 构建/更新 subTasks 列表
+          const subTasks = existing?.subTasks
+            ? [...existing.subTasks]
+            : Array.from({ length: progress.total }, (_, i) => ({
+                index: i + 1,
+                status: 'pending' as const,
+              }));
+
+          if (progress.currentSubTask) {
+            const idx = progress.currentSubTask.index - 1;
+            if (idx >= 0 && idx < subTasks.length) {
+              subTasks[idx] = { ...subTasks[idx], ...progress.currentSubTask };
+            }
+          }
+
+          return {
+            ...m,
+            batchOperation: {
+              batchId: progress.batchId,
+              toolName: progress.toolName,
+              total: progress.total,
+              current: progress.current,
+              subTasks,
+            },
+          };
+        });
+      });
+    };
+
     window.electronAPI.agent.onMessage(handleMessage);
     if (typeof window.electronAPI.agent.onStepResult === 'function') {
       window.electronAPI.agent.onStepResult(handleStepResult);
@@ -249,6 +293,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     window.electronAPI.agent.onToolCall(handleToolCall);
     if (typeof window.electronAPI.agent.onTtsProgress === 'function') {
       window.electronAPI.agent.onTtsProgress(handleTtsProgress);
+    }
+
+    if (typeof (window.electronAPI.agent as any).onBatchProgress === 'function') {
+      (window.electronAPI.agent as any).onBatchProgress(handleBatchProgress);
     }
 
     if (typeof window.electronAPI.agent.onQuotaExceeded === 'function') {

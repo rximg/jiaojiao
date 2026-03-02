@@ -40,6 +40,36 @@ export interface HitlBlockRecord {
   approved: boolean;
 }
 
+/** 批量执行进度（从 IPC 接收） */
+export interface BatchProgress {
+  batchId: string;
+  toolName: string;
+  current: number;
+  total: number;
+  currentSubTask?: {
+    index: number;
+    label?: string;
+    status: 'pending' | 'running' | 'completed' | 'error';
+    result?: unknown;
+    error?: string;
+  };
+}
+
+/** 消息上的批量操作状态（展示 BatchWrapper 用） */
+export interface BatchOperationState {
+  batchId: string;
+  toolName: string;
+  total: number;
+  current: number;
+  subTasks: Array<{
+    index: number;
+    label?: string;
+    status: 'pending' | 'running' | 'completed' | 'error';
+    result?: unknown;
+    error?: string;
+  }>;
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant" | "system";
@@ -50,6 +80,8 @@ export interface Message {
   stepResults?: StepResult[];
   /** TTS 进度：调用 synthesize_speech 时实时更新，前端显示「已生成 x/n 份文件」 */
   ttsProgress?: { current: number; total: number };
+  /** 批量操作状态（统一展示所有批量工具的进度，替代 ttsProgress） */
+  batchOperation?: BatchOperationState;
   /** 已结束的 HITL 确认块，用于在历史中显示并保留「继续/取消」结果 */
   hitlBlock?: HitlBlockRecord;
 }

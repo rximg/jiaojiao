@@ -367,33 +367,20 @@ export class MultimodalPortImpl implements MultimodalPort {
   ): Promise<SynthesizeSpeechResult> {
     const audioPaths: string[] = [];
     const audioUris: string[] = [];
-    const ttsSync = this.deps.ttsSyncPort;
     for (let i = 0; i < items.length; i++) {
       if (i > 0) await new Promise((r) => setTimeout(r, delayMs));
       const { text, relativePath } = items[i];
-      const result = await ttsSync.execute({ text, voice });
-      let buffer: Buffer;
-      if ('audioUrl' in result && result.audioUrl) {
-        const res = await fetch(result.audioUrl);
-        if (!res.ok) {
-          throw new Error(`TTS audio download failed: ${res.status} ${res.statusText}`);
-        }
-        buffer = Buffer.from(await res.arrayBuffer());
-      } else if ('pcmBuffer' in result) {
-        const { pcmBuffer, sampleRate, channels } = result;
-        buffer =
-          format === 'wav'
-            ? pcmToWav(pcmBuffer, { sampleRate, channels })
-            : await pcmToMp3(pcmBuffer, { sampleRate, channels });
-      } else {
-        throw new Error('TTS sync port returned unexpected result shape');
-      }
-      await this.deps.artifactRepo.write(sessionId, relativePath, buffer);
-      const absPath = this.deps.artifactRepo.resolvePath(sessionId, relativePath);
-      audioPaths.push(absPath);
-      audioUris.push(pathToFileURL(absPath).href);
+      const { audioPath, audioUri } = await this.synthesizeSpeechSingleItem(
+        text,
+        voice,
+        format,
+        sessionId,
+        relativePath
+      );
+      audioPaths.push(audioPath);
+      audioUris.push(audioUri);
       if (onProgress) {
-        onProgress(i + 1, items.length, absPath);
+        onProgress(i + 1, items.length, audioPath);
       }
     }
 
@@ -404,6 +391,40 @@ export class MultimodalPortImpl implements MultimodalPort {
       audioUris,
       numbers: numbers.length ? numbers : items.map((_, idx) => idx),
       sessionId,
+    };
+  }
+
+  /** 合成单条语音并写入 artifact，供 synthesize_speech_single 工具调用 */
+  async synthesizeSpeechSingleItem(
+    text: string,
+    voice: string,
+    format: string,
+    sessionId: string,
+    relativePath: string
+  ): Promise<{ audioPath: string; audioUri: string }> {
+    const ttsSync = this.deps.ttsSyncPort;
+    const result = await ttsSync.execute({ text, voice });
+    let buffer: Buffer;
+    if ('audioUrl' in result && result.audioUrl) {
+      const res = await fetch(result.audioUrl);
+      if (!res.ok) {
+        throw new Error(`TTS audio download failed: ${res.status} ${res.statusText}`);
+      }
+      buffer = Buffer.from(await res.arrayBuffer());
+    } else if ('pcmBuffer' in result) {
+      const { pcmBuffer, sampleRate, channels } = result;
+      buffer =
+        format === 'wav'
+          ? pcmToWav(pcmBuffer, { sampleRate, channels })
+          : await pcmToMp3(pcmBuffer, { sampleRate, channels });
+    } else {
+      throw new Error('TTS sync port returned unexpected result shape');
+    }
+    await this.deps.artifactRepo.write(sessionId, relativePath, buffer);
+    const absPath = this.deps.artifactRepo.resolvePath(sessionId, relativePath);
+    return {
+      audioPath: absPath,
+      audioUri: pathToFileURL(absPath).href,
     };
   }
 

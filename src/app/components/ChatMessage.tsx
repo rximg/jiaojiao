@@ -2,12 +2,14 @@ import { User, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Message } from '@/types/types';
 import StepResultBlocks from './StepResultBlocks';
+import BatchWrapper from './BatchWrapper';
 
 interface ChatMessageProps {
   message: Message;
+  sessionId?: string | null;
 }
 
-export default function ChatMessage({ message }: ChatMessageProps) {
+export default function ChatMessage({ message, sessionId }: ChatMessageProps) {
   const isUser = message.role === 'user';
 
   return (
@@ -31,7 +33,10 @@ export default function ChatMessage({ message }: ChatMessageProps) {
         )}
       >
         <div className="whitespace-pre-wrap break-words">{message.content}</div>
-        {message.ttsProgress && message.ttsProgress.total > 0 && (
+        {message.batchOperation && (
+          <BatchWrapper operation={message.batchOperation} sessionId={sessionId} />
+        )}
+        {!message.batchOperation && message.ttsProgress && message.ttsProgress.total > 0 && (
           <div className="mt-2 text-xs opacity-70">
             已生成 {message.ttsProgress.current} / {message.ttsProgress.total} 份文件
           </div>

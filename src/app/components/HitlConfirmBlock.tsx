@@ -13,8 +13,7 @@ export interface PendingHitlRequest {
   timeout: number;
 }
 
-const ACTION_TITLE: Record<string, string> = {
-  'ai.text2image': '生成图像？',
+const ACTION_TITLE: Record<string, string> = {  'ai.batch_tool_call': '批量执行工具？',  'ai.text2image': '生成图像？',
   'ai.text2speech': '合成语音？',
   'ai.vl_script': '以图生剧本？',
   'ai.image_label_order': '标注图片序号？',
@@ -201,6 +200,42 @@ export default function HitlConfirmBlock({ request, sessionId, onContinue, onCan
   }, [onContinue, request.actionType, resolved, editablePrompt, editableTexts, promptLoadedFromFile, labelAnnotations, editableVlUserPrompt, stopCountdown]);
 
   const renderPayload = () => {
+    // ── 批量模式：统一展示子任务列表 ──
+    if (payload._batchMode) {
+      const total = payload._batchTotal as number;
+      const items = Array.isArray(payload._batchItems) ? (payload._batchItems as string[]) : [];
+      const commonEntries = Object.entries(payload).filter(
+        ([k]) => !k.startsWith('_')
+      );
+      return (
+        <div className="space-y-2">
+          <div className="text-sm text-muted-foreground">
+            共 <span className="font-semibold text-foreground">{total}</span> 项
+          </div>
+          <ul className="text-sm space-y-1 max-h-40 overflow-auto">
+            {items.slice(0, 6).map((item, i) => (
+              <li key={i} className="flex items-center gap-1.5">
+                <span className="text-muted-foreground text-xs">#{i + 1}</span>
+                <span>{item}</span>
+              </li>
+            ))}
+            {items.length > 6 && (
+              <li className="text-muted-foreground text-xs">… 等 {items.length - 6} 项</li>
+            )}
+          </ul>
+          {commonEntries.length > 0 && (
+            <div className="text-xs text-muted-foreground space-y-0.5">
+              {commonEntries.map(([k, v]) => (
+                <div key={k}>
+                  <span className="font-medium">{k}</span>：{String(v)}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
     if (request.actionType === 'ai.text2image') {
       const prompt = typeof payload.prompt === 'string' ? payload.prompt : null;
       const promptFile = typeof payload.promptFile === 'string' ? payload.promptFile : null;
@@ -320,7 +355,7 @@ export default function HitlConfirmBlock({ request, sessionId, onContinue, onCan
                 onClick={handleContinue}
                 className="px-3 py-1.5 text-sm rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
               >
-                继续
+                {payload._batchMode ? '全部执行' : '继续'}
               </button>
               <button
                 type="button"

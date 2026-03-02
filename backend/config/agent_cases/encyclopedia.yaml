@@ -52,9 +52,10 @@ tools:
   generate_image:
     enable: true
     config_path: ./tools/t2i.yaml
-  synthesize_speech:
+  synthesize_speech_single:  # 单步语音（batch_tool_call 内部调用）
     enable: true
     config_path: ./tools/tts.yaml
+  batch_tool_call: {}          # 通用批量执行器
   generate_script_from_image:
     enable: true
     config_path: ./tools/vl_script.yaml

@@ -25,18 +25,19 @@ tools:
   finalize_workflow: {}
   annotate_image_numbers: {}
   delete_artifacts: {}
-  generate_image:
+  generate_image:                # 单步（重做单张角色图 / 单独生成一张图时使用）
     enable: true
     config_path: ./tools/t2i.yaml
-  synthesize_speech:
+  edit_image:                    # 单步（重做单张分镜图时使用）
+    enable: true
+    config_path: ./tools/image_edit.yaml
+  synthesize_speech_single:      # 单步语音（单条合成 / batch_tool_call 内部调用）
     enable: true
     config_path: ./tools/tts.yaml
+  batch_tool_call: {}            # 通用批量执行器（首次批量生成时使用）
   generate_script_from_image:
     enable: true
     config_path: ./tools/vl_script.yaml
-  edit_image:
-    enable: true
-    config_path: ./tools/image_edit.yaml
 
 # 可选：子代理配置（如需要）
 sub_agents: {}

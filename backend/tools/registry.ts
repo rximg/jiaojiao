@@ -11,6 +11,8 @@ export interface ToolContext {
   getSessionBackend?: (sessionId: string) => FilesystemBackend;
   /** 当前 run 的上下文，供 synthesize_speech 等工具上报 TTS 进度 */
   getRunContext?: () => import('../application/agent/run-context.js').RunContext | undefined;
+  /** 按工具名查询已解析的工具配置（供 batch_tool_call 获取单步工具的 serviceConfig） */
+  getToolConfig?: (toolName: string) => ToolConfig | undefined;
 }
 
 export interface ToolConfig {

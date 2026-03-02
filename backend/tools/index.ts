@@ -6,7 +6,8 @@ import './annotate-image-numbers.js';
 import './delete-artifacts.js';
 import './generate-image.js';
 import './edit-image.js';
-import './synthesize-speech.js';
+import './synthesize-speech-single.js';
+import './batch-tool-wrapper.js';
 import './generate-script-from-image.js';
 
 export { createTool, registerTool, getRegisteredToolNames } from './registry.js';

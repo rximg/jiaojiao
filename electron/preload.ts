@@ -41,6 +41,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onTtsProgress: (callback: (data: { threadId: string; messageId?: string; toolCallId?: string; current: number; total: number; path: string }) => void) => {
       ipcRenderer.on('agent:ttsProgress', (_event, data) => callback(data));
     },
+    onBatchProgress: (callback: (data: { threadId: string; messageId?: string; toolCallId?: string; progress: import('../src/types/types').BatchProgress }) => void) => {
+      ipcRenderer.on('agent:batchProgress', (_event, data) => callback(data));
+    },
     onTodoUpdate: (callback: (data: any) => void) => {
       ipcRenderer.on('agent:todoUpdate', (_event, data) => callback(data));
     },

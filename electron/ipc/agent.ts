@@ -114,6 +114,9 @@ async function sendAgentMessage(
       onTtsProgress: (newThreadId: string, messageId: string | undefined, toolCallId: string | undefined, current: number, total: number, path: string) => {
         mainWindow.webContents.send('agent:ttsProgress', { threadId: newThreadId, messageId, toolCallId, current, total, path });
       },
+      onBatchProgress: (newThreadId: string, messageId: string | undefined, toolCallId: string | undefined, progress: any) => {
+        mainWindow.webContents.send('agent:batchProgress', { threadId: newThreadId, messageId, toolCallId, progress });
+      },
       onTodoUpdate: (newThreadId: string, todos: any[]) => {
         mainWindow.webContents.send('agent:todoUpdate', { threadId: newThreadId, todos });
       },

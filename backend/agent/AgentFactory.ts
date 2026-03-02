@@ -236,6 +236,21 @@ export class AgentFactory {
 
     // 创建工具：配置驱动，通过 tools 注册表创建；Phase 5 注入 getSessionBackend 供 Agent 模块使用 FilesystemBackend
     const workspaceRoot = resolveWorkspaceRoot();
+
+    // 预构建工具配置映射（供 batch_tool_call 按名称查询单步工具的 serviceConfig）
+    const toolsConfig = this.agentConfig.tools ?? {};
+    const toolConfigMap: Record<string, import('../tools/registry.js').ToolConfig> = {};
+    for (const [name, opts] of Object.entries(toolsConfig)) {
+      const entry = opts as { enable?: boolean; description?: string; config?: any };
+      if (entry.enable === false) continue;
+      toolConfigMap[name] = {
+        enable: true,
+        name,
+        description: entry.description,
+        serviceConfig: entry.config,
+      };
+    }
+
     const toolContext = {
       requestApprovalViaHITL: this.requestApprovalViaHITL.bind(this),
       getDefaultSessionId: () => process.env.AGENT_SESSION_ID || sessionId || DEFAULT_SESSION_ID,
@@ -245,19 +260,11 @@ export class AgentFactory {
           virtualMode: true,
         }),
       getRunContext,
+      getToolConfig: (n: string) => toolConfigMap[n],
     };
 
     const tools: any[] = [];
-    const toolsConfig = this.agentConfig.tools ?? {};
-    for (const [name, opts] of Object.entries(toolsConfig)) {
-      const entry = opts as { enable?: boolean; description?: string; config?: any };
-      if (entry.enable === false) continue;
-      const config = {
-        enable: true,
-        name: name,
-        description: entry.description,
-        serviceConfig: entry.config,
-      };
+    for (const [name, config] of Object.entries(toolConfigMap)) {
       const t = createTool(name, config, toolContext);
       const resolved = t instanceof Promise ? await t : t;
       if (resolved) tools.push(resolved);
