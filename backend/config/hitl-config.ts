@@ -146,6 +146,14 @@ export const DEFAULT_HITL_CONFIG: HITLConfig = {
       requireApproval: true,
       description: '删除产物（图片/音频等）需确认',
     },
+    // 通用批量工具执行器（一次确认，串行执行多项）
+    {
+      actionType: 'ai.batch_tool_call',
+      enabled: true,
+      priority: 'low',
+      requireApproval: true,
+      description: '批量执行工具需确认（一次确认后串行执行所有子任务）',
+    },
   ],
   
   timeouts: {

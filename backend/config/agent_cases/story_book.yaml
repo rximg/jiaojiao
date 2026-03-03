@@ -3,7 +3,7 @@ version: 1.0.0
 description: 绘本故事生成系统 - 生成多图片长故事绘本，保证角色一致性
 
 # Skill 配置（新增）
-skill_path: .claude/skills/picture-book-story
+skill_path: backend/config/skills/picture-book-story
 
 # 案例元数据
 case:

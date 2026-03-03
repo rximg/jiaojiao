@@ -120,6 +120,7 @@ declare global {
         onMessage: (callback: (data: any) => void) => void;
         onToolCall: (callback: (data: any) => void) => void;
         onTtsProgress: (callback: (data: { threadId: string; messageId?: string; toolCallId?: string; current: number; total: number; path: string }) => void) => void;
+        onBatchProgress: (callback: (data: { threadId: string; messageId?: string; toolCallId?: string; progress: import('../src/types/types').BatchProgress }) => void) => void;
         onTodoUpdate: (callback: (data: any) => void) => void;
         onStepResult: (callback: (data: { threadId: string; messageId: string; stepResults: Array<{ type: 'image' | 'audio' | 'document'; payload: Record<string, unknown> }> }) => void) => void;
         onQuotaExceeded: (callback: (data: any) => void) => void;

@@ -162,9 +162,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         
         setMessages((prev) => {
           // 去重：新消息按 id 替换已有消息，避免流式更新时重复
+          // 同时保留已有消息上的运行时字段（batchOperation、stepResults 等），防止被刷新覆盖
           const newMessageIds = new Set(newMessages.map((m: Message) => m.id));
           const prevDeduped = prev.filter((m: Message) => !newMessageIds.has(m.id));
-          const updated = [...prevDeduped, ...newMessages];
+          const mergedNew = newMessages.map((newMsg: Message) => {
+            const existing = prev.find((m: Message) => m.id === newMsg.id);
+            return existing
+              ? {
+                  ...existing,   // 保留 batchOperation、stepResults、ttsProgress 等运行时字段
+                  ...newMsg,     // 新消息覆盖 content、role 等基础字段
+                }
+              : newMsg;
+          });
+          const updated = [...prevDeduped, ...mergedNew];
           allMessagesRef.current = updated;
           return updated;
         });
@@ -241,44 +251,52 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (data.threadId !== currentSessionId) return;
       const { progress } = data;
 
+      const applyUpdate = (m: Message, targetId: string): Message => {
+        if (m.id !== targetId) return m;
+
+        const existing = m.batchOperation;
+
+        // 构建/更新 subTasks 列表
+        const subTasks = existing?.subTasks
+          ? [...existing.subTasks]
+          : Array.from({ length: progress.total }, (_, i) => ({
+              index: i + 1,
+              status: 'pending' as const,
+            }));
+
+        if (progress.currentSubTask) {
+          const idx = progress.currentSubTask.index - 1;
+          if (idx >= 0 && idx < subTasks.length) {
+            subTasks[idx] = { ...subTasks[idx], ...progress.currentSubTask };
+          }
+        }
+
+        return {
+          ...m,
+          batchOperation: {
+            batchId: progress.batchId,
+            toolName: progress.toolName,
+            total: progress.total,
+            current: progress.current,
+            subTasks,
+          },
+        };
+      };
+
       setMessages((prev) => {
-        // 找到关联的 assistant 消息
+        // 优先使用后端传来的 messageId（由 runCtx.messageId 设定），否则回退到最后一条 assistant 消息
         const lastAssistantMsg = prev.filter((m) => m.role === 'assistant').pop();
         const targetId = data.messageId ?? lastAssistantMsg?.id;
         if (!targetId) return prev;
-
-        return prev.map((m) => {
-          if (m.id !== targetId) return m;
-
-          const existing = m.batchOperation;
-
-          // 构建/更新 subTasks 列表
-          const subTasks = existing?.subTasks
-            ? [...existing.subTasks]
-            : Array.from({ length: progress.total }, (_, i) => ({
-                index: i + 1,
-                status: 'pending' as const,
-              }));
-
-          if (progress.currentSubTask) {
-            const idx = progress.currentSubTask.index - 1;
-            if (idx >= 0 && idx < subTasks.length) {
-              subTasks[idx] = { ...subTasks[idx], ...progress.currentSubTask };
-            }
-          }
-
-          return {
-            ...m,
-            batchOperation: {
-              batchId: progress.batchId,
-              toolName: progress.toolName,
-              total: progress.total,
-              current: progress.current,
-              subTasks,
-            },
-          };
-        });
+        return prev.map((m) => applyUpdate(m, targetId));
       });
+
+      // 同步更新 allMessagesRef（与 handleTtsProgress 保持一致）
+      const lastAssistantInRef = allMessagesRef.current.filter((m) => m.role === 'assistant').pop();
+      const refTargetId = data.messageId ?? lastAssistantInRef?.id;
+      if (refTargetId) {
+        allMessagesRef.current = allMessagesRef.current.map((m) => applyUpdate(m, refTargetId));
+      }
     };
 
     window.electronAPI.agent.onMessage(handleMessage);
@@ -295,8 +313,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       window.electronAPI.agent.onTtsProgress(handleTtsProgress);
     }
 
-    if (typeof (window.electronAPI.agent as any).onBatchProgress === 'function') {
-      (window.electronAPI.agent as any).onBatchProgress(handleBatchProgress);
+    if (typeof window.electronAPI.agent.onBatchProgress === 'function') {
+      window.electronAPI.agent.onBatchProgress(handleBatchProgress);
     }
 
     if (typeof window.electronAPI.agent.onQuotaExceeded === 'function') {

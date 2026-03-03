@@ -169,6 +169,9 @@ export async function invokeAgentUseCase(
         const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content ?? '');
         const stableId: string = streamingAssistantId ?? (msg.id ?? `stream-${effectiveSessionId}`);
         streamingAssistantId = stableId;
+        // 同步更新 runCtx.messageId，确保工具执行期间（batch/tts 等）pushProgress 引用正确的消息 ID
+        // LangGraph stream 的 state 顶层不含 tool_calls，此处是唯一可靠的更新时机
+        runCtx.messageId = stableId;
         let stepResults = extractStepResultsFromContent(content);
         if (resolveStepResultPaths && stepResults.length > 0) {
           stepResults = await resolveStepResultPaths(sessionId, stepResults);
