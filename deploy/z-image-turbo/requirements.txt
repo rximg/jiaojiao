@@ -1,0 +1,4 @@
+# 容器内已有：torch 2.6.0、transformers、accelerate、fastapi、uvicorn、modelscope、pillow
+# diffusers 0.37.0 要求 peft>=0.17.0（容器内是 0.16.0），一并升级
+diffusers>=0.36.0
+peft>=0.17.0
