@@ -23,17 +23,25 @@ export type EditImagePort = SyncInferencePort<EditImagePortInput, { imageUrl: st
 export type TTSSyncPort = SyncInferencePort<TTSPortInput, TtsZhipuPcmResult | TtsDashScopeResult>;
 
 export function createVLPort(cfg: VLAIConfig): VLPort {
-  return cfg.provider === 'zhipu' ? new VLZhipuPort(cfg) : new VLDashScopePort(cfg);
+  if (cfg.provider === 'zhipu') return new VLZhipuPort(cfg);
+  // jiaojiao 使用与 DashScope 兼容的网关，直接复用 DashScope 适配器
+  return new VLDashScopePort(cfg);
 }
 
 export function createT2IPort(cfg: T2IAIConfig): T2IPort {
-  return cfg.provider === 'zhipu' ? new T2IZhipuPort(cfg) : new T2IDashScopePort(cfg);
+  if (cfg.provider === 'zhipu') return new T2IZhipuPort(cfg);
+  // jiaojiao 网关兼容 DashScope 协议，直接复用
+  return new T2IDashScopePort(cfg);
 }
 
 export function createEditImagePort(cfg: T2IAIConfig): EditImagePort {
-  return cfg.provider === 'zhipu' ? new EditImageZhipuPort(cfg) : new EditImageDashScopePort(cfg);
+  if (cfg.provider === 'zhipu') return new EditImageZhipuPort(cfg);
+  // jiaojiao 网关兼容 DashScope 协议，直接复用
+  return new EditImageDashScopePort(cfg);
 }
 
 export function createTTSSyncPort(cfg: TTSAIConfig): TTSSyncPort {
-  return cfg.provider === 'zhipu' ? new TTSZhipuPort(cfg) : new TTSDashScopePort(cfg);
+  if (cfg.provider === 'zhipu') return new TTSZhipuPort(cfg);
+  // jiaojiao 网关兼容 DashScope 协议，直接复用
+  return new TTSDashScopePort(cfg);
 }

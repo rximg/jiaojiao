@@ -15,6 +15,7 @@ import type {
   AIConfig,
   AiModelsSchema,
   ProviderAbilityModelsConfig,
+  JiaojiaoProviderConfig,
 } from '#backend/domain/inference/types.js';
 
 /** 能力块在 ai_models.json 中可包含的 URL 与异步轮询配置 */
@@ -68,9 +69,9 @@ function resolveModel(abilityConfig: ProviderAbilityModelsConfig, specifiedModel
 function resolveProviderForAbility(agentProvider: Provider | undefined, _ability: AIAbility): Provider {
   const envProvider = process.env.TEST_API_PROVIDER;
   if (envProvider === 'zhipu' || envProvider === 'dashscope') return envProvider;
-  if (agentProvider !== 'zhipu' && agentProvider !== 'dashscope') {
+  if (agentProvider !== 'zhipu' && agentProvider !== 'dashscope' && agentProvider !== 'jiaojiao') {
     throw new Error(
-      '未配置 AI 供应商（agent.provider）：请在应用设置中选择通义（dashscope）或智谱（zhipu）后再使用'
+      '未配置 AI 供应商（agent.provider）：请在应用设置中选择通义（dashscope）、智谱（zhipu）或嘉嘉（jiaojiao）后再使用'
     );
   }
   return agentProvider;
@@ -92,6 +93,7 @@ export async function getAIConfig(ability: AIAbility): Promise<AIConfig> {
   const multimodalApiKeys = (appConfig.multimodalApiKeys ?? appConfig.apiKeys) as {
     dashscope?: string;
     zhipu?: string;
+    jiaojiao?: string;
   };
   const aiModels = await loadAiModels();
   const agent = appConfig.agent as {
@@ -107,6 +109,81 @@ export async function getAIConfig(ability: AIAbility): Promise<AIConfig> {
     isLlm ? agent?.provider : (agent?.multimodalProvider ?? agent?.provider),
     ability
   );
+
+  // ── jiaojiao 分支：复用 DashScope 适配器，endpoint 指向本地网关 ─────────────────
+  if (provider === 'jiaojiao' && !isLlm) {
+    const jiaojiaoSection = aiModels.jiaojiao as JiaojiaoProviderConfig | undefined;
+    if (!jiaojiaoSection?.gatewayUrl) {
+      throw new Error('ai_models.json 中未找到 jiaojiao.gatewayUrl，请检查配置');
+    }
+    const apiKey = (multimodalApiKeys.jiaojiao ?? '').trim();
+    if (!apiKey) {
+      throw new Error('未配置嘉嘉网关密钥：请在应用设置中填写嘉嘉（jiaojiao）API Key');
+    }
+    const abilityBlock = getAbilityBlock(aiModels, provider, ability);
+    const model = resolveModel(abilityBlock, agent?.model?.trim() || undefined);
+
+    switch (ability) {
+      case 'vl': {
+        const endpoint = requireUrl(
+          (abilityBlock as AbilityBlockWithUrls).endpoint,
+          'jiaojiao.vl.endpoint'
+        );
+        const cfg: VLAIConfig = { provider: 'jiaojiao', apiKey, endpoint, model, prompt: '' };
+        return cfg;
+      }
+      case 'tts': {
+        const endpoint = requireUrl(
+          (abilityBlock as AbilityBlockWithUrls).endpoint,
+          'jiaojiao.tts.endpoint'
+        );
+        const taskEndpoint = (abilityBlock as AbilityBlockWithUrls).taskEndpoint?.trim()
+          ? (abilityBlock as AbilityBlockWithUrls).taskEndpoint!.replace(/\/$/, '')
+          : undefined;
+        const cfg: TTSAIConfig = {
+          provider: 'jiaojiao',
+          apiKey,
+          endpoint,
+          ...(taskEndpoint && { taskEndpoint }),
+          model,
+          ...((abilityBlock as AbilityBlockWithUrls).poll_interval_ms != null && {
+            poll_interval_ms: (abilityBlock as AbilityBlockWithUrls).poll_interval_ms,
+          }),
+          ...((abilityBlock as AbilityBlockWithUrls).max_poll_attempts != null && {
+            max_poll_attempts: (abilityBlock as AbilityBlockWithUrls).max_poll_attempts,
+          }),
+        };
+        return cfg;
+      }
+      case 't2i': {
+        const endpoint = requireUrl(
+          (abilityBlock as AbilityBlockWithUrls).endpoint,
+          'jiaojiao.t2i.endpoint'
+        );
+        const taskEndpoint = requireUrl(
+          (abilityBlock as AbilityBlockWithUrls).taskEndpoint,
+          'jiaojiao.t2i.taskEndpoint'
+        );
+        const cfg: T2IAIConfig = {
+          provider: 'jiaojiao',
+          apiKey,
+          endpoint,
+          taskEndpoint,
+          model,
+          ...((abilityBlock as AbilityBlockWithUrls).poll_interval_ms != null && {
+            poll_interval_ms: (abilityBlock as AbilityBlockWithUrls).poll_interval_ms,
+          }),
+          ...((abilityBlock as AbilityBlockWithUrls).max_poll_attempts != null && {
+            max_poll_attempts: (abilityBlock as AbilityBlockWithUrls).max_poll_attempts,
+          }),
+        };
+        return cfg;
+      }
+      default:
+        throw new Error(`jiaojiao 不支持 ${ability} 能力`);
+    }
+  }
+
   const abilityBlock = getAbilityBlock(aiModels, provider, ability);
   const raw = (ability === 'llm' ? (agent?.current ?? agent?.model) : agent?.model)?.trim();
   const specifiedModelForUser = raw || undefined;

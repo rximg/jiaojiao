@@ -119,6 +119,8 @@ export interface AppConfig {
   multimodalApiKeys?: {
     dashscope?: string;
     zhipu?: string;
+    /** 嘉嘉本地网关 SK */
+    jiaojiao?: string;
   };
   agent: {
     /** 当前使用的模型 id，为空时使用默认模型（见 ai_models.json） */
@@ -130,7 +132,7 @@ export interface AppConfig {
     /** LLM 供应商：dashscope（阿里百炼）| zhipu（智谱） */
     provider?: 'dashscope' | 'zhipu';
     /** 多模态（VL/TTS/T2I）供应商，可与 LLM 不同 */
-    multimodalProvider?: 'dashscope' | 'zhipu';
+    multimodalProvider?: 'dashscope' | 'zhipu' | 'jiaojiao';
   };
   storage: {
     /** @deprecated 仅作兼容，新逻辑用 syncTargetPath。工作目录固定为 userData/workspace，不可配置。 */

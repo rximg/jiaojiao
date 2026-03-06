@@ -105,7 +105,7 @@ export interface GenerateScriptFromImageResult {
 // 各能力配置（由 getAIConfig 返回，构建 adapter 时使用）
 // ---------------------------------------------------------------------------
 
-export type Provider = 'dashscope' | 'zhipu';
+export type Provider = 'dashscope' | 'zhipu' | 'jiaojiao';
 
 export type AIAbility = 'llm' | 'vl' | 'tts' | 't2i';
 
@@ -174,6 +174,16 @@ export type ProviderAbilityMap = {
   [K in AIAbility]: ProviderAbilityModelsConfig;
 };
 
+/** jiaojiao 网关在 ai_models.json 中的顶层配置（含额外元信息） */
+export interface JiaojiaoProviderConfig extends Partial<ProviderAbilityMap> {
+  /** 网关地址，如 http://jiaojiao.ai:9021 */
+  gatewayUrl: string;
+  /** 默认网关 SK，前端首次使用时自动填充 */
+  defaultApiKey: string;
+}
+
 export type AiModelsSchema = {
-  [P in Provider]?: ProviderAbilityMap;
+  dashscope?: ProviderAbilityMap;
+  zhipu?: ProviderAbilityMap;
+  jiaojiao?: JiaojiaoProviderConfig;
 };

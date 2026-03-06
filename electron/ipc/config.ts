@@ -41,6 +41,7 @@ const DEFAULTS: Record<string, unknown> = {
   multimodalApiKeys: {
     dashscope: '',
     zhipu: '',
+    jiaojiao: 'jjtk-20260306-default',
   },
   agent: {
     model: 'qwen-plus-2025-12-01',
@@ -315,6 +316,9 @@ export function handleConfigIPC() {
         multimodalApiKeys: {
           dashscope: typeof config?.multimodalApiKeys?.dashscope === 'string' ? config.multimodalApiKeys.dashscope : '',
           zhipu: typeof config?.multimodalApiKeys?.zhipu === 'string' ? config.multimodalApiKeys.zhipu : '',
+          jiaojiao: typeof (config?.multimodalApiKeys as Record<string, unknown>)?.jiaojiao === 'string'
+            ? (config.multimodalApiKeys as Record<string, unknown>).jiaojiao as string
+            : (def.multimodalApiKeys as Record<string, unknown>).jiaojiao as string,
         },
         agent: {
           model: typeof config?.agent?.model === 'string' ? config.agent.model : (def.agent.model as string),
@@ -322,7 +326,10 @@ export function handleConfigIPC() {
           temperature: Number(config?.agent?.temperature) || (def.agent.temperature as number),
           maxTokens: Number(config?.agent?.maxTokens) || (def.agent.maxTokens as number),
           provider: config?.agent?.provider === 'zhipu' ? 'zhipu' : 'dashscope',
-          multimodalProvider: config?.agent?.multimodalProvider === 'zhipu' ? 'zhipu' : 'dashscope',
+          multimodalProvider:
+            config?.agent?.multimodalProvider === 'zhipu' ? 'zhipu' :
+            config?.agent?.multimodalProvider === 'jiaojiao' ? 'jiaojiao' :
+            'dashscope',
         },
         storage: (() => {
           const raw = typeof config?.storage?.outputPath === 'string' ? config.storage.outputPath.trim() : '';

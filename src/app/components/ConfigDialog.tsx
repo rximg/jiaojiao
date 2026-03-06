@@ -36,7 +36,7 @@ const FALLBACK_LLM_OPTIONS: Record<string, LLMOpts> = {
   },
 };
 
-type Provider = 'dashscope' | 'zhipu';
+type Provider = 'dashscope' | 'zhipu' | 'jiaojiao';
 
 interface ConfigDialogProps {
   open: boolean;
@@ -66,6 +66,7 @@ export default function ConfigDialog({
   const [multimodalProvider, setMultimodalProvider] = useState<Provider>('dashscope');
   const [multimodalDashscopeKey, setMultimodalDashscopeKey] = useState('');
   const [multimodalZhipuKey, setMultimodalZhipuKey] = useState('');
+  const [jiaojiaoApiKey, setJiaojiaoApiKey] = useState('');
   const [applyStepsFor, setApplyStepsFor] = useState<'llm' | 'multimodal'>('llm');
   /** 是否显示 LLM / 多模态 API Key 明文（各自控制） */
   const [showLlmApiKey, setShowLlmApiKey] = useState(false);
@@ -98,10 +99,12 @@ export default function ConfigDialog({
       setProvider(p);
       setDashscopeApiKey(initialConfig.apiKeys?.dashscope ?? '');
       setZhipuApiKey(initialConfig.apiKeys?.zhipu ?? '');
-      const mmp = (initialConfig.agent?.multimodalProvider === 'zhipu' ? 'zhipu' : 'dashscope') as Provider;
+      const mmp = (initialConfig.agent?.multimodalProvider === 'zhipu' ? 'zhipu' :
+        initialConfig.agent?.multimodalProvider === 'jiaojiao' ? 'jiaojiao' : 'dashscope') as Provider;
       setMultimodalProvider(mmp);
       setMultimodalDashscopeKey(initialConfig.multimodalApiKeys?.dashscope ?? '');
       setMultimodalZhipuKey(initialConfig.multimodalApiKeys?.zhipu ?? '');
+      setJiaojiaoApiKey((initialConfig.multimodalApiKeys as Record<string, string> | undefined)?.jiaojiao ?? '');
       const opts = llmOptions[p] ?? FALLBACK_LLM_OPTIONS[p];
       const currentRaw = (initialConfig.agent?.current ?? initialConfig.agent?.model ?? '').trim();
       const currentOrDefault = currentRaw && opts.models.some((m) => m.id === currentRaw)
@@ -125,8 +128,10 @@ export default function ConfigDialog({
   const currentApiKey = provider === 'dashscope' ? dashscopeApiKey : zhipuApiKey;
   const setCurrentApiKey = provider === 'dashscope' ? setDashscopeApiKey : setZhipuApiKey;
   const llmOpts = llmOptions[provider] ?? FALLBACK_LLM_OPTIONS[provider];
-  const currentMultimodalKey = multimodalProvider === 'dashscope' ? multimodalDashscopeKey : multimodalZhipuKey;
-  const setCurrentMultimodalKey = multimodalProvider === 'dashscope' ? setMultimodalDashscopeKey : setMultimodalZhipuKey;
+  const currentMultimodalKey = multimodalProvider === 'dashscope' ? multimodalDashscopeKey :
+    multimodalProvider === 'zhipu' ? multimodalZhipuKey : jiaojiaoApiKey;
+  const setCurrentMultimodalKey = multimodalProvider === 'dashscope' ? setMultimodalDashscopeKey :
+    multimodalProvider === 'zhipu' ? setMultimodalZhipuKey : setJiaojiaoApiKey;
 
   /** 简单校验：避免误将模型名当成 API Key 保存（API Key 通常为 sk- 或一长串 token） */
   const looksLikeModelId = (s: string): boolean => {
@@ -136,7 +141,7 @@ export default function ConfigDialog({
 
   const handleSave = async () => {
     const hasLlmKey = Boolean(dashscopeApiKey.trim() || zhipuApiKey.trim());
-    const hasMultimodalKey = Boolean(multimodalDashscopeKey.trim() || multimodalZhipuKey.trim());
+    const hasMultimodalKey = Boolean(multimodalDashscopeKey.trim() || multimodalZhipuKey.trim() || jiaojiaoApiKey.trim());
     if (!hasLlmKey) {
       alert('请至少填写 LLM（大语言模型）的一个供应商 API Key');
       return;
@@ -145,6 +150,7 @@ export default function ConfigDialog({
       alert('请至少填写多模态（视觉/语音/图像）的一个供应商 API Key');
       return;
     }
+    // jiaojiao SK 格式自定义，不做模型名检测；dashscope/zhipu 仍检测
     if (looksLikeModelId(multimodalDashscopeKey) || looksLikeModelId(multimodalZhipuKey)) {
       alert('多模态 API Key 不能填写模型名称，请填写真实的 API Key（如 sk- 开头或平台提供的密钥）');
       return;
@@ -163,7 +169,8 @@ export default function ConfigDialog({
         multimodalApiKeys: {
           dashscope: multimodalDashscopeKey.trim() || undefined,
           zhipu: multimodalZhipuKey.trim() || undefined,
-        },
+          jiaojiao: jiaojiaoApiKey.trim() || undefined,
+        } as AppConfig['multimodalApiKeys'],
         agent: {
           model: model || llmOpts.default,
           current: model || llmOpts.default,
@@ -302,25 +309,34 @@ export default function ConfigDialog({
                 >
                   <option value="dashscope">阿里百炼</option>
                   <option value="zhipu">智谱</option>
+                  <option value="jiaojiao">嘉嘉（本地网关）</option>
                 </select>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0 rounded-md"
-                  onClick={() => { setApplyStepsFor('multimodal'); setApplyStepsOpen(true); }}
-                >
-                  申请
-                </Button>
+                {multimodalProvider !== 'jiaojiao' && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 rounded-md"
+                    onClick={() => { setApplyStepsFor('multimodal'); setApplyStepsOpen(true); }}
+                  >
+                    申请
+                  </Button>
+                )}
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="multimodalApikey" className="text-foreground">API Key</Label>
+              <Label htmlFor="multimodalApikey" className="text-foreground">
+                {multimodalProvider === 'jiaojiao' ? '网关密钥' : 'API Key'}
+              </Label>
               <div className="relative">
                 <Input
                   id="multimodalApikey"
                   type={showMultimodalApiKey ? 'text' : 'password'}
-                  placeholder={multimodalProvider === 'dashscope' ? 'sk-...（阿里百炼）' : 'sk-...（智谱）'}
+                  placeholder={
+                    multimodalProvider === 'dashscope' ? 'sk-...（阿里百炼）' :
+                    multimodalProvider === 'zhipu' ? 'sk-...（智谱）' :
+                    'jjtk-...（嘉嘉网关密钥）'
+                  }
                   value={currentMultimodalKey}
                   onChange={(e) => setCurrentMultimodalKey(e.target.value)}
                   className="pr-9"
