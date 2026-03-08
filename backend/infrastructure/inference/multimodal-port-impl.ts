@@ -147,6 +147,23 @@ async function resolveFirstExistingImagePath(candidates: string[]): Promise<stri
   throw new Error(`Image file not found: ${candidates[0]}`);
 }
 
+function formatDownloadFetchError(kind: 'T2I' | 'ImageEdit', targetUrl: string, error: unknown): Error {
+  const err = error as {
+    message?: string;
+    cause?: { code?: string; hostname?: string; message?: string };
+  };
+  const cause = err?.cause;
+  if (cause?.code === 'ENOTFOUND' && cause.hostname === 'z-image-turbo') {
+    return new Error(
+      `${kind} image download failed: upstream returned Docker internal host \"z-image-turbo\". ` +
+        `Please set Z_IMAGE_PUBLIC_URL to a host-reachable URL (for example http://localhost:9021/z-image-turbo).`
+    );
+  }
+  return new Error(
+    `${kind} image download failed from ${targetUrl}: ${err?.message ?? cause?.message ?? String(error)}`
+  );
+}
+
 export class MultimodalPortImpl implements MultimodalPort {
   private readonly workspaceFsLike = {
     sessionPath: (sessionId: string, rel: string) =>
@@ -224,7 +241,12 @@ export class MultimodalPortImpl implements MultimodalPort {
     const taskId = await this.deps.t2iPort.submit({ prompt, parameters });
     const imageUrl = await this.deps.t2iPort.poll(taskId);
 
-    const imageRes = await fetch(imageUrl);
+    let imageRes: Response;
+    try {
+      imageRes = await fetch(imageUrl);
+    } catch (error) {
+      throw formatDownloadFetchError('T2I', imageUrl, error);
+    }
     if (!imageRes.ok) {
       throw new Error(`T2I image download failed: ${imageRes.status} ${imageRes.statusText}`);
     }
@@ -330,7 +352,12 @@ export class MultimodalPortImpl implements MultimodalPort {
           },
         });
 
-        const imageRes = await fetch(result.imageUrl);
+        let imageRes: Response;
+        try {
+          imageRes = await fetch(result.imageUrl);
+        } catch (error) {
+          throw formatDownloadFetchError('ImageEdit', result.imageUrl, error);
+        }
         if (!imageRes.ok) {
           throw new Error(`Edited image download failed: ${imageRes.status} ${imageRes.statusText}`);
         }

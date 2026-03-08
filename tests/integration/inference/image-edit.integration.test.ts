@@ -8,29 +8,39 @@ import { createEditImagePort } from '../../../backend/infrastructure/inference/c
 import { loadConfig } from '../../../backend/app-config';
 import type { T2IAIConfig } from '../../../backend/domain/inference/types.js';
 
+const testProvider =
+  process.env.TEST_API_PROVIDER === 'zhipu' ||
+  process.env.TEST_API_PROVIDER === 'dashscope' ||
+  process.env.TEST_API_PROVIDER === 'jiaojiao'
+    ? process.env.TEST_API_PROVIDER
+    : undefined;
+
 let hasKey = false;
 
 const SAMPLE_IMAGE_URL =
   'https://cdn.wanx.aliyuncs.com/tmp/pressure/umbrella1.png';
 
-describe('Inference / Image Edit (DashScope)', () => {
+describe('Inference / Image Edit (DashScope/Jiaojiao)', () => {
   beforeAll(async () => {
     try {
       const config = await loadConfig();
-      const key =
-        (config.multimodalApiKeys as Record<string, string> | undefined)?.dashscope ??
-        (config.apiKeys as Record<string, string> | undefined)?.dashscope;
+      const provider = (testProvider ?? config.agent?.multimodalProvider ?? config.agent?.provider ?? 'dashscope') as
+        | 'dashscope'
+        | 'zhipu'
+        | 'jiaojiao';
+      const keys = (config.multimodalApiKeys ?? config.apiKeys) as Record<string, string | undefined>;
+      const key = keys[provider];
       hasKey = !!key?.trim();
     } catch {
       hasKey = false;
     }
   });
 
-  it('should return image URL from DashScope image-edit adapter', async (ctx) => {
+  it('should return image URL from image-edit adapter', async (ctx) => {
     if (!hasKey) ctx.skip();
 
     const cfg = (await getAIConfig('t2i')) as T2IAIConfig;
-    if (cfg.provider !== 'dashscope') {
+    if (cfg.provider !== 'dashscope' && cfg.provider !== 'jiaojiao') {
       ctx.skip();
     }
 

@@ -66,9 +66,11 @@ function resolveModel(abilityConfig: ProviderAbilityModelsConfig, specifiedModel
   return found && modelId ? modelId : (abilityConfig.default || abilityConfig.models[0]?.id || '');
 }
 
-function resolveProviderForAbility(agentProvider: Provider | undefined, _ability: AIAbility): Provider {
+function resolveProviderForAbility(agentProvider: Provider | undefined, ability: AIAbility): Provider {
   const envProvider = process.env.TEST_API_PROVIDER;
   if (envProvider === 'zhipu' || envProvider === 'dashscope') return envProvider;
+  // jiaojiao 仅提供多模态网关能力，LLM 仍使用 dashscope/zhipu。
+  if (envProvider === 'jiaojiao' && ability !== 'llm') return 'jiaojiao';
   if (agentProvider !== 'zhipu' && agentProvider !== 'dashscope' && agentProvider !== 'jiaojiao') {
     throw new Error(
       '未配置 AI 供应商（agent.provider）：请在应用设置中选择通义（dashscope）、智谱（zhipu）或嘉嘉（jiaojiao）后再使用'

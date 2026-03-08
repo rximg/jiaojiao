@@ -162,7 +162,7 @@
             ]
         },
         "tts": {
-            "default": "cosyvoice-v2",
+            "default": "qwen-tts",
             "endpoint": "http://jiaojiao.ai:9021/api/v1/services/aigc/multimodal-generation/generation",
             "taskEndpoint": "http://jiaojiao.ai:9021/api/v1/tasks",
             "models": [

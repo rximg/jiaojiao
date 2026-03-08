@@ -11,7 +11,9 @@ import type { TTSAIConfig } from '#backend/domain/inference/types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const testProvider =
-  process.env.TEST_API_PROVIDER === 'zhipu' || process.env.TEST_API_PROVIDER === 'dashscope'
+  process.env.TEST_API_PROVIDER === 'zhipu' ||
+  process.env.TEST_API_PROVIDER === 'dashscope' ||
+  process.env.TEST_API_PROVIDER === 'jiaojiao'
     ? process.env.TEST_API_PROVIDER
     : undefined;
 let hasKey = false;
@@ -31,8 +33,12 @@ describe('Inference / TTS', () => {
   beforeAll(async () => {
     try {
       const config = await loadConfig();
-      const provider = (testProvider ?? config.agent?.provider ?? 'dashscope') as 'dashscope' | 'zhipu';
-      hasKey = !!((config.apiKeys as Record<string, string>)[provider]?.trim());
+      const provider = (testProvider ?? config.agent?.multimodalProvider ?? config.agent?.provider ?? 'dashscope') as
+        | 'dashscope'
+        | 'zhipu'
+        | 'jiaojiao';
+      const multimodalKeys = (config.multimodalApiKeys ?? config.apiKeys) as Record<string, string | undefined>;
+      hasKey = !!(multimodalKeys[provider]?.trim());
       debugLog(`[TTS inference] hasKey=${hasKey} path=${lastLoadedConfigPath ?? ''}`);
     } catch {
       hasKey = false;
@@ -47,9 +53,10 @@ describe('Inference / TTS', () => {
     if (!hasKey) ctx.skip();
     const cfg = (await getAIConfig('tts')) as TTSAIConfig;
     const port = createTTSSyncPort(cfg);
+    const voice = cfg.provider === 'zhipu' ? 'chinese_female' : 'Cherry';
     const result = await port.execute({
       text: '你好，这是 TTS 推理层测试。',
-      voice: 'chinese_female',
+      voice,
     });
 
     if ('pcmBuffer' in result) {

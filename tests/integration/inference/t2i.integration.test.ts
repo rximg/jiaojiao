@@ -11,10 +11,13 @@ import type { T2IAIConfig } from '#backend/domain/inference/types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const testProvider =
-  process.env.TEST_API_PROVIDER === 'zhipu' || process.env.TEST_API_PROVIDER === 'dashscope'
+  process.env.TEST_API_PROVIDER === 'zhipu' ||
+  process.env.TEST_API_PROVIDER === 'dashscope' ||
+  process.env.TEST_API_PROVIDER === 'jiaojiao'
     ? process.env.TEST_API_PROVIDER
     : undefined;
 let hasKey = false;
+const testTimeoutMs = process.env.TEST_API_PROVIDER === 'jiaojiao' ? 300_000 : 120_000;
 
 function debugLog(msg: string): void {
   try {
@@ -31,8 +34,12 @@ describe('Inference / T2I', () => {
   beforeAll(async () => {
     try {
       const config = await loadConfig();
-      const provider = (testProvider ?? config.agent?.provider ?? 'dashscope') as 'dashscope' | 'zhipu';
-      hasKey = !!((config.apiKeys as Record<string, string>)[provider]?.trim());
+      const provider = (testProvider ?? config.agent?.multimodalProvider ?? config.agent?.provider ?? 'dashscope') as
+        | 'dashscope'
+        | 'zhipu'
+        | 'jiaojiao';
+      const multimodalKeys = (config.multimodalApiKeys ?? config.apiKeys) as Record<string, string | undefined>;
+      hasKey = !!(multimodalKeys[provider]?.trim());
       debugLog(`[T2I inference] hasKey=${hasKey} path=${lastLoadedConfigPath ?? ''}`);
     } catch {
       hasKey = false;
@@ -58,5 +65,5 @@ describe('Inference / T2I', () => {
     expect(typeof imageUrl).toBe('string');
     expect(imageUrl.length).toBeGreaterThan(0);
     expect(imageUrl.startsWith('http')).toBe(true);
-  }, 120_000);
+  }, testTimeoutMs);
 });

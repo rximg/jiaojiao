@@ -50,6 +50,7 @@ outputs/workspaces/ # 每次会话生成的产物（图片、音频、日志）
 | [docs/architecture/frontend.md](docs/architecture/frontend.md) | 前端组件结构、状态管理、IPC 调用方式 |
 | [docs/architecture/ipc.md](docs/architecture/ipc.md) | IPC 通道完整列表与协议说明 |
 | [docs/architecture/ddd-constraints.md](docs/architecture/ddd-constraints.md) | DDD 约束细则（分层规则、禁止行为、新功能清单） |
+| [docs/architecture/gateway.md](docs/architecture/gateway.md) | jiaojiao-gateway 架构（路由分发、鉴权、适配器、部署拓扑） |
 | [docs/third-party-api/dashscope-api.md](docs/third-party-api/dashscope-api.md) | DashScope API 参考（LLM / T2I / TTS / VL） |
 | [docs/third-party-api/zhipu-api.md](docs/third-party-api/zhipu-api.md) | 智谱 API 参考（GLM / TTS / VL） |
 | [docs/third-party-api/百炼万象2.6的图片编辑api.md](docs/third-party-api/百炼万象2.6的图片编辑api.md) | 百炼万象 2.6 图片编辑 API |

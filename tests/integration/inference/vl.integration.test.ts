@@ -14,7 +14,9 @@ import type { VLAIConfig } from '#backend/domain/inference/types.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const testProvider =
-  process.env.TEST_API_PROVIDER === 'zhipu' || process.env.TEST_API_PROVIDER === 'dashscope'
+  process.env.TEST_API_PROVIDER === 'zhipu' ||
+  process.env.TEST_API_PROVIDER === 'dashscope' ||
+  process.env.TEST_API_PROVIDER === 'jiaojiao'
     ? process.env.TEST_API_PROVIDER
     : undefined;
 let hasKey = false;
@@ -22,7 +24,8 @@ let hasKey = false;
 function logKeyStatus(apiKeys: { dashscope?: string; zhipu?: string }): string {
   const ds = apiKeys.dashscope?.trim();
   const zp = apiKeys.zhipu?.trim();
-  return `dashscope: ${ds ? `已配置(len=${ds.length})` : '未配置'}, zhipu: ${zp ? `已配置(len=${zp.length})` : '未配置'}`;
+  const jj = (apiKeys as { jiaojiao?: string }).jiaojiao?.trim();
+  return `dashscope: ${ds ? `已配置(len=${ds.length})` : '未配置'}, zhipu: ${zp ? `已配置(len=${zp.length})` : '未配置'}, jiaojiao: ${jj ? `已配置(len=${jj.length})` : '未配置'}`;
 }
 
 function debugLog(msg: string): void {
@@ -48,8 +51,15 @@ describe('Inference / VL', () => {
     debugLog(`[VL] TEST_API_PROVIDER=${process.env.TEST_API_PROVIDER ?? '(未设置)'}`);
     try {
       const config = await loadConfig();
-      const apiKeys = config.apiKeys as { dashscope?: string; zhipu?: string };
-      const provider = (testProvider ?? config.agent?.provider ?? 'dashscope') as 'dashscope' | 'zhipu';
+      const apiKeys = (config.multimodalApiKeys ?? config.apiKeys) as {
+        dashscope?: string;
+        zhipu?: string;
+        jiaojiao?: string;
+      };
+      const provider = (testProvider ?? config.agent?.multimodalProvider ?? config.agent?.provider ?? 'dashscope') as
+        | 'dashscope'
+        | 'zhipu'
+        | 'jiaojiao';
       hasKey = !!(apiKeys[provider]?.trim());
       debugLog(`[VL] 配置文件路径: ${lastLoadedConfigPath ?? '(未使用文件)'}`);
       debugLog(`[VL] config.agent.provider=${config.agent?.provider} -> 使用 provider=${provider} hasKey=${hasKey} | ${logKeyStatus(apiKeys)}`);

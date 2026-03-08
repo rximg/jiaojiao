@@ -17,6 +17,7 @@
     "test:inference": "vitest run tests/integration/inference",
     "test:inference:zhipu": "npx cross-env TEST_API_PROVIDER=zhipu vitest run tests/integration/inference",
     "test:inference:dashscope": "npx cross-env TEST_API_PROVIDER=dashscope vitest run tests/integration/inference",
+    "test:inference:jiaojiao-gateway": "npx cross-env TEST_API_PROVIDER=jiaojiao vitest run tests/integration/inference/config.integration.test.ts tests/integration/inference/tts.integration.test.ts tests/integration/inference/t2i.integration.test.ts tests/integration/inference/vl.integration.test.ts tests/integration/inference/image-edit.integration.test.ts",
     "test:tools": "vitest run tests/integration/tools",
     "test:tools:zhipu": "npx cross-env TEST_API_PROVIDER=zhipu vitest run tests/integration/tools",
     "test:tools:dashscope": "npx cross-env TEST_API_PROVIDER=dashscope vitest run tests/integration/tools",
