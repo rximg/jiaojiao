@@ -56,6 +56,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     respond: (requestId, response) =>
       ipcRenderer.invoke('hitl:respond', requestId, response),
+    getPolicy: () => ipcRenderer.invoke('hitl:getPolicy'),
+    setMode: (mode) => ipcRenderer.invoke('hitl:setMode', mode),
+    addAllowlist: (actionType) => ipcRenderer.invoke('hitl:addAllowlist', actionType),
+    removeAllowlist: (actionType) => ipcRenderer.invoke('hitl:removeAllowlist', actionType),
+    clearAllowlist: () => ipcRenderer.invoke('hitl:clearAllowlist'),
   },
   fs: {
     ls: (sessionId, relativePath) =>

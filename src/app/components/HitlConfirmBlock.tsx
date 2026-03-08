@@ -28,6 +28,7 @@ interface HitlConfirmBlockProps {
   onContinue?: (editedPayload?: Record<string, unknown>) => void;
   /** 取消时可传入用户输入的修改说明（如 vl_script 的补充要求），会作为 reason 传回后端并出现在错误信息中，便于下次调用时使用 */
   onCancel?: (cancelReason?: string) => void;
+  onAddAllowlist?: (actionType: string) => void;
 }
 
 /** 将 "1. xxx\n2. yyy" 解析回 string[] */
@@ -50,7 +51,7 @@ function formatRemaining(ms: number): string {
   return `${totalSeconds} 秒`;
 }
 
-export default function HitlConfirmBlock({ request, sessionId, onContinue, onCancel }: HitlConfirmBlockProps) {
+export default function HitlConfirmBlock({ request, sessionId, onContinue, onCancel, onAddAllowlist }: HitlConfirmBlockProps) {
   const resolved = 'approved' in request ? { approved: request.approved } : undefined;
   const title = ACTION_TITLE[request.actionType] ?? '确认操作';
   const payload = request.payload;
@@ -355,7 +356,7 @@ export default function HitlConfirmBlock({ request, sessionId, onContinue, onCan
                 onClick={handleContinue}
                 className="px-3 py-1.5 text-sm rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
               >
-                {payload._batchMode ? '全部执行' : '继续'}
+                {payload._batchMode ? '全部执行' : '继续执行'}
               </button>
               <button
                 type="button"
@@ -369,7 +370,14 @@ export default function HitlConfirmBlock({ request, sessionId, onContinue, onCan
                 }}
                 className="px-3 py-1.5 text-sm rounded-xl border border-border hover:bg-muted/80 transition-colors"
               >
-                取消
+                取消执行
+              </button>
+              <button
+                type="button"
+                onClick={() => onAddAllowlist?.(request.actionType)}
+                className="px-3 py-1.5 text-sm rounded-xl border border-border hover:bg-muted/80 transition-colors"
+              >
+                加入自动通过列表
               </button>
             </div>
           </div>

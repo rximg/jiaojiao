@@ -36,7 +36,8 @@ const FALLBACK_LLM_OPTIONS: Record<string, LLMOpts> = {
   },
 };
 
-type Provider = 'dashscope' | 'zhipu' | 'jiaojiao';
+type LlmProvider = 'dashscope' | 'zhipu';
+type MultimodalProvider = 'dashscope' | 'zhipu' | 'jiaojiao';
 
 interface ConfigDialogProps {
   open: boolean;
@@ -51,7 +52,7 @@ export default function ConfigDialog({
   onSave,
   initialConfig,
 }: ConfigDialogProps) {
-  const [provider, setProvider] = useState<Provider>('dashscope');
+  const [provider, setProvider] = useState<LlmProvider>('dashscope');
   const [llmOptions, setLlmOptions] = useState<Record<string, LLMOpts>>(FALLBACK_LLM_OPTIONS);
   const [dashscopeApiKey, setDashscopeApiKey] = useState('');
   const [zhipuApiKey, setZhipuApiKey] = useState('');
@@ -63,7 +64,7 @@ export default function ConfigDialog({
   const [ttsStartNumber, setTtsStartNumber] = useState(6000);
   const [applyStepsOpen, setApplyStepsOpen] = useState(false);
   /** 多模态（VL/TTS/T2I）供应商与 API Key */
-  const [multimodalProvider, setMultimodalProvider] = useState<Provider>('dashscope');
+  const [multimodalProvider, setMultimodalProvider] = useState<MultimodalProvider>('dashscope');
   const [multimodalDashscopeKey, setMultimodalDashscopeKey] = useState('');
   const [multimodalZhipuKey, setMultimodalZhipuKey] = useState('');
   const [jiaojiaoApiKey, setJiaojiaoApiKey] = useState('');
@@ -95,12 +96,12 @@ export default function ConfigDialog({
 
   useEffect(() => {
     if (open && initialConfig) {
-      const p = (initialConfig.agent?.provider === 'zhipu' ? 'zhipu' : 'dashscope') as Provider;
+      const p = (initialConfig.agent?.provider === 'zhipu' ? 'zhipu' : 'dashscope') as LlmProvider;
       setProvider(p);
       setDashscopeApiKey(initialConfig.apiKeys?.dashscope ?? '');
       setZhipuApiKey(initialConfig.apiKeys?.zhipu ?? '');
       const mmp = (initialConfig.agent?.multimodalProvider === 'zhipu' ? 'zhipu' :
-        initialConfig.agent?.multimodalProvider === 'jiaojiao' ? 'jiaojiao' : 'dashscope') as Provider;
+        initialConfig.agent?.multimodalProvider === 'jiaojiao' ? 'jiaojiao' : 'dashscope') as MultimodalProvider;
       setMultimodalProvider(mmp);
       setMultimodalDashscopeKey(initialConfig.multimodalApiKeys?.dashscope ?? '');
       setMultimodalZhipuKey(initialConfig.multimodalApiKeys?.zhipu ?? '');
@@ -218,7 +219,7 @@ export default function ConfigDialog({
                   id="provider"
                   className="flex h-9 flex-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   value={provider}
-                  onChange={(e) => setProvider(e.target.value as Provider)}
+                  onChange={(e) => setProvider(e.target.value as LlmProvider)}
                 >
                   <option value="dashscope">阿里百炼</option>
                   <option value="zhipu">智谱</option>
@@ -305,7 +306,7 @@ export default function ConfigDialog({
                   id="multimodalProvider"
                   className="flex h-9 flex-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   value={multimodalProvider}
-                  onChange={(e) => setMultimodalProvider(e.target.value as Provider)}
+                  onChange={(e) => setMultimodalProvider(e.target.value as MultimodalProvider)}
                 >
                   <option value="dashscope">阿里百炼</option>
                   <option value="zhipu">智谱</option>

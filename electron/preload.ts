@@ -63,8 +63,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onConfirmRequest: (callback: (data: { requestId: string; actionType: string; payload: Record<string, unknown>; timeout: number }) => void) => {
       ipcRenderer.on('hitl:confirmRequest', (_event, data) => callback(data));
     },
-    respond: (requestId: string, response: { approved: boolean; reason?: string }) =>
+    respond: (requestId: string, response: { approved: boolean; reason?: string; payload?: Record<string, unknown> }) =>
       ipcRenderer.invoke('hitl:respond', requestId, response),
+    getPolicy: () => ipcRenderer.invoke('hitl:getPolicy'),
+    setMode: (mode: 'auto' | 'allowlist' | 'strict') => ipcRenderer.invoke('hitl:setMode', mode),
+    addAllowlist: (actionType: string) => ipcRenderer.invoke('hitl:addAllowlist', actionType),
+    removeAllowlist: (actionType: string) => ipcRenderer.invoke('hitl:removeAllowlist', actionType),
+    clearAllowlist: () => ipcRenderer.invoke('hitl:clearAllowlist'),
   },
   // 文件系统相关
   fs: {
@@ -129,7 +134,12 @@ declare global {
       };
       hitl: {
         onConfirmRequest: (callback: (data: { requestId: string; actionType: string; payload: Record<string, unknown>; timeout: number }) => void) => void;
-        respond: (requestId: string, response: { approved: boolean; reason?: string }) => Promise<{ success: boolean }>;
+        respond: (requestId: string, response: { approved: boolean; reason?: string; payload?: Record<string, unknown> }) => Promise<{ success: boolean }>;
+        getPolicy: () => Promise<{ mode: 'auto' | 'allowlist' | 'strict'; allowlist: string[] }>;
+        setMode: (mode: 'auto' | 'allowlist' | 'strict') => Promise<{ mode: 'auto' | 'allowlist' | 'strict'; allowlist: string[] }>;
+        addAllowlist: (actionType: string) => Promise<{ mode: 'auto' | 'allowlist' | 'strict'; allowlist: string[] }>;
+        removeAllowlist: (actionType: string) => Promise<{ mode: 'auto' | 'allowlist' | 'strict'; allowlist: string[] }>;
+        clearAllowlist: () => Promise<{ mode: 'auto' | 'allowlist' | 'strict'; allowlist: string[] }>;
       };
       fs: {
         ls: (sessionId: string, relativePath?: string) => Promise<{ entries: any[] }>;

@@ -5,6 +5,43 @@
 
 import { ipcMain } from 'electron';
 import { resolveHitlResponse } from './hitl-response-bridge.js';
+import { loadConfig, saveConfig } from '../../backend/app-config.js';
+
+type HitlMode = 'auto' | 'allowlist' | 'strict';
+
+interface HitlPolicy {
+  mode: HitlMode;
+  allowlist: string[];
+}
+
+function normalizePolicy(input?: { mode?: string; allowlist?: unknown }): HitlPolicy {
+  const mode: HitlMode =
+    input?.mode === 'auto' || input?.mode === 'allowlist' || input?.mode === 'strict'
+      ? input.mode
+      : 'strict';
+  const allowlist = Array.isArray(input?.allowlist)
+    ? Array.from(
+        new Set(
+          input.allowlist
+            .filter((item): item is string => typeof item === 'string')
+            .map((item) => item.trim())
+            .filter(Boolean)
+        )
+      )
+    : [];
+  return { mode, allowlist };
+}
+
+async function readPolicy(): Promise<HitlPolicy> {
+  const config = await loadConfig();
+  return normalizePolicy(config.hitl as { mode?: string; allowlist?: unknown } | undefined);
+}
+
+async function writePolicy(policy: HitlPolicy): Promise<HitlPolicy> {
+  const normalized = normalizePolicy(policy);
+  await saveConfig({ hitl: normalized });
+  return normalized;
+}
 
 export function handleHITLIPC() {
   // 用户响应确认请求
@@ -48,5 +85,40 @@ export function handleHITLIPC() {
       console.error('[HITL IPC] Failed to cancel:', error);
       throw error;
     }
+  });
+
+  ipcMain.handle('hitl:getPolicy', async () => {
+    return readPolicy();
+  });
+
+  ipcMain.handle('hitl:setMode', async (_event, mode: HitlMode) => {
+    const current = await readPolicy();
+    return writePolicy({ ...current, mode });
+  });
+
+  ipcMain.handle('hitl:addAllowlist', async (_event, actionType: string) => {
+    const normalizedAction = typeof actionType === 'string' ? actionType.trim() : '';
+    if (!normalizedAction) {
+      return readPolicy();
+    }
+    const current = await readPolicy();
+    return writePolicy({
+      ...current,
+      allowlist: Array.from(new Set([...current.allowlist, normalizedAction])),
+    });
+  });
+
+  ipcMain.handle('hitl:removeAllowlist', async (_event, actionType: string) => {
+    const normalizedAction = typeof actionType === 'string' ? actionType.trim() : '';
+    const current = await readPolicy();
+    return writePolicy({
+      ...current,
+      allowlist: current.allowlist.filter((item) => item !== normalizedAction),
+    });
+  });
+
+  ipcMain.handle('hitl:clearAllowlist', async () => {
+    const current = await readPolicy();
+    return writePolicy({ ...current, allowlist: [] });
   });
 }

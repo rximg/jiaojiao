@@ -60,6 +60,10 @@ const DEFAULTS: Record<string, unknown> = {
     theme: 'light',
     language: 'zh',
   },
+  hitl: {
+    mode: 'strict',
+    allowlist: [],
+  },
 };
 
 // 若 config.json 已存在但内容不是合法 JSON（损坏或首次/旧环境遗留），先移走再创建 Store，避免 conf 内部 JSON.parse 报错
@@ -262,6 +266,24 @@ export function handleConfigIPC() {
         ...currentStore.ui,
         ...latestUIConfig,
       },
+      hitl: {
+        mode:
+          (currentStore?.hitl as any)?.mode === 'auto' ||
+          (currentStore?.hitl as any)?.mode === 'allowlist' ||
+          (currentStore?.hitl as any)?.mode === 'strict'
+            ? (currentStore.hitl as any).mode
+            : 'strict',
+        allowlist: Array.isArray((currentStore?.hitl as any)?.allowlist)
+          ? Array.from(
+              new Set(
+                ((currentStore.hitl as any).allowlist as unknown[])
+                  .filter((item): item is string => typeof item === 'string')
+                  .map((item) => item.trim())
+                  .filter(Boolean)
+              )
+            )
+          : [],
+      },
     };
     log.info('[config] config:get ok, hasApiKey=', Boolean(currentStore?.apiKeys?.dashscope || currentStore?.apiKeys?.zhipu));
     return { config, isFirstRun };
@@ -304,6 +326,8 @@ export function handleConfigIPC() {
       const userDataDir = app.getPath('userData');
       const writePath = path.join(userDataDir, 'config.json');
       log.info('[config] config:set writePath=', writePath, 'userDataWritable=', Boolean(userDataDir));
+      const existingStore = getStore().store as Record<string, unknown>;
+      const existingHitl = (existingStore.hitl as { mode?: string; allowlist?: unknown } | undefined) ?? undefined;
 
       // 适配层：将前端 DTO 规范化为应用配置形状（含 legacy 路径过滤等）
       const def = DEFAULTS as Record<string, Record<string, unknown>>;
@@ -346,6 +370,36 @@ export function handleConfigIPC() {
         ui: {
           theme: config?.ui?.theme === 'dark' ? 'dark' : 'light',
           language: config?.ui?.language === 'en' ? 'en' : 'zh',
+        },
+        hitl: {
+          mode: (
+            config?.hitl?.mode ?? existingHitl?.mode
+          ) === 'auto' || (
+            config?.hitl?.mode ?? existingHitl?.mode
+          ) === 'allowlist' || (
+            config?.hitl?.mode ?? existingHitl?.mode
+          ) === 'strict'
+              ? (config?.hitl?.mode ?? existingHitl?.mode)
+              : 'strict',
+          allowlist: Array.isArray(config?.hitl?.allowlist)
+            ? Array.from(
+                new Set(
+                  (config.hitl.allowlist as unknown[])
+                    .filter((item): item is string => typeof item === 'string')
+                    .map((item) => item.trim())
+                    .filter(Boolean)
+                )
+              )
+            : Array.isArray(existingHitl?.allowlist)
+              ? Array.from(
+                  new Set(
+                    (existingHitl.allowlist as unknown[])
+                      .filter((item): item is string => typeof item === 'string')
+                      .map((item) => item.trim())
+                      .filter(Boolean)
+                  )
+                )
+            : [],
         },
       };
 

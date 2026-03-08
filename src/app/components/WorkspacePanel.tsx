@@ -1,7 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Folder, FolderOpen, Image, Music, FileText, RefreshCw, ChevronDown, ChevronRight, X, Upload, Printer } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Folder, FolderOpen, Image, Music, FileText, RefreshCw, ChevronDown, ChevronRight, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import ImagePrintDialog from './ImagePrintDialog';
 
 interface FileEntry {
   path: string;
@@ -28,17 +27,7 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
     llm_logs: false,
   });
   const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [printDialogOpen, setPrintDialogOpen] = useState(false);
-
-  const printableImages = useMemo(
-    () =>
-      files.images
-        .filter((entry) => !entry.isDir)
-        .map((entry) => ({ name: entry.name, path: entry.path })),
-    [files.images]
-  );
 
   const loadFiles = useCallback(async () => {
     if (!sessionId) return;
@@ -153,37 +142,6 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
     }
   };
 
-  const handleSyncAudio = useCallback(async () => {
-    if (!sessionId) return;
-    setSyncing(true);
-    try {
-      const res = await window.electronAPI?.sync?.syncAudioToStore?.(sessionId);
-      if (res?.success !== undefined) {
-        if (res.success) {
-          // 记录同步操作到会话元数据
-          try {
-            await window.electronAPI.session.update(sessionId, {
-              lastSyncAudioAt: new Date().toISOString(),
-            });
-          } catch (error) {
-            console.warn('Failed to update sync timestamp:', error);
-            // 不阻断同步流程
-          }
-          alert(res.message ?? `已同步 ${res.copied ?? 0} 个 mp3`);
-        } else {
-          alert(res.message ?? '同步失败');
-        }
-      } else {
-        alert('同步功能不可用');
-      }
-    } catch (e) {
-      console.error(e);
-      alert('同步失败：' + (e instanceof Error ? e.message : String(e)));
-    } finally {
-      setSyncing(false);
-    }
-  }, [sessionId]);
-
   if (!sessionId) {
     return (
       <div className="w-80 border-l border-border bg-sidebar p-6">
@@ -264,32 +222,6 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
                     ({entries.length})
                   </span>
                 </button>
-                {category === 'audio' && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={syncing}
-                    onClick={handleSyncAudio}
-                    className="h-7 shrink-0"
-                    title="将本会话音频同步到目标目录"
-                  >
-                    <Upload className={`h-3.5 w-3.5 ${syncing ? 'animate-pulse' : ''}`} />
-                    <span className="ml-1 text-xs">同步</span>
-                  </Button>
-                )}
-                {category === 'images' && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={entries.filter((entry) => !entry.isDir).length === 0}
-                    onClick={() => setPrintDialogOpen(true)}
-                    className="h-7 shrink-0"
-                    title="图片排版打印"
-                  >
-                    <Printer className="h-3.5 w-3.5" />
-                    <span className="ml-1 text-xs">打印</span>
-                  </Button>
-                )}
               </div>
 
               {expanded[category] && (
@@ -390,13 +322,6 @@ export default function WorkspacePanel({ sessionId, lastArtifactTime, onClose }:
           </div>
         </div>
       )}
-
-      <ImagePrintDialog
-        open={printDialogOpen}
-        onOpenChange={setPrintDialogOpen}
-        images={printableImages}
-        sessionId={sessionId}
-      />
     </div>
   );
 }

@@ -98,6 +98,20 @@ export async function loadConfig(): Promise<AppConfig> {
       zhipu: (storedMultimodal?.zhipu ?? storedConfig?.apiKeys?.zhipu ?? '')?.trim() || '',
       jiaojiao: (storedMultimodal?.jiaojiao ?? '')?.trim() || '',
     };
+    const rawHitl = storedConfig?.hitl as { mode?: string; allowlist?: unknown } | undefined;
+    const hitlMode = rawHitl?.mode === 'auto' || rawHitl?.mode === 'allowlist' || rawHitl?.mode === 'strict'
+      ? rawHitl.mode
+      : 'strict';
+    const hitlAllowlist = Array.isArray(rawHitl?.allowlist)
+      ? Array.from(
+          new Set(
+            rawHitl.allowlist
+              .filter((item): item is string => typeof item === 'string')
+              .map((item) => item.trim())
+              .filter(Boolean)
+          )
+        )
+      : [];
 
     return {
       apiKeys: {
@@ -140,6 +154,10 @@ export async function loadConfig(): Promise<AppConfig> {
         theme: storedConfig?.ui?.theme || 'light',
         language: storedConfig?.ui?.language || 'zh',
       },
+      hitl: {
+        mode: hitlMode,
+        allowlist: hitlAllowlist,
+      },
     };
   } catch (error) {
     throw new Error(`无法从用户目录加载配置: ${(error as Error).message}`);
@@ -153,7 +171,7 @@ export async function saveConfig(updates: Partial<AppConfig>): Promise<void> {
   const store = getConfigStore();
   const setFn = (store as { set?: (k: string, v: unknown) => void }).set;
   if (typeof setFn !== 'function') return;
-  const keys = ['apiKeys', 'multimodalApiKeys', 'agent', 'storage', 'ui', 'configVersion'] as const;
+  const keys = ['apiKeys', 'multimodalApiKeys', 'agent', 'storage', 'ui', 'hitl', 'configVersion'] as const;
   for (const key of keys) {
     if (key in updates && (updates as Record<string, unknown>)[key] !== undefined) {
       setFn.call(store, key, (updates as Record<string, unknown>)[key]);

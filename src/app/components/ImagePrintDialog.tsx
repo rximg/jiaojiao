@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import {
   DEFAULT_PRINT_LAYOUT,
   type PerPage,
+  type PrintPage,
   type PrintableImage,
   type PrintLayoutConfig,
   computePrintPages,
@@ -16,8 +17,15 @@ import {
 interface ImagePrintDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  images: Array<{ name: string; path: string }>;
+  images: Array<{ name: string; path: string; sessionId?: string; sessionTitle?: string }>;
   sessionId?: string; // 会话ID，用于记录打印操作
+  pageBreakBySession?: boolean;
+  onAfterPrint?: (selectedItems: PrintableImage[]) => void | Promise<void>;
+}
+
+interface PrintPageView extends PrintPage {
+  sessionId?: string;
+  sessionLabel?: string;
 }
 
 const LOCAL_STORAGE_KEY = 'image-print-layout-v1';
@@ -56,7 +64,14 @@ function probeImageRatio(filePath: string): Promise<PrintableImage['ratioClass']
   });
 }
 
-export default function ImagePrintDialog({ open, onOpenChange, images, sessionId }: ImagePrintDialogProps) {
+export default function ImagePrintDialog({
+  open,
+  onOpenChange,
+  images,
+  sessionId,
+  pageBreakBySession = false,
+  onAfterPrint,
+}: ImagePrintDialogProps) {
   const [items, setItems] = useState<PrintableImage[]>([]);
   const [selectedMap, setSelectedMap] = useState<Record<string, boolean>>({});
   const [layout, setLayout] = useState<PrintLayoutConfig>(DEFAULT_PRINT_LAYOUT);
@@ -65,7 +80,16 @@ export default function ImagePrintDialog({ open, onOpenChange, images, sessionId
   useEffect(() => {
     if (!open) return;
     setLayout(readStoredLayout());
-    const sorted = [...images].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+    const sorted = [...images].sort((a, b) => {
+      if (pageBreakBySession) {
+        const aGroup = (a.sessionTitle ?? a.sessionId ?? '').trim();
+        const bGroup = (b.sessionTitle ?? b.sessionId ?? '').trim();
+        if (aGroup !== bGroup) {
+          return aGroup.localeCompare(bGroup, 'zh-CN');
+        }
+      }
+      return a.name.localeCompare(b.name, 'zh-CN');
+    });
     setItems(sorted.map((entry) => ({ ...entry, ratioClass: 'unknown' as const })));
     setSelectedMap(
       sorted.reduce<Record<string, boolean>>((acc, entry) => {
@@ -74,7 +98,7 @@ export default function ImagePrintDialog({ open, onOpenChange, images, sessionId
       }, {})
     );
     setCurrentPage(0);
-  }, [open]);
+  }, [open, images, pageBreakBySession]);
 
   useEffect(() => {
     if (!open || items.length === 0) return;
@@ -109,7 +133,44 @@ export default function ImagePrintDialog({ open, onOpenChange, images, sessionId
     [items, selectedMap]
   );
 
-  const pages = useMemo(() => computePrintPages(selectedItems, layout), [selectedItems, layout]);
+  const pages = useMemo<PrintPageView[]>(() => {
+    if (!pageBreakBySession) {
+      return computePrintPages(selectedItems, layout).map((page) => ({ ...page }));
+    }
+    const grouped = new Map<string, { sessionId?: string; sessionLabel: string; images: PrintableImage[] }>();
+    const orderedKeys: string[] = [];
+    selectedItems.forEach((item) => {
+      const key = item.sessionId ?? '__default__';
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          sessionId: item.sessionId,
+          sessionLabel: item.sessionTitle ?? item.sessionId ?? '未标记会话',
+          images: [],
+        });
+        orderedKeys.push(key);
+      }
+      grouped.get(key)!.images.push(item);
+    });
+
+    const merged: PrintPageView[] = [];
+    let globalIndex = 0;
+    orderedKeys.forEach((key) => {
+      const group = grouped.get(key);
+      if (!group) return;
+      const groupPages = computePrintPages(group.images, layout);
+      groupPages.forEach((page) => {
+        merged.push({
+          ...page,
+          index: globalIndex,
+          sessionId: group.sessionId,
+          sessionLabel: group.sessionLabel,
+        });
+        globalIndex += 1;
+      });
+    });
+
+    return merged;
+  }, [selectedItems, layout, pageBreakBySession]);
 
   useEffect(() => {
     if (pages.length === 0) {
@@ -158,6 +219,12 @@ export default function ImagePrintDialog({ open, onOpenChange, images, sessionId
   const handlePrint = () => {
     if (!validateBeforePrint()) return;
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(layout));
+
+    if (onAfterPrint) {
+      Promise.resolve(onAfterPrint(selectedItems)).catch((error) => {
+        console.warn('Failed to handle print callback:', error);
+      });
+    }
     
     // 记录打印操作到会话元数据
     if (sessionId) {
@@ -363,6 +430,9 @@ export default function ImagePrintDialog({ open, onOpenChange, images, sessionId
           <div className="ipd-preview p-4 overflow-y-auto space-y-3">
             <div className="text-sm font-medium">预览</div>
             <div className="text-xs text-muted-foreground">{summary}</div>
+            {pageBreakBySession && current?.sessionLabel && (
+              <div className="text-xs text-muted-foreground">当前页会话：{current.sessionLabel}</div>
+            )}
 
             {pages.length === 0 || !current ? (
               <div className="h-64 border border-dashed border-border rounded-xl flex items-center justify-center text-sm text-muted-foreground">

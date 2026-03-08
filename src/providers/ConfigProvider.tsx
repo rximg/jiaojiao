@@ -74,6 +74,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
         agent: { model: 'qwen-plus-2025-12-01', temperature: 0.1, maxTokens: 20000, provider: 'dashscope', multimodalProvider: 'dashscope' },
         storage: { outputPath: '', syncTargetPath: '' },
         ui: { theme: 'light', language: 'zh' },
+        hitl: { mode: 'strict', allowlist: [] },
       };
       const updatedConfig = { ...baseConfig, ...newConfig } as AppConfig;
       await window.electronAPI.config.set(updatedConfig);

@@ -150,6 +150,11 @@ export interface AppConfig {
     /** @deprecated 使用 quickOptions，YAML/后端兼容 */
     quick_options?: QuickOption[];
   };
+  /** HITL 执行模式与自动通过列表 */
+  hitl?: {
+    mode?: 'auto' | 'allowlist' | 'strict';
+    allowlist?: string[];
+  };
 }
 
 export interface WelcomeConfig {

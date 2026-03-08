@@ -6,6 +6,7 @@ import ChatMessage from './ChatMessage';
 import WelcomeMessage from './WelcomeMessage';
 import QuickOptions from './QuickOptions';
 import HitlConfirmBlock from './HitlConfirmBlock';
+import HitlModeDialog, { type HitlPolicy, type HitlMode } from './HitlModeDialog';
 import TodoPanel from './TodoPanel';
 import WorkspacePanel from './WorkspacePanel';
 import { useChat } from '../../providers/ChatProvider';
@@ -41,6 +42,9 @@ export default function ChatInterface({
   const waitingForConfirmation = Boolean(pendingHitlRequest);
   const [showWelcome, setShowWelcome] = useState(true);
   const [showWorkspace] = useState(true);
+  const [hitlModeOpen, setHitlModeOpen] = useState(false);
+  const [hitlPolicy, setHitlPolicy] = useState<HitlPolicy>({ mode: 'strict', allowlist: [] });
+  const [hitlPolicyLoading, setHitlPolicyLoading] = useState(false);
   const isCreatingSessionRef = useRef(false);
   /** 本次「案例」模式下是否已执行过创建新 session，避免重复创建 */
   const createdForNullRef = useRef(false);
@@ -172,6 +176,108 @@ export default function ChatInterface({
     onBack();
   }, [onBack, resetSession]);
 
+  const normalizePolicy = useCallback((raw: unknown): HitlPolicy => {
+    const source = (raw ?? {}) as { mode?: unknown; allowlist?: unknown };
+    const mode: HitlMode =
+      source.mode === 'auto' || source.mode === 'allowlist' || source.mode === 'strict'
+        ? source.mode
+        : 'strict';
+    const allowlist = Array.isArray(source.allowlist)
+      ? Array.from(
+          new Set(
+            source.allowlist
+              .filter((item): item is string => typeof item === 'string')
+              .map((item) => item.trim())
+              .filter(Boolean)
+          )
+        )
+      : [];
+    return { mode, allowlist };
+  }, []);
+
+  const loadHitlPolicy = useCallback(async () => {
+    if (typeof window.electronAPI.hitl?.getPolicy !== 'function') return;
+    setHitlPolicyLoading(true);
+    try {
+      const policy = await window.electronAPI.hitl.getPolicy();
+      setHitlPolicy(normalizePolicy(policy));
+    } catch (error) {
+      console.error('[ChatInterface] Failed to load HITL policy:', error);
+    } finally {
+      setHitlPolicyLoading(false);
+    }
+  }, [normalizePolicy]);
+
+  useEffect(() => {
+    void loadHitlPolicy();
+  }, [loadHitlPolicy]);
+
+  useEffect(() => {
+    if (!hitlModeOpen) return;
+    void loadHitlPolicy();
+  }, [hitlModeOpen, loadHitlPolicy]);
+
+  const handleSetHitlMode = useCallback(
+    async (mode: HitlMode) => {
+      if (typeof window.electronAPI.hitl?.setMode !== 'function') return;
+      setHitlPolicyLoading(true);
+      try {
+        const policy = await window.electronAPI.hitl.setMode(mode);
+        setHitlPolicy(normalizePolicy(policy));
+      } catch (error) {
+        console.error('[ChatInterface] Failed to set HITL mode:', error);
+      } finally {
+        setHitlPolicyLoading(false);
+      }
+    },
+    [normalizePolicy]
+  );
+
+  const handleAddAllowlist = useCallback(
+    async (actionType: string) => {
+      if (typeof window.electronAPI.hitl?.addAllowlist !== 'function') return;
+      setHitlPolicyLoading(true);
+      try {
+        const policy = await window.electronAPI.hitl.addAllowlist(actionType);
+        setHitlPolicy(normalizePolicy(policy));
+      } catch (error) {
+        console.error('[ChatInterface] Failed to add HITL allowlist item:', error);
+      } finally {
+        setHitlPolicyLoading(false);
+      }
+    },
+    [normalizePolicy]
+  );
+
+  const handleRemoveAllowlist = useCallback(
+    async (actionType: string) => {
+      if (typeof window.electronAPI.hitl?.removeAllowlist !== 'function') return;
+      setHitlPolicyLoading(true);
+      try {
+        const policy = await window.electronAPI.hitl.removeAllowlist(actionType);
+        setHitlPolicy(normalizePolicy(policy));
+      } catch (error) {
+        console.error('[ChatInterface] Failed to remove HITL allowlist item:', error);
+      } finally {
+        setHitlPolicyLoading(false);
+      }
+    },
+    [normalizePolicy]
+  );
+
+  const handleClearAllowlist = useCallback(async () => {
+    if (typeof window.electronAPI.hitl?.clearAllowlist !== 'function') return;
+    setHitlPolicyLoading(true);
+    try {
+      const policy = await window.electronAPI.hitl.clearAllowlist();
+      setHitlPolicy(normalizePolicy(policy));
+    } catch (error) {
+      console.error('[ChatInterface] Failed to clear HITL allowlist:', error);
+    } finally {
+      setHitlPolicyLoading(false);
+    }
+  }, [normalizePolicy]);
+
   return (
     <div className="flex h-screen flex-col">
       {/* 配置栏 */}
@@ -184,6 +290,9 @@ export default function ChatInterface({
           <h1 className="text-xl font-semibold text-foreground">百科绘本</h1>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setHitlModeOpen(true)}>
+            执行模式
+          </Button>
           <Button variant="outline" size="sm" onClick={onConfigClick}>
             <Settings className="mr-2 h-4 w-4" />
             配置
@@ -215,11 +324,11 @@ export default function ChatInterface({
             {messages.map((message) => (
               <React.Fragment key={message.id}>
                 {message.hitlBlock && !message.content ? (
-                  <HitlConfirmBlock request={message.hitlBlock} />
+                  <HitlConfirmBlock request={message.hitlBlock} sessionId={currentSessionId} />
                 ) : (
                   <>
                     <ChatMessage message={message} sessionId={currentSessionId} />
-                    {message.hitlBlock && <HitlConfirmBlock request={message.hitlBlock} />}
+                    {message.hitlBlock && <HitlConfirmBlock request={message.hitlBlock} sessionId={currentSessionId} />}
                   </>
                 )}
               </React.Fragment>
@@ -240,6 +349,9 @@ export default function ChatInterface({
                 sessionId={currentSessionId}
                 onContinue={handleHitlContinue}
                 onCancel={handleHitlCancel}
+                onAddAllowlist={(actionType) => {
+                  void handleAddAllowlist(actionType);
+                }}
               />
             )}
             {isLoading && !waitingForConfirmation && (
@@ -259,10 +371,10 @@ export default function ChatInterface({
           {waitingForConfirmation && (
             <div className="px-6 pb-2 flex flex-wrap gap-2">
               <Button variant="default" size="sm" onClick={() => handleHitlContinue()} className="rounded-full">
-                继续
+                继续执行
               </Button>
               <Button variant="outline" size="sm" onClick={() => handleHitlCancel()} className="rounded-full border-border">
-                取消
+                取消执行
               </Button>
             </div>
           )}
@@ -317,6 +429,16 @@ export default function ChatInterface({
                           {/* 工作区面板 */}
         {showWorkspace && <WorkspacePanel sessionId={currentSessionId} lastArtifactTime={lastArtifactTime} />}
       </div>
+
+      <HitlModeDialog
+        open={hitlModeOpen}
+        onOpenChange={setHitlModeOpen}
+        policy={hitlPolicy}
+        loading={hitlPolicyLoading}
+        onModeChange={handleSetHitlMode}
+        onRemoveAllowlist={handleRemoveAllowlist}
+        onClearAllowlist={handleClearAllowlist}
+      />
     </div>
   );
 }

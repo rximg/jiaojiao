@@ -9,9 +9,17 @@
  */
 
 import { randomUUID } from 'crypto';
-import { getHITLRule, requiresApproval, getTimeout, type HITLConfig, DEFAULT_HITL_CONFIG } from '../config/hitl-config.js';
+import { getHITLRule, getTimeout, type HITLConfig, DEFAULT_HITL_CONFIG } from '../config/hitl-config.js';
 import type { LogManager } from './log-manager.js';
 import { registerHitlResponseWaiter } from '../../electron/ipc/hitl-response-bridge.js';
+import { loadConfig } from '../app-config.js';
+
+type HitlMode = 'auto' | 'allowlist' | 'strict';
+
+interface HitlExecutionPolicy {
+  mode: HitlMode;
+  allowlist: Set<string>;
+}
 
 export interface HITLRequest {
   requestId: string;
@@ -26,6 +34,10 @@ export interface HITLRequest {
     approved: boolean;
     reason?: string;
     timestamp: string;
+  };
+  audit?: {
+    decisionMode: 'auto' | 'allowlist-hit' | 'manual';
+    matchedRule?: string;
   };
 }
 
@@ -51,6 +63,60 @@ export class HITLService {
     this.config = { ...DEFAULT_HITL_CONFIG, ...config };
   }
   
+  private async getExecutionPolicy(): Promise<HitlExecutionPolicy> {
+    try {
+      const config = await loadConfig();
+      const rawMode = config.hitl?.mode;
+      const mode: HitlMode =
+        rawMode === 'auto' || rawMode === 'allowlist' || rawMode === 'strict'
+          ? rawMode
+          : 'strict';
+      const allowlist = Array.isArray(config.hitl?.allowlist)
+        ? config.hitl.allowlist
+            .filter((item): item is string => typeof item === 'string')
+            .map((item) => item.trim())
+            .filter(Boolean)
+        : [];
+      return {
+        mode,
+        allowlist: new Set(allowlist),
+      };
+    } catch {
+      return {
+        mode: 'strict',
+        allowlist: new Set<string>(),
+      };
+    }
+  }
+
+  private async logAutoApproval(
+    actionType: string,
+    payload: Record<string, any>,
+    decisionMode: 'auto' | 'allowlist-hit'
+  ): Promise<void> {
+    if (!this.logManager) return;
+    const now = new Date().toISOString();
+    await this.logManager.logHITL(this.sessionId, {
+      requestId: `auto-${randomUUID()}`,
+      sessionId: this.sessionId,
+      actionType,
+      priority: 'low',
+      payload,
+      timestamp: now,
+      timeout: 0,
+      status: 'approved',
+      response: {
+        approved: true,
+        reason: `mode=${decisionMode === 'auto' ? 'auto' : 'allowlist-hit'}`,
+        timestamp: now,
+      },
+      audit: {
+        decisionMode,
+        matchedRule: actionType,
+      },
+    });
+  }
+
   /**
    * 请求人工确认。调用方必须在收到批准且拿到返回值后，仅使用返回的 merged 执行后续操作，
    * 不得使用原始 payload，以保证所有编辑修改都能正确传入下一步。
@@ -60,8 +126,15 @@ export class HITLService {
     actionType: string,
     payload: Record<string, any>
   ): Promise<Record<string, unknown> | null> {
-    // 检查是否需要确认
-    if (!requiresApproval(actionType, this.config)) {
+    const policy = await this.getExecutionPolicy();
+
+    if (policy.mode === 'auto') {
+      await this.logAutoApproval(actionType, payload, 'auto');
+      return { ...payload };
+    }
+
+    if (policy.mode === 'allowlist' && policy.allowlist.has(actionType)) {
+      await this.logAutoApproval(actionType, payload, 'allowlist-hit');
       return { ...payload };
     }
     
@@ -78,6 +151,10 @@ export class HITLService {
       timestamp: new Date().toISOString(),
       timeout,
       status: 'pending',
+      audit: {
+        decisionMode: 'manual',
+        matchedRule: rule?.actionType,
+      },
     };
     
     this.pendingRequests.set(request.requestId, request);

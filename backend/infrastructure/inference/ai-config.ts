@@ -190,9 +190,10 @@ export async function getAIConfig(ability: AIAbility): Promise<AIConfig> {
   const raw = (ability === 'llm' ? (agent?.current ?? agent?.model) : agent?.model)?.trim();
   const specifiedModelForUser = raw || undefined;
 
-  const keysForAbility = isLlm ? apiKeys : multimodalApiKeys;
   const getApiKey = (p: Provider): string => {
-    const key = (keysForAbility[p] ?? '').trim();
+    const key = isLlm
+      ? (p === 'zhipu' ? apiKeys.zhipu : apiKeys.dashscope)?.trim() ?? ''
+      : (multimodalApiKeys[p] ?? '').trim();
     if (!key) {
       const label = isLlm ? 'LLM' : '多模态（视觉/语音/图像）';
       throw new Error(

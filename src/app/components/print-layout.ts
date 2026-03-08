@@ -7,6 +7,8 @@ export interface PrintableImage {
   name: string;
   path: string;
   ratioClass: RatioClass;
+  sessionId?: string;
+  sessionTitle?: string;
 }
 
 export interface PrintLayoutConfig {
