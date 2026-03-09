@@ -1,6 +1,6 @@
 name: story_book_agent
-version: 1.0.0
-description: 绘本故事生成系统 - 生成多图片长故事绘本，保证角色一致性
+version: 1.1.0
+description: 绘本故事生成系统 - 大纲确认后生成结构化分镜，固定四角色四宫格，保证角色一致性
 
 # Skill 配置（新增）
 skill_path: backend/config/skills/picture-book-story
@@ -9,13 +9,13 @@ skill_path: backend/config/skills/picture-book-story
 case:
   id: story_book
   title: 绘本故事
-  description: 生成多图片长故事绘本，保证角色一致性
+  description: 大纲确认后生成结构化分镜，固定四角色四宫格
   cover: 绘本故事封面.png
   order: 2
 
 agent:
   name: story_book_agent
-  version: 1.0.0
+  version: 1.1.0
   type: main_agent
 
   # 如果 Skill 中已有完整 system prompt，可省略；否则可补充
@@ -35,9 +35,6 @@ tools:
     enable: true
     config_path: ./tools/tts.yaml
   batch_tool_call: {}            # 通用批量执行器（首次批量生成时使用）
-  generate_script_from_image:
-    enable: true
-    config_path: ./tools/vl_script.yaml
 
 # 可选：子代理配置（如需要）
 sub_agents: {}
