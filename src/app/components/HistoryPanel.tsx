@@ -158,6 +158,69 @@ export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
     }
   };
 
+  /** 跨会话：同步全部 session 的音频到 store */
+  const handleSyncAll = async () => {
+    if (processing) return;
+    setProcessing('sync');
+    try {
+      const result = await window.electronAPI.sync.syncAudioToStore();
+      if (result?.success) {
+        await loadHistory();
+        alert(`音频同步完成：已同步 ${result.copied} 个 mp3 到 ${result.storeDir}`);
+      } else {
+        alert(result?.message ?? '同步失败');
+      }
+    } catch (err) {
+      console.error('[HistoryPanel] syncAll failed:', err);
+      alert('同步失败');
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  /** 跨会话：收集全部 session 的图片并打开打印预览 */
+  const handlePrintPreviewAll = async () => {
+    if (processing) return;
+    setProcessing('print');
+    try {
+      const imageEntries: Array<{ name: string; path: string; sessionId?: string; sessionTitle?: string }> = [];
+      await Promise.all(
+        sessions.map(async (session) => {
+          try {
+            const details = await window.electronAPI.session.get(session.sessionId);
+            const images = Array.isArray(details?.files?.images) ? details.files.images : [];
+            const sessionLabel = (session.title ?? '').trim() || session.sessionId.slice(0, 8);
+            images
+              .filter((entry: { name?: string; path?: string; isDir?: boolean }) => {
+                if (entry?.isDir) return false;
+                return Boolean(entry?.name && /\.(png|jpg|jpeg|webp|gif)$/i.test(entry.name));
+              })
+              .forEach((entry: { name: string; path: string }) => {
+                imageEntries.push({
+                  name: entry.name,
+                  path: entry.path,
+                  sessionId: session.sessionId,
+                  sessionTitle: sessionLabel,
+                });
+              });
+          } catch (error) {
+            console.warn('[HistoryPanel] Failed to collect images for session:', session.sessionId, error);
+          }
+        })
+      );
+
+      if (imageEntries.length === 0) {
+        alert('历史记录中没有可打印的图片。');
+        return;
+      }
+
+      setPrintImages(imageEntries);
+      setPrintDialogOpen(true);
+    } finally {
+      setProcessing(null);
+    }
+  };
+
   const handleBatchPrintPreview = async () => {
     if (!hasSelection || processing) return;
     setProcessing('print');
@@ -232,11 +295,35 @@ export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
   return (
     <div className="h-full flex flex-col bg-sidebar">
       <div className="p-4 border-b border-border">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <h2 className="text-sm font-semibold text-sidebar-foreground">历史记录</h2>
-          <Button type="button" variant="outline" size="sm" onClick={toggleSelectMode}>
-            {selectMode ? '取消选择' : '选择会话'}
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={processing !== null || sessions.length === 0}
+              onClick={() => void handleSyncAll()}
+              title="同步全部会话的音频到配置的目标目录"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              <span className="ml-1">{processing === 'sync' ? '同步中...' : '音频同步'}</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={processing !== null || sessions.length === 0}
+              onClick={() => void handlePrintPreviewAll()}
+              title="收集全部会话的图片并打开打印预览"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              <span className="ml-1">{processing === 'print' ? '处理中...' : '打印预览'}</span>
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={toggleSelectMode}>
+              {selectMode ? '取消选择' : '选择会话'}
+            </Button>
+          </div>
         </div>
         {selectMode && (
           <div className="mt-2 space-y-2">

@@ -1,0 +1,69 @@
+name: main_agent
+version: 1.0.0
+description: 行为纠正绘本制作系统
+
+case:
+  id: behavior_correction
+  title: 行为纠正
+  description: 通过双分镜绘本正向引导宝宝建立良好行为习惯
+  order: 2
+  cover: cover.jpg
+
+agent:
+  name: behavior_correction_agent
+  version: 1.0.0
+  type: main_agent
+
+runtime:
+  prompt:
+    source: skill_md
+  middlewares:
+    deepagent_skill:
+      enabled: true
+    checkpoint:
+      enabled: true
+    subagent:
+      enabled: false
+
+tools:
+  finalize_workflow: {}
+  delete_artifacts: {}
+  generate_image:
+    enable: true
+    config_path: ./tools/t2i.yaml
+  synthesize_speech:
+    enable: true
+    config_path: ./tools/tts.yaml
+
+sub_agents: {}
+
+ui:
+  welcome:
+    title: 欢迎使用行为纠正绘本生成助手
+    subtitle: 我可以帮您生成正向引导绘本，帮助宝宝建立良好的行为习惯
+    instructions:
+      title: 请告诉我
+      items:
+        - 行为：宝宝的不良习惯（如：用手抓饭、打人、乱扔玩具）
+        - 年龄：宝宝的年龄（如：2岁、4岁）
+        - 场景：行为发生的场景（可选，如：吃饭时、在幼儿园）
+    footer: 或者直接点击下方的快捷选项开始！
+  quick_options:
+    - label: 宝宝用手抓饭
+      description: 培养使用餐具的好习惯
+      prompt: 2岁宝宝总是用手抓饭，不肯用勺子
+    - label: 宝宝打人咬人
+      description: 学会温柔表达情绪
+      prompt: 3岁宝宝生气时会打人咬人
+    - label: 宝宝不刷牙
+      description: 建立口腔卫生习惯
+      prompt: 3岁宝宝不愿意刷牙
+    - label: 宝宝乱扔玩具
+      description: 学会收拾整理
+      prompt: 4岁宝宝玩完玩具不收拾，到处乱扔
+    - label: 宝宝喜欢爬高
+      description: 引导孩子不要爬高
+      prompt: 3岁宝宝喜欢爬桌子上
+    - label: 宝宝不肯睡觉
+      description: 建立良好作息规律
+      prompt: 2岁宝宝晚上不肯按时睡觉

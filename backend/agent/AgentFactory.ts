@@ -1,7 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { createAgent } from 'langchain';
 import { createDeepAgent, createFilesystemMiddleware, FilesystemBackend, type SubAgent, type CompiledSubAgent } from 'deepagents';
-import { ConfigLoader, type AgentConfig } from './ConfigLoader.js';
+import { ConfigLoader, type AgentConfig, type SkillConfig } from './ConfigLoader.js';
 import { getAIConfig } from '../infrastructure/inference/ai-config.js';
 import { createLLMFromAIConfig } from '../infrastructure/inference/adapters/llm/index.js';
 import type { LLMAIConfig } from '#backend/domain/inference/types.js';
@@ -11,7 +11,7 @@ import { fileURLToPath } from 'url';
 import { DEFAULT_SESSION_ID, getWorkspaceFilesystem, resolveWorkspaceRoot } from '../services/fs.js';
 import { createAgentRuntime, type AgentRuntime } from '../services/runtime-manager.js';
 import { createTool } from '../tools/index.js';
-import { resolveMainAgentConfigPath } from './case-config-resolver.js';
+import { resolveMainAgentConfigPath, resolveSkillBundleByCaseId, type SkillBundle } from './case-config-resolver.js';
 import { getRunContext } from '../application/agent/run-context.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -21,12 +21,11 @@ export class AgentFactory {
   private configLoader: ConfigLoader;
   private agentConfig: AgentConfig;
   private projectRoot: string;
-  private runtime?: AgentRuntime;  // 新增：Runtime 实例
+  private runtime?: AgentRuntime;
+  /** Skill-First 解析结果；null 表示使用 agent_cases fallback */
+  private skillBundle: SkillBundle | null;
 
   constructor(configPath?: string) {
-    // 计算配置目录路径
-    // 优先使用主进程注入的目录（打包后为 resources/backend/config）
-    // 开发环境：backend/agent -> backend/config；生产 dist-electron 或 asar 内用 __dirname
     let configDir: string;
     let projectRoot: string;
 
@@ -44,25 +43,31 @@ export class AgentFactory {
     this.projectRoot = projectRoot;
     this.configLoader = new ConfigLoader(configDir, projectRoot);
 
-    // 加载主配置（优先显式 configPath；其次按 AGENT_CASE_ID 读取 config/agent_cases/{caseId}.yaml；默认 encyclopedia.yaml）
     const caseIdFromEnv = process.env.AGENT_CASE_ID?.trim();
-    const resolvedConfigPath = configPath ?? resolveMainAgentConfigPath(configDir, caseIdFromEnv);
-    if (caseIdFromEnv && !configPath) {
-      console.log(`[AgentFactory] 当前案例: ${caseIdFromEnv}，加载配置: ${resolvedConfigPath}`);
+
+    // Skill-First：优先读 skill/index.yaml；失败则 fallback 到 agent_cases
+    const bundle = !configPath ? resolveSkillBundleByCaseId(configDir, caseIdFromEnv) : null;
+    this.skillBundle = bundle;
+
+    if (bundle) {
+      console.log(`[AgentFactory] Skill-First 加载: caseId=${bundle.caseId}, skill=${bundle.skillName}`);
+      this.agentConfig = this.configLoader.loadSkillConfig(bundle.configYamlPath) as AgentConfig;
+    } else {
+      const resolvedConfigPath = configPath ?? resolveMainAgentConfigPath(configDir, caseIdFromEnv);
+      if (caseIdFromEnv && !configPath) {
+        console.warn(`[AgentFactory] skill/index.yaml 未找到案例，fallback agent_cases (deprecated): ${resolvedConfigPath}`);
+      }
+      this.agentConfig = this.configLoader.loadMainConfig(resolvedConfigPath);
     }
 
-    this.agentConfig = this.configLoader.loadMainConfig(resolvedConfigPath);
     if (this.agentConfig.sub_agents == null || typeof this.agentConfig.sub_agents !== 'object') {
-      console.warn('[AgentFactory] 主配置缺少 sub_agents，请检查是否加载了正确配置:', resolvedConfigPath);
       this.agentConfig.sub_agents = {};
     }
 
-    // 验证配置
-    const validation = this.configLoader.validateConfig(this.agentConfig);
+    const validation = this.configLoader.validateConfig(this.agentConfig, !!bundle);
     if (!validation.valid) {
       throw new Error(`配置验证失败:\n${validation.errors.join('\n')}`);
     }
-
   }
 
   /**初始化运行时（新增）
@@ -280,54 +285,70 @@ export class AgentFactory {
     }
 
     // 加载主Agent提示词
-    // 优先级：1) skill_path 对应 SKILL.md；2) YAML 中的 agent.system_prompt
+    // Skill-First：主 prompt 仅来自 SKILL.md；fallback：skill_path → agent.system_prompt
     let mainSystemPrompt = '';
 
-    if (this.agentConfig.skill_path) {
-      const skillPath = path.isAbsolute(this.agentConfig.skill_path)
-        ? this.agentConfig.skill_path
-        : path.resolve(this.projectRoot, this.agentConfig.skill_path);
-      const skillFilePath = path.join(skillPath, 'SKILL.md');
-
-      if (fs.existsSync(skillFilePath)) {
-        const skillContent = fs.readFileSync(skillFilePath, 'utf-8');
-        const frontmatterMatch = skillContent.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-        mainSystemPrompt = frontmatterMatch ? frontmatterMatch[2].trim() : skillContent.trim();
-        console.log(`[AgentFactory] 从 Skill 加载 system prompt: ${skillFilePath}`);
+    if (this.skillBundle) {
+      if (fs.existsSync(this.skillBundle.skillMdPath)) {
+        mainSystemPrompt = this.configLoader.loadSkillPrompt(this.skillBundle.skillMdPath);
+        console.log(`[AgentFactory] 从 SKILL.md 加载 system prompt: ${this.skillBundle.skillMdPath}`);
       } else {
-        console.warn(`[AgentFactory] Skill 文件不存在: ${skillFilePath}`);
+        throw new Error(`Skill-First 配置下 SKILL.md 不存在: ${this.skillBundle.skillMdPath}`);
       }
-    }
-
-    if (!mainSystemPrompt) {
-      mainSystemPrompt = typeof this.agentConfig.agent.system_prompt === 'string'
-        ? this.agentConfig.agent.system_prompt
-        : this.agentConfig.agent.system_prompt.path
-          ? this.configLoader.loadPromptFromYaml(
-              path.resolve(this.projectRoot, this.agentConfig.agent.system_prompt.path.replace('../', ''))
-            )
-          : '';
+    } else {
+      if (this.agentConfig.skill_path) {
+        const skillPath = path.isAbsolute(this.agentConfig.skill_path)
+          ? this.agentConfig.skill_path
+          : path.resolve(this.projectRoot, this.agentConfig.skill_path);
+        const skillFilePath = path.join(skillPath, 'SKILL.md');
+        if (fs.existsSync(skillFilePath)) {
+          const skillContent = fs.readFileSync(skillFilePath, 'utf-8');
+          const frontmatterMatch = skillContent.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+          mainSystemPrompt = frontmatterMatch ? frontmatterMatch[2].trim() : skillContent.trim();
+        }
+      }
+      if (!mainSystemPrompt && this.agentConfig.agent.system_prompt) {
+        mainSystemPrompt = typeof this.agentConfig.agent.system_prompt === 'string'
+          ? this.agentConfig.agent.system_prompt
+          : this.agentConfig.agent.system_prompt.path
+            ? this.configLoader.loadPromptFromYaml(
+                path.resolve(this.projectRoot, this.agentConfig.agent.system_prompt.path.replace('../', ''))
+              )
+            : '';
+      }
     }
 
     if (!mainSystemPrompt) {
       throw new Error('主Agent系统提示词未配置');
     }
 
-    // 创建SubAgents
-    const subAgents = await this.createSubAgents(sessionId);
+    // SubAgents：Skill-First 时由 runtime.middlewares.subagent.enabled 决定；fallback 时按 sub_agents 配置
+    const skillConfig = this.agentConfig as SkillConfig;
+    const subagentEnabled = skillConfig.runtime?.middlewares?.subagent?.enabled === undefined
+      ? Object.keys(this.agentConfig.sub_agents ?? {}).length > 0
+      : skillConfig.runtime?.middlewares?.subagent?.enabled === true;
+    const subAgents = subagentEnabled ? await this.createSubAgents(sessionId) : [];
 
-    // 有 sessionId 时使用 WorkspaceCheckpointSaver，按 session/checkpoints/ 持久化，stream/invoke 时需传 config.configurable.thread_id = sessionId
+    // Checkpoint：Skill-First 时由 runtime.middlewares.checkpoint.enabled 决定；默认 true
+    const checkpointEnabled = skillConfig.runtime?.middlewares?.checkpoint?.enabled !== false;
     let checkpointer: InstanceType<typeof import('../services/workspace-checkpoint-saver.js').WorkspaceCheckpointSaver> | undefined;
-    if (sessionId) {
+    if (sessionId && checkpointEnabled) {
       const workspace = getWorkspaceFilesystem({});
       const { WorkspaceCheckpointSaver } = await import('../services/workspace-checkpoint-saver.js');
       checkpointer = new WorkspaceCheckpointSaver(workspace);
     }
 
-    // 如果配置了 skill_path，传给 deepagents 以启用 Skill 运行时能力
-    const skillSources = this.agentConfig.skill_path
-      ? [this.agentConfig.skill_path]
-      : undefined;
+    // Skills：Skill-First 时由 runtime.middlewares.deepagent_skill.enabled 决定；fallback 时按 skill_path
+    const deepagentSkillEnabled = skillConfig.runtime?.middlewares?.deepagent_skill?.enabled !== false;
+    let skillSources: string[] | undefined;
+    if (this.skillBundle && deepagentSkillEnabled) {
+      skillSources = [this.skillBundle.skillDir];
+    } else if (!this.skillBundle && this.agentConfig.skill_path) {
+      const skillPath = path.isAbsolute(this.agentConfig.skill_path)
+        ? this.agentConfig.skill_path
+        : path.resolve(this.projectRoot, this.agentConfig.skill_path);
+      skillSources = [skillPath];
+    }
 
     // 创建主Agent
     // 注意：不在主 Agent 中添加 FilesystemMiddleware，因为 prompt_generator 子代理已经通过 createAgent 添加了

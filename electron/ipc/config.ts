@@ -2,6 +2,7 @@ import { app, ipcMain, shell, dialog, BrowserWindow } from 'electron';
 import Store from 'electron-store';
 import * as fs from 'fs';
 import * as path from 'path';
+import { pathToFileURL } from 'url';
 import * as yaml from 'js-yaml';
 import { log } from '../logger.js';
 import { fileURLToPath } from 'url';
@@ -100,17 +101,73 @@ function getStore(): Store<Record<string, unknown>> {
   return store;
 }
 
-/** 案例元数据 */
+/** 案例元数据（coverUrl 为 skill 目录封面绝对路径的 file:// URL） */
 interface CaseMeta {
   id: string;
   title: string;
   description: string;
   cover: string | null;
+  coverUrl: string | null;
   order: number;
 }
 
-/** 读取所有 agent_cases/*.yaml 的 case 元数据，按 order 排序 */
+/** Skill-First：从 skill/index.yaml + skill/<name>/config.yaml 加载案例列表 */
+function loadCaseMetasFromSkill(configDir: string): CaseMeta[] | null {
+  try {
+    const skillDirRoot = path.join(configDir, 'skill');
+    const indexPath = path.join(skillDirRoot, 'index.yaml');
+    if (!fs.existsSync(indexPath)) return null;
+
+    const content = fs.readFileSync(indexPath, 'utf-8');
+    const index = yaml.load(content) as { cases?: Record<string, { skill_name: string }> } | undefined;
+    if (!index?.cases) return null;
+
+    const metas: CaseMeta[] = [];
+    for (const [caseId, entry] of Object.entries(index.cases)) {
+      if (!entry?.skill_name) continue;
+      const skillDir = path.join(skillDirRoot, entry.skill_name);
+      const configPath = path.join(skillDir, 'config.yaml');
+      if (!fs.existsSync(configPath)) continue;
+
+      try {
+        const cfgContent = fs.readFileSync(configPath, 'utf-8');
+        const cfg = yaml.load(cfgContent) as { case?: { title?: string; description?: string; cover?: string; order?: number } } | undefined;
+        const c = cfg?.case ?? {};
+        const coverFilename = c.cover ?? null;
+        let coverUrl: string | null = null;
+        if (coverFilename) {
+          const coverPath = path.join(skillDir, coverFilename);
+          if (fs.existsSync(coverPath)) {
+            coverUrl = pathToFileURL(coverPath).href;
+          }
+        }
+        metas.push({
+          id: caseId,
+          title: c.title ?? caseId,
+          description: c.description ?? '',
+          cover: coverFilename,
+          coverUrl,
+          order: typeof c.order === 'number' ? c.order : 99,
+        });
+      } catch (err) {
+        log.warn(`[config] loadCaseMetasFromSkill ${caseId} failed:`, err);
+      }
+    }
+    return metas.sort((a, b) => a.order - b.order);
+  } catch (error) {
+    log.warn('[config] loadCaseMetasFromSkill failed:', error);
+    return null;
+  }
+}
+
+/** 读取案例元数据：优先 skill/index，失败则 fallback agent_cases */
 function loadCaseMetas(configDir: string): CaseMeta[] {
+  const fromSkill = loadCaseMetasFromSkill(configDir);
+  if (fromSkill && fromSkill.length > 0) {
+    log.info('[config] loadCaseMetas from skill/index.yaml, count:', fromSkill.length);
+    return fromSkill;
+  }
+
   try {
     const casesDir = path.join(configDir, 'agent_cases');
     const files = fs.readdirSync(casesDir).filter((f) => f.endsWith('.yaml'));
@@ -118,16 +175,18 @@ function loadCaseMetas(configDir: string): CaseMeta[] {
       const id = path.basename(file, '.yaml');
       try {
         const content = fs.readFileSync(path.join(casesDir, file), 'utf-8');
-        const parsed = yaml.load(content) as any;
+        const parsed = yaml.load(content) as Record<string, unknown>;
+        const c = (parsed?.case as Record<string, unknown>) ?? {};
         return {
           id,
-          title: parsed?.case?.title ?? id,
-          description: parsed?.case?.description ?? '',
-          cover: parsed?.case?.cover ?? null,
-          order: typeof parsed?.case?.order === 'number' ? (parsed.case.order as number) : 99,
+          title: (c.title as string) ?? id,
+          description: (c.description as string) ?? '',
+          cover: (c.cover as string) ?? null,
+          coverUrl: null,
+          order: typeof c.order === 'number' ? c.order : 99,
         };
       } catch {
-        return { id, title: id, description: '', cover: null, order: 99 };
+        return { id, title: id, description: '', cover: null, coverUrl: null, order: 99 };
       }
     });
     return metas.sort((a, b) => a.order - b.order);
@@ -173,34 +232,54 @@ export function getBackendConfigDir(): string {
   return resolveBackendConfigDir();
 }
 
-/**
- * 加载案例 YAML 中的 UI 配置（welcome / quick_options 等）
- * @param caseId 案例 ID（默认 encyclopedia）
- */
-function loadUIConfigFromYaml(caseId?: string): Record<string, unknown> {
+/** Skill-First：从 skill/<name>/config.yaml 加载 UI 配置 */
+function loadUIConfigFromSkill(configDir: string, caseId: string): Record<string, unknown> | null {
+  try {
+    const skillDirRoot = path.join(configDir, 'skill');
+    const indexPath = path.join(skillDirRoot, 'index.yaml');
+    if (!fs.existsSync(indexPath)) return null;
+
+    const content = fs.readFileSync(indexPath, 'utf-8');
+    const index = yaml.load(content) as { cases?: Record<string, { skill_name: string }> } | undefined;
+    const entry = index?.cases?.[caseId];
+    if (!entry?.skill_name) return null;
+
+    const configPath = path.join(skillDirRoot, entry.skill_name, 'config.yaml');
+    if (!fs.existsSync(configPath)) return null;
+
+    const cfgContent = fs.readFileSync(configPath, 'utf-8');
+    const config = yaml.load(cfgContent) as { ui?: Record<string, unknown> } | undefined;
+    return config?.ui ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** 加载案例 UI 配置：优先 skill，失败则 fallback agent_cases */
+function loadUIConfig(caseId?: string): Record<string, unknown> {
   try {
     const configDir = resolveBackendConfigDir();
     const effectiveCaseId = caseId?.trim() || DEFAULT_CASE_ID;
+
+    const fromSkill = loadUIConfigFromSkill(configDir, effectiveCaseId);
+    if (fromSkill) {
+      log.info(`[config] Case UI loaded from skill (${effectiveCaseId})`);
+      return fromSkill;
+    }
+
     const configPath = path.join(configDir, 'agent_cases', `${effectiveCaseId}.yaml`);
     if (!fs.existsSync(configPath)) {
-      log.warn(`[config] Case YAML not found: ${configPath}, trying default case`);
-      // 回退到默认案例
       const fallbackPath = path.join(configDir, 'agent_cases', `${DEFAULT_CASE_ID}.yaml`);
-      if (!fs.existsSync(fallbackPath)) {
-        log.warn('[config] Default case YAML not found:', fallbackPath);
-        return {};
-      }
+      if (!fs.existsSync(fallbackPath)) return {};
       const content = fs.readFileSync(fallbackPath, 'utf-8');
-      const config = yaml.load(content) as any;
-      return config?.ui || {};
+      const config = yaml.load(content) as { ui?: Record<string, unknown> };
+      return config?.ui ?? {};
     }
     const fileContent = fs.readFileSync(configPath, 'utf-8');
-    const config = yaml.load(fileContent) as any;
-    const uiKeys = config?.ui ? Object.keys(config.ui) : [];
-    log.info(`[config] Case UI loaded (${effectiveCaseId}), keys:`, uiKeys.length ? uiKeys.join(', ') : '(none)');
-    return config?.ui || {};
+    const config = yaml.load(fileContent) as { ui?: Record<string, unknown> };
+    return config?.ui ?? {};
   } catch (error) {
-    log.error('[config] loadUIConfigFromYaml failed:', error);
+    log.error('[config] loadUIConfig failed:', error);
     return {};
   }
 }
@@ -234,7 +313,7 @@ export function handleConfigIPC() {
     log.info('[config] config:get userDataDir=', userDataDir, 'configPath=', configPath, 'isFirstRun=', isFirstRun);
 
     const s = getStore();
-    const latestUIConfig = loadUIConfigFromYaml(caseId);
+    const latestUIConfig = loadUIConfig(caseId);
     const currentStore = s.store as any;
     const storedOutput = (currentStore?.storage as any)?.outputPath;
     const storedSync = (currentStore?.storage as any)?.syncTargetPath;

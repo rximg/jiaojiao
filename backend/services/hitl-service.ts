@@ -13,8 +13,7 @@ import { getHITLRule, getTimeout, type HITLConfig, DEFAULT_HITL_CONFIG } from '.
 import type { LogManager } from './log-manager.js';
 import { registerHitlResponseWaiter } from '../../electron/ipc/hitl-response-bridge.js';
 import { loadConfig } from '../app-config.js';
-
-type HitlMode = 'auto' | 'allowlist' | 'strict';
+import { shouldAutoApprove, type HitlMode } from './hitl-policy.js';
 
 interface HitlExecutionPolicy {
   mode: HitlMode;
@@ -128,13 +127,9 @@ export class HITLService {
   ): Promise<Record<string, unknown> | null> {
     const policy = await this.getExecutionPolicy();
 
-    if (policy.mode === 'auto') {
-      await this.logAutoApproval(actionType, payload, 'auto');
-      return { ...payload };
-    }
-
-    if (policy.mode === 'allowlist' && policy.allowlist.has(actionType)) {
-      await this.logAutoApproval(actionType, payload, 'allowlist-hit');
+    if (shouldAutoApprove(policy.mode, policy.allowlist, actionType)) {
+      const decisionMode = policy.mode === 'auto' ? 'auto' : 'allowlist-hit';
+      await this.logAutoApproval(actionType, payload, decisionMode);
       return { ...payload };
     }
     

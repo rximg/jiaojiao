@@ -15,6 +15,7 @@ interface CaseMeta {
   title: string;
   description: string;
   cover: string | null;
+  coverUrl?: string | null;
   order: number;
 }
 
@@ -35,7 +36,7 @@ export default function CaseList({ onCaseClick }: CaseListProps) {
       <p className="text-sm text-muted-foreground mb-8">选择下方案例开始创建您的绘本</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {cases.map((caseItem) => {
-          const coverUrl = getCoverUrl(caseItem.cover);
+          const coverUrl = caseItem.coverUrl ?? getCoverUrl(caseItem.cover);
           return (
             <button
               key={caseItem.id}

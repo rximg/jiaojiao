@@ -106,7 +106,7 @@ declare global {
         getAiModels: () => Promise<Record<string, { default: string; models: Array<{ id: string; label: string }> }>>;
         set: (config: any) => Promise<void>;
         getWorkspaceDir: () => Promise<string>;
-        getCases: () => Promise<Array<{ id: string; title: string; description: string; cover: string | null; order: number }>>;
+        getCases: () => Promise<Array<{ id: string; title: string; description: string; cover: string | null; coverUrl?: string | null; order: number }>>;
         openConfigDir: () => Promise<void>;
         showOutputPathDialog: (defaultPath?: string) => Promise<string | null>;
         openFolder: (dirPath: string) => Promise<void>;

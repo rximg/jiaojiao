@@ -35,7 +35,12 @@ backend/            # 后端服务
   infrastructure/   # AI 推理适配器、仓储实现
   services/         # 运行时服务（RuntimeManager 等）
   tools/            # 内置 Agent 工具（generate-image、edit-image、synthesize-speech 等）
-  config/           # YAML 智能体配置（agent_cases/、sub_agents/、tools/、ai_models.json）
+  config/           # YAML 智能体配置
+    skill/          # Skill-First 案例配置（优先）；index.yaml + <skill_name>/{config.yaml, SKILL.md, cover.*}
+    agent_cases/    # 旧案例配置（过渡期 fallback）
+    sub_agents/     # 子代理配置
+    tools/          # 工具 AI 服务配置
+    ai_models.json  # 模型与网关配置
 outputs/workspaces/ # 每次会话生成的产物（图片、音频、日志）
 ```
 

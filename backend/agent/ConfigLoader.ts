@@ -2,6 +2,22 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 
+/** runtime.middlewares 结构（Skill-First） */
+export interface RuntimeMiddlewares {
+  deepagent_skill?: { enabled?: boolean };
+  checkpoint?: { enabled?: boolean };
+  subagent?: { enabled?: boolean };
+}
+
+/** Skill-First 配置（config.yaml 含 runtime，主 prompt 来自 SKILL.md） */
+export interface SkillConfig extends Omit<AgentConfig, 'agent'> {
+  agent: Omit<AgentConfig['agent'], 'system_prompt'> & { system_prompt?: string | { path: string } };
+  runtime?: {
+    prompt?: { source?: string };
+    middlewares?: RuntimeMiddlewares;
+  };
+}
+
 export interface AgentConfig {
   name: string;
   version: string;
@@ -11,7 +27,7 @@ export interface AgentConfig {
     name: string;
     version: string;
     type: string;
-    system_prompt: string | {
+    system_prompt?: string | {
       path: string;
     };
     storage?: {
@@ -154,6 +170,65 @@ export class ConfigLoader {
   }
 
   /**
+   * 加载 Skill 目录的 config.yaml（Skill-First）
+   * @param configYamlPath 绝对路径，如 skill/encyclopedia/config.yaml
+   */
+  loadSkillConfig(configYamlPath: string): SkillConfig {
+    const config = this.loadYaml<SkillConfig>(configYamlPath);
+    if (config.sub_agents == null || typeof config.sub_agents !== 'object') {
+      config.sub_agents = {};
+    }
+
+    if (config.tools) {
+      for (const [key, toolEntry] of Object.entries(config.tools)) {
+        const entry = toolEntry as { enable?: boolean; config_path?: string; config?: unknown };
+        if (entry.config_path) {
+          try {
+            entry.config = this.loadYaml<unknown>(entry.config_path);
+          } catch (error) {
+            console.warn(`加载工具配置失败 (${key}):`, error);
+          }
+        }
+      }
+    }
+
+    if (config.sub_agents) {
+      for (const [key, subAgentEntry] of Object.entries(config.sub_agents)) {
+        if (subAgentEntry.enable && subAgentEntry.config_path) {
+          try {
+            const subConfig = this.loadYaml<Record<string, unknown>>(subAgentEntry.config_path);
+            subAgentEntry.config = subConfig;
+            const sp = subConfig?.sub_agent as { system_prompt?: string | { path: string } } | undefined;
+            if (typeof sp?.system_prompt === 'string') {
+              (subAgentEntry.config as Record<string, unknown>).system_prompt_text = sp.system_prompt;
+            } else if (sp?.system_prompt?.path) {
+              const promptYamlPath = path.resolve(this.projectRoot, sp.system_prompt.path.replace('../', ''));
+              (subAgentEntry.config as Record<string, unknown>).system_prompt_text = this.loadPromptFromYaml(promptYamlPath);
+            }
+          } catch (error) {
+            console.warn(`加载SubAgent配置失败 (${key}):`, error);
+          }
+        }
+      }
+    }
+
+    return config;
+  }
+
+  /**
+   * 加载 SKILL.md 正文（去除 frontmatter）
+   */
+  loadSkillPrompt(skillMdPath: string): string {
+    const content = fs.readFileSync(skillMdPath, 'utf-8');
+    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+    const body = frontmatterMatch ? frontmatterMatch[2].trim() : content.trim();
+    if (!body) {
+      throw new Error(`SKILL.md 正文为空: ${skillMdPath}`);
+    }
+    return body;
+  }
+
+  /**
    * 从YAML文件加载提示词
    */
   loadPromptFromYaml(yamlPath: string): string {
@@ -235,24 +310,35 @@ export class ConfigLoader {
 
   /**
    * 验证配置
+   * @param config 主配置或 Skill 配置
+   * @param isSkillConfig 是否 Skill-First 配置（主 prompt 来自 SKILL.md，不校验 system_prompt）
    */
-  validateConfig(config: AgentConfig): { valid: boolean; errors: string[] } {
+  validateConfig(config: AgentConfig | SkillConfig, isSkillConfig?: boolean): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
+    const skillConfig = config as SkillConfig;
+    const isSkill = isSkillConfig ?? (skillConfig.runtime?.prompt?.source === 'skill_md');
 
-    // 验证基本字段
     if (!config.name) errors.push('缺少配置名称');
     if (!config.agent) errors.push('缺少agent配置');
-    
-    if (config.agent) {
-      // 支持直接嵌入或path引用
-      const hasSystemPrompt = typeof config.agent.system_prompt === 'string' || 
-                               (typeof config.agent.system_prompt === 'object' && config.agent.system_prompt?.path);
+
+    if (config.agent && !isSkill) {
+      const hasSystemPrompt = typeof config.agent.system_prompt === 'string' ||
+        (typeof config.agent.system_prompt === 'object' && config.agent.system_prompt?.path);
       if (!hasSystemPrompt) {
         errors.push('缺少主agent提示词');
       }
     }
 
-    // 验证SubAgent
+    if (skillConfig.runtime?.middlewares) {
+      const m = skillConfig.runtime.middlewares;
+      if (m.subagent?.enabled === true) {
+        const hasSubAgents = config.sub_agents && Object.keys(config.sub_agents).length > 0;
+        if (!hasSubAgents) {
+          console.warn('[ConfigLoader] runtime.middlewares.subagent.enabled=true 但 sub_agents 为空');
+        }
+      }
+    }
+
     if (config.sub_agents) {
       for (const [key, sub] of Object.entries(config.sub_agents)) {
         if (sub.enable) {
