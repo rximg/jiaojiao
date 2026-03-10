@@ -1,8 +1,0 @@
-default_case_id: encyclopedia
-cases:
-  encyclopedia:
-    skill_name: encyclopedia
-  story_book:
-    skill_name: story_book
-  behavior_correction:
-    skill_name: behavior_correction

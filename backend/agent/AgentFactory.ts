@@ -45,7 +45,7 @@ export class AgentFactory {
 
     const caseIdFromEnv = process.env.AGENT_CASE_ID?.trim();
 
-    // Skill-First：优先读 skill/index.yaml；失败则 fallback 到 agent_cases
+    // Skill-First：优先读 skills/index.yaml；失败则 fallback 到 agent_cases
     const bundle = !configPath ? resolveSkillBundleByCaseId(configDir, caseIdFromEnv) : null;
     this.skillBundle = bundle;
 
@@ -55,7 +55,7 @@ export class AgentFactory {
     } else {
       const resolvedConfigPath = configPath ?? resolveMainAgentConfigPath(configDir, caseIdFromEnv);
       if (caseIdFromEnv && !configPath) {
-        console.warn(`[AgentFactory] skill/index.yaml 未找到案例，fallback agent_cases (deprecated): ${resolvedConfigPath}`);
+        console.warn(`[AgentFactory] skills/index.yaml 未找到案例，fallback agent_cases (deprecated): ${resolvedConfigPath}`);
       }
       this.agentConfig = this.configLoader.loadMainConfig(resolvedConfigPath);
     }

@@ -14,18 +14,18 @@ export interface SkillBundle {
   skillMdPath: string;
 }
 
-/** skill/index.yaml 结构 */
+/** skills/index.yaml 结构 */
 interface SkillIndex {
   default_case_id?: string;
   cases?: Record<string, { skill_name: string }>;
 }
 
 /**
- * 优先从 skill/index.yaml 解析 caseId → skill 目录；不存在或失败时返回 null（调用方 fallback 到 agent_cases）
+ * 优先从 skills/index.yaml 解析 caseId → skill 目录；不存在或失败时返回 null（调用方 fallback 到 agent_cases）
  */
 export function resolveSkillBundleByCaseId(configDir: string, caseId?: string): SkillBundle | null {
   const effectiveCaseId = caseId?.trim() || DEFAULT_CASE_ID;
-  const skillDirRoot = path.join(configDir, 'skill');
+  const skillDirRoot = path.join(configDir, 'skills');
   const indexPath = path.join(skillDirRoot, 'index.yaml');
 
   if (!fs.existsSync(indexPath)) {
@@ -66,7 +66,7 @@ export function resolveSkillBundleByCaseId(configDir: string, caseId?: string): 
       skillMdPath,
     };
   } catch (err) {
-    console.warn('[case-config-resolver] 解析 skill/index.yaml 失败:', err);
+    console.warn('[case-config-resolver] 解析 skills/index.yaml 失败:', err);
     return null;
   }
 }

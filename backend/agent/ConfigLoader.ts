@@ -171,7 +171,7 @@ export class ConfigLoader {
 
   /**
    * 加载 Skill 目录的 config.yaml（Skill-First）
-   * @param configYamlPath 绝对路径，如 skill/encyclopedia/config.yaml
+  * @param configYamlPath 绝对路径，如 skills/encyclopedia/config.yaml
    */
   loadSkillConfig(configYamlPath: string): SkillConfig {
     const config = this.loadYaml<SkillConfig>(configYamlPath);

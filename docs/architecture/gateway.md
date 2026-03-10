@@ -81,9 +81,6 @@ deploy/jiaojiao-gateway/
     ├── server.py
     ├── Dockerfile
     └── requirements.txt
-
-deploy/
-└── docker-compose.yml     # 唯一编排入口（gateway + z-image-turbo + gateway-test）
 ```
 
 ---
@@ -264,7 +261,7 @@ curl http://localhost:9021/health
 
 ```bash
 # 1. 准备环境变量
-cd deploy
+cd deploy/jiaojiao-gateway
 cp .env.example .env
 # 编辑 .env：填写 DASHSCOPE_API_KEY 和 MODEL_PATH
 

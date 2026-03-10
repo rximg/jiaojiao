@@ -36,7 +36,7 @@ backend/            # 后端服务
   services/         # 运行时服务（RuntimeManager 等）
   tools/            # 内置 Agent 工具（generate-image、edit-image、synthesize-speech 等）
   config/           # YAML 智能体配置
-    skill/          # Skill-First 案例配置（优先）；index.yaml + <skill_name>/{config.yaml, SKILL.md, cover.*}
+    skills/         # Skill-First 案例配置（优先）；index.yaml + <skill_name>/{config.yaml, SKILL.md, cover.*}
     agent_cases/    # 旧案例配置（过渡期 fallback）
     sub_agents/     # 子代理配置
     tools/          # 工具 AI 服务配置

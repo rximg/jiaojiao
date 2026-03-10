@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { BookOpen } from 'lucide-react';
 
 // 预加载 src/assets/ 下所有图片，key 形如 "/src/assets/行为纠正海报.jpg"
-const assetMap = import.meta.glob('@/assets/*.{png,jpg,jpeg,webp}', { eager: true }) as Record<string, { default: string }>;
+const assetMap = import.meta.glob('@/assets/*.{png,jpg,jpeg,webp,svg}', { eager: true }) as Record<string, { default: string }>;
 
 function getCoverUrl(filename: string | null | undefined): string | undefined {
   if (!filename) return undefined;

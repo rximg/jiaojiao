@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckSquare, Clock, Image as ImageIcon, Printer, Square, Trash2, Upload, Volume2, Download } from 'lucide-react';
+import { Clock, Image as ImageIcon, Printer, Trash2, Upload, Volume2, Download } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import type { PrintableImage } from './print-layout';
@@ -59,17 +59,6 @@ export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation();
-    if (!window.confirm('确定删除这条历史记录？删除后无法恢复。')) return;
-    try {
-      await window.electronAPI.session.delete(sessionId);
-      setSessions((prev) => prev.filter((s) => s.sessionId !== sessionId));
-    } catch (error) {
-      console.error('Failed to delete session:', error);
-    }
-  };
-
   const clearSelection = () => {
     setSelectedIds(new Set());
   };
@@ -93,10 +82,6 @@ export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
       }
       return next;
     });
-  };
-
-  const selectAll = () => {
-    setSelectedIds(new Set(sessions.map((session) => session.sessionId)));
   };
 
   const selectedSessions = sessions.filter((session) => selectedIds.has(session.sessionId));
@@ -153,69 +138,6 @@ export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
         await loadHistory();
       }
       alert(`批量删除完成：成功 ${selectedSessions.length - failed.length} 个，失败 ${failed.length} 个。`);
-    } finally {
-      setProcessing(null);
-    }
-  };
-
-  /** 跨会话：同步全部 session 的音频到 store */
-  const handleSyncAll = async () => {
-    if (processing) return;
-    setProcessing('sync');
-    try {
-      const result = await window.electronAPI.sync.syncAudioToStore();
-      if (result?.success) {
-        await loadHistory();
-        alert(`音频同步完成：已同步 ${result.copied} 个 mp3 到 ${result.storeDir}`);
-      } else {
-        alert(result?.message ?? '同步失败');
-      }
-    } catch (err) {
-      console.error('[HistoryPanel] syncAll failed:', err);
-      alert('同步失败');
-    } finally {
-      setProcessing(null);
-    }
-  };
-
-  /** 跨会话：收集全部 session 的图片并打开打印预览 */
-  const handlePrintPreviewAll = async () => {
-    if (processing) return;
-    setProcessing('print');
-    try {
-      const imageEntries: Array<{ name: string; path: string; sessionId?: string; sessionTitle?: string }> = [];
-      await Promise.all(
-        sessions.map(async (session) => {
-          try {
-            const details = await window.electronAPI.session.get(session.sessionId);
-            const images = Array.isArray(details?.files?.images) ? details.files.images : [];
-            const sessionLabel = (session.title ?? '').trim() || session.sessionId.slice(0, 8);
-            images
-              .filter((entry: { name?: string; path?: string; isDir?: boolean }) => {
-                if (entry?.isDir) return false;
-                return Boolean(entry?.name && /\.(png|jpg|jpeg|webp|gif)$/i.test(entry.name));
-              })
-              .forEach((entry: { name: string; path: string }) => {
-                imageEntries.push({
-                  name: entry.name,
-                  path: entry.path,
-                  sessionId: session.sessionId,
-                  sessionTitle: sessionLabel,
-                });
-              });
-          } catch (error) {
-            console.warn('[HistoryPanel] Failed to collect images for session:', session.sessionId, error);
-          }
-        })
-      );
-
-      if (imageEntries.length === 0) {
-        alert('历史记录中没有可打印的图片。');
-        return;
-      }
-
-      setPrintImages(imageEntries);
-      setPrintDialogOpen(true);
     } finally {
       setProcessing(null);
     }
@@ -295,50 +217,18 @@ export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
   return (
     <div className="h-full flex flex-col bg-sidebar">
       <div className="p-4 border-b border-border">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-sidebar-foreground">历史记录</h2>
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={processing !== null || sessions.length === 0}
-              onClick={() => void handleSyncAll()}
-              title="同步全部会话的音频到配置的目标目录"
-            >
-              <Upload className="h-3.5 w-3.5" />
-              <span className="ml-1">{processing === 'sync' ? '同步中...' : '音频同步'}</span>
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={processing !== null || sessions.length === 0}
-              onClick={() => void handlePrintPreviewAll()}
-              title="收集全部会话的图片并打开打印预览"
-            >
-              <Printer className="h-3.5 w-3.5" />
-              <span className="ml-1">{processing === 'print' ? '处理中...' : '打印预览'}</span>
-            </Button>
-            <Button type="button" variant="outline" size="sm" onClick={toggleSelectMode}>
-              {selectMode ? '取消选择' : '选择会话'}
-            </Button>
-          </div>
+          <Button type="button" variant={selectMode ? 'secondary' : 'outline'} size="sm" onClick={toggleSelectMode}>
+            {selectMode ? '取消选择' : '选择会话'}
+          </Button>
         </div>
         {selectMode && (
-          <div className="mt-2 space-y-2">
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <div className="mt-3 space-y-2">
+            <div className="text-xs text-muted-foreground">
               已选择 {selectedSessions.length} / {sessions.length}
             </div>
             <div className="flex flex-wrap items-center gap-1">
-              <Button type="button" variant="ghost" size="sm" onClick={selectAll}>
-                <CheckSquare className="h-3.5 w-3.5" />
-                <span className="ml-1">全选</span>
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={clearSelection}>
-                <Square className="h-3.5 w-3.5" />
-                <span className="ml-1">清空选择</span>
-              </Button>
               <Button
                 type="button"
                 variant="outline"
@@ -389,96 +279,95 @@ export default function HistoryPanel({ onSessionClick }: HistoryPanelProps) {
 
               return (
                 <div
-                key={session.sessionId}
-                className={`group flex items-center gap-2 p-2 rounded-xl transition-colors ${selectMode && selectedIds.has(session.sessionId) ? 'bg-accent/80' : 'hover:bg-accent/80'}`}
-              >
-                {selectMode && (
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(session.sessionId)}
-                    onChange={() => toggleSessionSelected(session.sessionId)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="h-4 w-4"
-                  />
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (selectMode) {
-                      toggleSessionSelected(session.sessionId);
-                      return;
-                    }
-                    onSessionClick(session.sessionId);
-                  }}
-                  className="flex-1 flex gap-3 text-left min-w-0"
+                  key={session.sessionId}
+                  className={`group flex items-center gap-2 p-2 rounded-xl transition-colors ${selectMode && selectedIds.has(session.sessionId) ? 'bg-accent/80' : 'hover:bg-accent/80'}`}
                 >
-                  {/* 第一张图片预览 */}
-                  {session.firstImage ? (
-                    <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-muted flex items-center justify-center relative">
-                      <img 
-                        src={`local-file://${encodeURIComponent(session.firstImage)}`} 
-                        alt="预览" 
-                        className="w-full h-full object-cover relative z-10"
-                        onError={(e) => {
-                          const img = e.target as HTMLImageElement;
-                          img.style.display = 'none';
-                        }}
-                      />
-                      <ImageIcon className="h-6 w-6 text-muted-foreground absolute inset-0 m-auto" aria-hidden />
-                    </div>
-                  ) : (
-                    <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-muted flex items-center justify-center">
-                      <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                    </div>
+                  {selectMode && (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(session.sessionId)}
+                      onChange={() => toggleSessionSelected(session.sessionId)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-4 w-4"
+                    />
                   )}
-                  
-                  {/* 文字信息 */}
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm truncate">{displayTitle}</div>
-                    {showSnippet && (
-                      <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                        {session.firstMessage}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectMode) {
+                        toggleSessionSelected(session.sessionId);
+                        return;
+                      }
+                      onSessionClick(session.sessionId);
+                    }}
+                    className="flex-1 flex gap-3 text-left min-w-0"
+                  >
+                    {/* 第一张图片预览 */}
+                    {session.firstImage ? (
+                      <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-muted flex items-center justify-center relative">
+                        <img
+                          src={`local-file://${encodeURIComponent(session.firstImage)}`}
+                          alt="预览"
+                          className="w-full h-full object-cover relative z-10"
+                          onError={(e) => {
+                            const img = e.target as HTMLImageElement;
+                            img.style.display = 'none';
+                          }}
+                        />
+                        <ImageIcon className="h-6 w-6 text-muted-foreground absolute inset-0 m-auto" aria-hidden />
+                      </div>
+                    ) : (
+                      <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-muted flex items-center justify-center">
+                        <ImageIcon className="h-6 w-6 text-muted-foreground" />
                       </div>
                     )}
-                    {/* 时间信息 */}
-                    <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      <span className="whitespace-nowrap">{formatDate(session.updatedAt)}</span>
-                    </div>
-                    {/* 图标状态行 */}
-                    <div className="flex items-center gap-2 mt-1 text-xs">
-                      <span className={`inline-flex items-center gap-1 ${session.hasImage ? 'text-foreground' : 'text-muted-foreground opacity-40'}`} title={session.hasImage ? '已生成图片' : '未生成图片'}>
-                        <ImageIcon className="h-3 w-3" />
-                      </span>
-                      <span className={`inline-flex items-center gap-1 ${session.hasAudio ? 'text-foreground' : 'text-muted-foreground opacity-40'}`} title={session.hasAudio ? '已生成音频' : '未生成音频'}>
-                        <Volume2 className="h-3 w-3" />
-                      </span>
-                      {session.lastSyncAudioAt && (
-                        <span className="inline-flex items-center gap-1 text-foreground" title={`最近同步于 ${formatDate(session.lastSyncAudioAt)}`}>
-                          <Download className="h-3 w-3" />
-                        </span>
+
+                    {/* 文字信息 */}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">{displayTitle}</div>
+                      {showSnippet && (
+                        <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                          {session.firstMessage}
+                        </div>
                       )}
-                      {session.lastPrintAt && (
-                        <span className="inline-flex items-center gap-1 text-foreground" title={`最近打印于 ${formatDate(session.lastPrintAt)}`}>
-                          <Printer className="h-3 w-3" />
+                      {/* 时间信息 */}
+                      <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        <span className="whitespace-nowrap">{formatDate(session.updatedAt)}</span>
+                      </div>
+                      {/* 图标状态行 */}
+                      <div className="flex items-center gap-2 mt-1 text-xs">
+                        <span
+                          className={`inline-flex items-center gap-1 ${session.hasImage ? 'text-foreground' : 'text-muted-foreground opacity-40'}`}
+                          title={session.hasImage ? '已生成图片' : '未生成图片'}
+                        >
+                          <ImageIcon className="h-3 w-3" />
                         </span>
-                      )}
+                        <span
+                          className={`inline-flex items-center gap-1 ${session.hasAudio ? 'text-foreground' : 'text-muted-foreground opacity-40'}`}
+                          title={session.hasAudio ? '已生成音频' : '未生成音频'}
+                        >
+                          <Volume2 className="h-3 w-3" />
+                        </span>
+                        {session.lastSyncAudioAt && (
+                          <span
+                            className="inline-flex items-center gap-1 text-foreground"
+                            title={`最近同步于 ${formatDate(session.lastSyncAudioAt)}`}
+                          >
+                            <Download className="h-3 w-3" />
+                          </span>
+                        )}
+                        {session.lastPrintAt && (
+                          <span
+                            className="inline-flex items-center gap-1 text-foreground"
+                            title={`最近打印于 ${formatDate(session.lastPrintAt)}`}
+                          >
+                            <Printer className="h-3 w-3" />
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </button>
-                {!selectMode && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="flex-shrink-0 h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => handleDelete(e, session.sessionId)}
-                    title="删除"
-                    aria-label="删除"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
+                  </button>
                 </div>
               );
             })}

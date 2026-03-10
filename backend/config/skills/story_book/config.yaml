@@ -1,0 +1,65 @@
+name: story_book_agent
+version: 1.1.0
+description: 绘本故事生成系统 - 大纲确认后生成结构化分镜，固定四角色四宫格，保证角色一致性
+
+case:
+  id: story_book
+  title: 绘本故事
+  description: 大纲确认后生成结构化分镜，固定四角色四宫格
+  order: 2
+  cover: 绘本宣传海报生成.jpg
+
+agent:
+  name: story_book_agent
+  version: 1.1.0
+  type: main_agent
+
+runtime:
+  prompt:
+    source: skill_md
+  middlewares:
+    deepagent_skill:
+      enabled: true
+    checkpoint:
+      enabled: true
+    subagent:
+      enabled: false
+
+tools:
+  finalize_workflow: {}
+  annotate_image_numbers: {}
+  delete_artifacts: {}
+  generate_image:
+    enable: true
+    config_path: ./tools/t2i.yaml
+  edit_image:
+    enable: true
+    config_path: ./tools/image_edit.yaml
+  synthesize_speech_single:
+    enable: true
+    config_path: ./tools/tts.yaml
+  batch_tool_call: {}
+
+sub_agents: {}
+
+ui:
+  welcome:
+    title: 欢迎使用绘本故事生成助手
+    subtitle: 我可以帮您生成完整的多页绘本故事，保证角色形象一致
+    instructions:
+      title: 请告诉我
+      items:
+        - 主题：想要讲述的故事（如：小兔子找妈妈、小熊学本领）
+        - 年龄：目标儿童的年龄段（如：3-6岁）
+        - 页数：想要生成的页数（建议8-16页）
+    footer: 或者直接点击下方的快捷选项开始！
+  quick_options:
+    - label: 小兔子勇敢之旅
+      description: 适合3-6岁儿童
+      prompt: 给5岁孩子生成小兔子勇敢面对困难的绘本，10页
+    - label: 小猫找妈妈
+      description: 温馨亲情故事
+      prompt: 给4岁孩子生成小猫找妈妈的绘本，8页
+    - label: 小熊学本领
+      description: 成长励志故事
+      prompt: 给6岁孩子生成小熊学习新本领的绘本，12页

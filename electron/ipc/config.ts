@@ -2,7 +2,6 @@ import { app, ipcMain, shell, dialog, BrowserWindow } from 'electron';
 import Store from 'electron-store';
 import * as fs from 'fs';
 import * as path from 'path';
-import { pathToFileURL } from 'url';
 import * as yaml from 'js-yaml';
 import { log } from '../logger.js';
 import { fileURLToPath } from 'url';
@@ -101,7 +100,7 @@ function getStore(): Store<Record<string, unknown>> {
   return store;
 }
 
-/** 案例元数据（coverUrl 为 skill 目录封面绝对路径的 file:// URL） */
+/** 案例元数据（coverUrl 为 skill 目录封面绝对路径的 local-file:// URL） */
 interface CaseMeta {
   id: string;
   title: string;
@@ -111,10 +110,10 @@ interface CaseMeta {
   order: number;
 }
 
-/** Skill-First：从 skill/index.yaml + skill/<name>/config.yaml 加载案例列表 */
+/** Skill-First：从 skills/index.yaml + skills/<name>/config.yaml 加载案例列表 */
 function loadCaseMetasFromSkill(configDir: string): CaseMeta[] | null {
   try {
-    const skillDirRoot = path.join(configDir, 'skill');
+    const skillDirRoot = path.join(configDir, 'skills');
     const indexPath = path.join(skillDirRoot, 'index.yaml');
     if (!fs.existsSync(indexPath)) return null;
 
@@ -138,7 +137,7 @@ function loadCaseMetasFromSkill(configDir: string): CaseMeta[] | null {
         if (coverFilename) {
           const coverPath = path.join(skillDir, coverFilename);
           if (fs.existsSync(coverPath)) {
-            coverUrl = pathToFileURL(coverPath).href;
+            coverUrl = `local-file://${encodeURIComponent(coverPath)}`;
           }
         }
         metas.push({
@@ -160,11 +159,11 @@ function loadCaseMetasFromSkill(configDir: string): CaseMeta[] | null {
   }
 }
 
-/** 读取案例元数据：优先 skill/index，失败则 fallback agent_cases */
+/** 读取案例元数据：优先 skills/index，失败则 fallback agent_cases */
 function loadCaseMetas(configDir: string): CaseMeta[] {
   const fromSkill = loadCaseMetasFromSkill(configDir);
   if (fromSkill && fromSkill.length > 0) {
-    log.info('[config] loadCaseMetas from skill/index.yaml, count:', fromSkill.length);
+    log.info('[config] loadCaseMetas from skills/index.yaml, count:', fromSkill.length);
     return fromSkill;
   }
 
@@ -232,10 +231,10 @@ export function getBackendConfigDir(): string {
   return resolveBackendConfigDir();
 }
 
-/** Skill-First：从 skill/<name>/config.yaml 加载 UI 配置 */
+/** Skill-First：从 skills/<name>/config.yaml 加载 UI 配置 */
 function loadUIConfigFromSkill(configDir: string, caseId: string): Record<string, unknown> | null {
   try {
-    const skillDirRoot = path.join(configDir, 'skill');
+    const skillDirRoot = path.join(configDir, 'skills');
     const indexPath = path.join(skillDirRoot, 'index.yaml');
     if (!fs.existsSync(indexPath)) return null;
 
