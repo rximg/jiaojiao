@@ -23,7 +23,7 @@ async function testAgentFactory() {
 
     // 2. 加载主Agent
     console.log('\n[步骤 2] 加载主Agent配置...');
-    console.log('配置路径:', path.join(__dirname, '../../backend/config/agent_cases/encyclopedia.yaml'));
+    console.log('配置来源: backend/config/skills/<skill_name>/config.yaml');
     
     const mainAgent = await factory.createMainAgent();
     console.log('✅ 主Agent创建成功');
@@ -42,7 +42,7 @@ async function testAgentFactory() {
     console.log('\n[配置信息]');
     console.log('- 项目根目录:', path.resolve(__dirname, '../..'));
     console.log('- 配置目录:', path.resolve(__dirname, '../../backend/config'));
-    console.log('- 提示词: 使用各配置内的内联 system_prompt');
+    console.log('- 提示词: 仅从 skill 目录下 SKILL.md 正文加载');
 
     console.log('\n' + '='.repeat(60));
     console.log('✅ 所有测试通过！');
