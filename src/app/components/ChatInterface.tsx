@@ -45,6 +45,7 @@ export default function ChatInterface({
   const [hitlModeOpen, setHitlModeOpen] = useState(false);
   const [hitlPolicy, setHitlPolicy] = useState<HitlPolicy>({ mode: 'strict', allowlist: [] });
   const [hitlPolicyLoading, setHitlPolicyLoading] = useState(false);
+  const [isStoppingBeforeBack, setIsStoppingBeforeBack] = useState(false);
   const isCreatingSessionRef = useRef(false);
   /** 本次「案例」模式下是否已执行过创建新 session，避免重复创建 */
   const createdForNullRef = useRef(false);
@@ -172,9 +173,23 @@ export default function ChatInterface({
   );
 
   const handleBackClick = useCallback(async () => {
+    if (isStoppingBeforeBack) {
+      return;
+    }
+
+    if (isLoading) {
+      setIsStoppingBeforeBack(true);
+      try {
+        await stopStream();
+      } finally {
+        setIsStoppingBeforeBack(false);
+      }
+      return;
+    }
+
     await resetSession();
     onBack();
-  }, [onBack, resetSession]);
+  }, [isLoading, isStoppingBeforeBack, onBack, resetSession, stopStream]);
 
   const normalizePolicy = useCallback((raw: unknown): HitlPolicy => {
     const source = (raw ?? {}) as { mode?: unknown; allowlist?: unknown };
@@ -283,7 +298,7 @@ export default function ChatInterface({
       {/* 配置栏 */}
       <header className="flex h-16 items-center justify-between border-b border-border bg-card/80 px-6 shadow-sm">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={handleBackClick}>
+          <Button variant="ghost" size="sm" onClick={handleBackClick} disabled={isStoppingBeforeBack}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             返回
           </Button>
