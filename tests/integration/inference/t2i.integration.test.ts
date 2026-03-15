@@ -60,6 +60,9 @@ describe('Inference / T2I', () => {
     });
     expect(typeof taskId).toBe('string');
     expect(taskId.length).toBeGreaterThan(0);
+    if (cfg.provider === 'jiaojiao') {
+      expect(taskId.startsWith('qi_')).toBe(true);
+    }
 
     const imageUrl = await port.poll(taskId);
     expect(typeof imageUrl).toBe('string');

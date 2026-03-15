@@ -84,7 +84,11 @@
             "models": [
                 {
                     "id": "wan2.6-t2i",
-                    "label": "通义万相"
+                    "label": "通义万相文生图"
+                },
+                {
+                    "id": "wan2.6-image",
+                    "label": "通义万相图像编辑"
                 }
             ],
             "poll_interval_ms": 2000,
@@ -179,17 +183,17 @@
             "max_poll_attempts": 60
         },
         "t2i": {
-            "default": "wan2.6-t2i",
+            "default": "qwen-image",
             "endpoint": "http://jiaojiao.ai:9021/api/v1/services/aigc/image-generation/generation",
             "taskEndpoint": "http://jiaojiao.ai:9021/api/v1/tasks",
             "models": [
                 {
-                    "id": "wan2.6-t2i",
-                    "label": "嘉嘉 T2I（万象 2.6）"
+                    "id": "qwen-image",
+                    "label": "嘉嘉 T2I（Qwen Image）"
                 },
                 {
-                    "id": "wan2.6-image",
-                    "label": "嘉嘉 图像编辑（万象 2.6）"
+                    "id": "qwen-image-edit",
+                    "label": "嘉嘉 图像编辑（Qwen Image Edit）"
                 }
             ],
             "poll_interval_ms": 2000,

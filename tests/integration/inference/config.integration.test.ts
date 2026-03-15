@@ -48,6 +48,7 @@ describe('Inference / getAIConfig', () => {
     const t2i = cfg as T2IAIConfig;
     expect(t2i.endpoint).toBeDefined();
     expect(t2i.taskEndpoint).toBeDefined();
+    expect(t2i.model).toBe('wan2.6-t2i');
   });
 
   it('returns jiaojiao T2I config when TEST_API_PROVIDER is jiaojiao', async () => {
@@ -72,5 +73,6 @@ describe('Inference / getAIConfig', () => {
     expect(t2i.provider).toBe('jiaojiao');
     expect(t2i.endpoint).toContain('/api/v1/services/aigc/image-generation/generation');
     expect(t2i.taskEndpoint).toContain('/api/v1/tasks');
+    expect(t2i.model).toBe('qwen-image');
   });
 });

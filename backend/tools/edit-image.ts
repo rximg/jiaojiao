@@ -1,5 +1,6 @@
 /**
- * edit_image：图像编辑，调用 MultimodalPort（DashScope wan2.6-image 异步接口）
+ * edit_image：图像编辑，调用 MultimodalPort。
+ * 默认模型按 provider 决定：DashScope -> wan2.6-image，jiaojiao -> qwen-image-edit。
  */
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
@@ -93,8 +94,7 @@ function create(config: ToolConfig, context: ToolContext) {
         count: (merged.count as number) ?? (defaultParams.count as number) ?? 1,
         model:
           (merged.model as string | undefined) ??
-          modelFromConfig ??
-          'wan2.6-image',
+          modelFromConfig,
         promptExtend:
           (merged.promptExtend as boolean | undefined) ??
           (defaultParams.prompt_extend as boolean | undefined) ??
@@ -117,7 +117,7 @@ function create(config: ToolConfig, context: ToolContext) {
         imageName: z.string().optional().describe('输出文件名，如 scene_01.png（不含路径）'),
         size: z.string().optional().default((defaultParams.size as string) ?? SAFE_DEFAULT_SIZE).describe('输出图片尺寸，如 1280*1280（总像素需在 589824 到 1638400 之间）'),
         count: z.number().optional().default((defaultParams.count as number) ?? 1).describe('输出图片数量（1-4，默认1）'),
-        model: z.string().optional().describe('模型名称（默认 wan2.6-image）'),
+        model: z.string().optional().describe('模型名称（留空则按 provider 自动选择默认图像编辑模型）'),
         strength: z.number().optional().describe('兼容参数，当前接口未使用'),
         promptExtend: z.boolean().optional().describe('是否启用提示词智能改写（默认true）'),
         watermark: z.boolean().optional().describe('是否添加水印（默认false）'),

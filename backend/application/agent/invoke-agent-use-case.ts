@@ -58,6 +58,38 @@ function fixToolCallsInMessages(messages: any[]): any[] {
   });
 }
 
+function normalizeMessageRole(msg: any): string | undefined {
+  if (!msg || typeof msg !== 'object') return undefined;
+
+  if (typeof msg.role === 'string' && msg.role.length > 0) {
+    return msg.role;
+  }
+
+  const rawType =
+    typeof msg._getType === 'function'
+      ? msg._getType()
+      : typeof msg.getType === 'function'
+        ? msg.getType()
+        : typeof msg.type === 'string'
+          ? msg.type
+          : undefined;
+
+  if (typeof rawType !== 'string' || rawType.length === 0) {
+    return undefined;
+  }
+
+  switch (rawType) {
+    case 'ai':
+      return 'assistant';
+    case 'human':
+      return 'user';
+    case 'system':
+      return 'system';
+    default:
+      return rawType;
+  }
+}
+
 function extractStepResultsFromContent(content: string): StepResult[] {
   if (!content || typeof content !== 'string') return [];
   const results: StepResult[] = [];
@@ -157,15 +189,22 @@ export async function invokeAgentUseCase(
 
     const chunkKeys = Object.keys(chunk);
     const nodeKey = chunkKeys[0];
-    const state = nodeKey ? (chunk as any)[nodeKey] : chunk;
+    // IMPORTANT FIX: If streamMode is 'values' by default, chunk IS the state.
+    // In 'values', keys might be ['messages', 'todos']. If we do chunk[nodeKey], we get the messages array, not the state dict!
+    // But if streamMode is 'updates', chunk is { [nodeName]: state }, so keys might be ['model_request'].
+    // We should safely detect if it's an update chunk or value chunk.
+    const isUpdateChunk = typeof chunk === 'object' && chunkKeys.length === 1 && typeof (chunk as any)[nodeKey] === 'object' && !Array.isArray((chunk as any)[nodeKey]);
+    
+    const state = isUpdateChunk ? (chunk as any)[nodeKey] : chunk;
 
     if (state?.messages && Array.isArray(state.messages)) {
       const fixedStateMessages = fixToolCallsInMessages(state.messages);
       const newMessages = fixedStateMessages
-        .filter((msg: any) => msg.role === 'assistant')
+        .filter((msg: any) => normalizeMessageRole(msg) === 'assistant')
         .slice(-1);
       if (newMessages.length > 0) {
         const msg = newMessages[0];
+        const role = normalizeMessageRole(msg) ?? 'assistant';
         const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content ?? '');
         const stableId: string = streamingAssistantId ?? (msg.id ?? `stream-${effectiveSessionId}`);
         streamingAssistantId = stableId;
@@ -179,7 +218,7 @@ export async function invokeAgentUseCase(
         const mapped = [
           {
             id: stableId,
-            role: msg.role,
+            role,
             content,
             ...(stepResults.length > 0 ? { stepResults } : {}),
           },

@@ -31,6 +31,26 @@ interface DashScopeEditImageResponse {
   message?: string;
 }
 
+function resolveEditImageEndpoint(cfg: T2IAIConfig): string {
+  const trimmed = cfg.endpoint.replace(/\/$/, '');
+
+  if (cfg.provider === 'jiaojiao') {
+    return trimmed.replace(
+      /\/api\/v1\/services\/aigc\/image-generation\/generation$/,
+      '/api/v1/services/aigc/image-generation/image-edit'
+    );
+  }
+
+  if (cfg.provider === 'dashscope') {
+    return trimmed.replace(
+      /\/api\/v1\/services\/aigc\/image-generation\/generation$/,
+      '/api/v1/services/aigc/multimodal-generation/generation'
+    );
+  }
+
+  return trimmed;
+}
+
 export async function submitEditImageDashScope(
   cfg: T2IAIConfig,
   input: EditImagePortInput
@@ -42,7 +62,11 @@ export async function submitEditImageDashScope(
 
   const resolvedModel =
     input.model?.trim() ||
-    (cfg.model === 'wan2.6-t2i' ? 'wan2.6-image' : cfg.model);
+    (cfg.provider === 'jiaojiao'
+      ? 'qwen-image-edit'
+      : cfg.model === 'wan2.6-t2i'
+        ? 'wan2.6-image'
+        : cfg.model);
 
   const body = {
     model: resolvedModel,
@@ -63,7 +87,7 @@ export async function submitEditImageDashScope(
     },
   };
 
-  const res = await fetch(cfg.endpoint, {
+  const res = await fetch(resolveEditImageEndpoint(cfg), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

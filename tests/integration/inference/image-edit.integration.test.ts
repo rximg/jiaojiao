@@ -1,10 +1,14 @@
 /**
- * Inference 层：图片编辑适配器集成测试（DashScope wan2.6-image）
- * 直接测试 createEditImagePort + execute（真实接口）
+ * Inference 层：图片编辑适配器集成测试（DashScope / Jiaojiao qwen-image-edit）。
+ * 直接测试提交 + 轮询真实接口。
  */
 import { describe, it, expect, beforeAll } from 'vitest';
+import sharp from 'sharp';
 import { getAIConfig } from '../../../backend/infrastructure/inference/ai-config.js';
-import { createEditImagePort } from '../../../backend/infrastructure/inference/create-ports.js';
+import {
+  pollEditImageDashScope,
+  submitEditImageDashScope,
+} from '../../../backend/infrastructure/inference/adapters/image-edit/dashscope.ts';
 import { loadConfig } from '../../../backend/app-config';
 import type { T2IAIConfig } from '../../../backend/domain/inference/types.js';
 
@@ -16,9 +20,15 @@ const testProvider =
     : undefined;
 
 let hasKey = false;
+const testTimeoutMs = process.env.TEST_API_PROVIDER === 'jiaojiao' ? 300_000 : 120_000;
 
-const SAMPLE_IMAGE_URL =
-  'https://cdn.wanx.aliyuncs.com/tmp/pressure/umbrella1.png';
+async function createMinimalTestPng(): Promise<Buffer> {
+  return sharp({
+    create: { width: 16, height: 16, channels: 3, background: { r: 200, g: 200, b: 200 } },
+  })
+    .png()
+    .toBuffer();
+}
 
 describe('Inference / Image Edit (DashScope/Jiaojiao)', () => {
   beforeAll(async () => {
@@ -43,14 +53,18 @@ describe('Inference / Image Edit (DashScope/Jiaojiao)', () => {
     if (cfg.provider !== 'dashscope' && cfg.provider !== 'jiaojiao') {
       ctx.skip();
     }
+    const model = cfg.provider === 'jiaojiao' ? 'qwen-image-edit' : 'wan2.6-image';
 
-    const port = createEditImagePort(cfg);
+    const imageBuffer = await createMinimalTestPng();
+    const imageDataUrl = `data:image/png;base64,${imageBuffer.toString('base64')}`;
+
+    let taskId = '';
     let result: { imageUrl: string };
     try {
-      result = await port.execute({
-        model: 'wan2.6-image',
+      taskId = await submitEditImageDashScope(cfg, {
+        model,
         prompt: '参考图颜色与构图，生成一张简洁风格的水果插画',
-        imageDataUrls: [SAMPLE_IMAGE_URL],
+        imageDataUrls: [imageDataUrl],
         parameters: {
           size: '1280*1280',
           n: 1,
@@ -59,6 +73,10 @@ describe('Inference / Image Edit (DashScope/Jiaojiao)', () => {
           enable_interleave: false,
         },
       });
+      if (cfg.provider === 'jiaojiao') {
+        expect(taskId.startsWith('qe_') || taskId.startsWith('qu_')).toBe(true);
+      }
+      result = await pollEditImageDashScope(cfg, taskId);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (message.includes('AccessDenied') && message.includes('does not support synchronous calls')) {
@@ -67,7 +85,9 @@ describe('Inference / Image Edit (DashScope/Jiaojiao)', () => {
       throw error;
     }
 
+    expect(typeof taskId).toBe('string');
+    expect(taskId.length).toBeGreaterThan(0);
     expect(typeof result.imageUrl).toBe('string');
     expect(result.imageUrl.startsWith('http')).toBe(true);
-  }, 120_000);
+  }, testTimeoutMs);
 });

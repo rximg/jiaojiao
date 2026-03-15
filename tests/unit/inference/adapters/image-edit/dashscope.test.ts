@@ -11,7 +11,7 @@ import type { EditImagePortInput } from '../../../../../backend/infrastructure/i
 const cfg: T2IAIConfig = {
   provider: 'dashscope',
   apiKey: 'test-api-key',
-  endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
+  endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation',
   taskEndpoint: 'https://dashscope.aliyuncs.com/api/v1/tasks',
   model: 'wan2.6-image',
 };
@@ -55,7 +55,7 @@ describe('image-edit/dashscope adapter', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe(cfg.endpoint);
+    expect(url).toBe('https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation');
     expect(init.method).toBe('POST');
     expect(init.headers).toEqual({
       'Content-Type': 'application/json',
@@ -258,5 +258,30 @@ describe('image-edit/dashscope adapter', () => {
     const result = await port.execute(input);
 
     expect(result).toEqual({ imageUrl: 'https://example.com/port-result.png' });
+  });
+
+  it('uses the jiaojiao image-edit route for jiaojiao provider', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          output: {
+            task_id: 'task-123',
+          },
+        }),
+      } as Response);
+
+    await submitEditImageDashScope(
+      {
+        ...cfg,
+        provider: 'jiaojiao',
+        endpoint: 'http://localhost:9021/api/v1/services/aigc/image-generation/generation',
+      },
+      input
+    );
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://localhost:9021/api/v1/services/aigc/image-generation/image-edit');
   });
 });
