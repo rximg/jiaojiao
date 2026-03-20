@@ -282,6 +282,6 @@ describe('image-edit/dashscope adapter', () => {
     );
 
     const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('http://localhost:9021/api/v1/services/aigc/image-generation/image-edit');
+    expect(url).toBe('http://localhost:9021/api/v1/services/aigc/image-generation/generation');
   });
 });

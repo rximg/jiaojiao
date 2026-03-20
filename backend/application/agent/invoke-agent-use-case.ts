@@ -183,7 +183,7 @@ export async function invokeAgentUseCase(
   setCurrentRunContext(runCtx);
   try {
   return await runWithContextAsync(runCtx, async () => {
-  let streamingAssistantId: string | null = null;
+  let latestAssistantMessageId: string | null = null;
   for await (const chunk of stream) {
     if (signal.aborted) break;
 
@@ -206,8 +206,11 @@ export async function invokeAgentUseCase(
         const msg = newMessages[0];
         const role = normalizeMessageRole(msg) ?? 'assistant';
         const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content ?? '');
-        const stableId: string = streamingAssistantId ?? (msg.id ?? `stream-${effectiveSessionId}`);
-        streamingAssistantId = stableId;
+        const messageIdFromChunk = typeof msg.id === 'string' && msg.id.length > 0 ? msg.id : null;
+        const stableId: string = messageIdFromChunk ?? latestAssistantMessageId ?? `stream-${effectiveSessionId}`;
+        // 同一条 assistant 消息的流式增量应复用同一个 ID；
+        // 但同一轮 run 中出现新的 assistant 消息时，必须切换到新的消息 ID，避免前端按 ID 去重时把后一条覆盖前一条。
+        latestAssistantMessageId = stableId;
         // 同步更新 runCtx.messageId，确保工具执行期间（batch/tts 等）pushProgress 引用正确的消息 ID
         // LangGraph stream 的 state 顶层不含 tool_calls，此处是唯一可靠的更新时机
         runCtx.messageId = stableId;
@@ -233,7 +236,7 @@ export async function invokeAgentUseCase(
     if (state?.tool_calls || state?.toolCalls) {
       const toolCallsRaw = state.tool_calls ?? state.toolCalls;
       const toolCalls = Array.isArray(toolCallsRaw) ? toolCallsRaw : [toolCallsRaw];
-      runCtx.messageId = streamingAssistantId ?? undefined;
+      runCtx.messageId = latestAssistantMessageId ?? undefined;
       const ttsCall = toolCalls.find((tc: any) => tc.name === 'synthesize_speech');
       runCtx.toolCallId = ttsCall?.id ?? toolCalls[0]?.id;
       if (callbacks.onToolCall) {

@@ -35,10 +35,7 @@ function resolveEditImageEndpoint(cfg: T2IAIConfig): string {
   const trimmed = cfg.endpoint.replace(/\/$/, '');
 
   if (cfg.provider === 'jiaojiao') {
-    return trimmed.replace(
-      /\/api\/v1\/services\/aigc\/image-generation\/generation$/,
-      '/api/v1/services/aigc/image-generation/image-edit'
-    );
+    return trimmed;
   }
 
   if (cfg.provider === 'dashscope') {

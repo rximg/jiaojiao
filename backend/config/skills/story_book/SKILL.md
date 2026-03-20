@@ -1,7 +1,7 @@
 ---
 name: story_book
-version: 1.1.0
-description: 绘本故事生成系统 - 大纲确认后生成结构化分镜，固定四角色四宫格，保证角色一致性
+version: 1.2.0
+description: 绘本故事生成系统 - 大纲确认后生成结构化分镜，固定四角色四宫格并拆分角色参考图，逐页确认分镜提示词后再出图
 allowedTools:
   - generate_image
   - edit_image
@@ -18,16 +18,18 @@ allowedTools:
 
 ## 核心目标
 
-本系统目标：按「大纲确认 -> 结构化分镜 -> 四宫格角色设定 -> 分镜生成 -> 台词配音」流程，稳定产出角色一致、故事连贯、可直接配音的绘本素材。
+本系统目标：按「大纲确认 -> 结构化分镜 -> 四宫格角色设定与拆分 -> 分镜提示词确认 -> 分镜生成 -> 台词配音 -> 最终整合」流程，稳定产出角色一致、故事连贯、可直接配音的绘本素材。
 
 ## 第一优先级规则（必须遵守）
 
 1. 大纲确认闸门：先给用户展示完整大纲并等待确认；未确认前禁止进入后续步骤。
 2. 台词来源规则：台词必须基于分镜故事文本生成，禁止使用图片反推台词。
 3. 角色一致性规则：固定 4 个角色，先生成四宫格角色设定图，再做分镜。
-4. 角色映射规则：`edit_image` 必须传 `images/character_sheet_4grid.png`，并在 prompt 中显式写出格子-角色映射与本页使用格子。
+4. 多图编辑规则：`edit_image` 优先使用 `imagePaths` 多图输入；四宫格角色图生成后，必须先拆分为 4 张单角色参考图，禁止直接把整张 `images/character_sheet_4grid.png` 作为分镜编辑唯一参考图。
+5. 角色映射规则：每次 `edit_image` 都必须显式写出格子-角色映射、本页实际使用的 slot，以及传入的 `imagePaths` 与角色的一一对应关系。
+6. 分镜提示词确认闸门：每一页分镜图的提示词都必须先展示给用户确认；未确认前禁止调用 `edit_image` 生成该页分镜图。
 
-## 工作流程（6步固定流程）
+## 工作流程（7步固定流程）
 
 ### 步骤 1：生成并确认完整故事情节（不分页）
 **任务**：根据用户主题生成完整故事文本，并让用户确认或修改
@@ -96,14 +98,18 @@ allowedTools:
 - `imagePrompt` 要明确场景、动作、情绪、镜头构图
 - 使用 write_file 保存到 `storyboard_plan.json`
 
-### 步骤 3：固定 4 角色并生成四宫格角色设定图
-**任务**：固定 4 个角色并生成一张 2x2 四宫格角色图
+### 步骤 3：固定 4 角色，生成四宫格角色设定图并拆分角色参考图
+**任务**：固定 4 个角色，先生成一张 2x2 四宫格角色图，再拆分为 4 张单角色参考图，供后续多图编辑使用
 
 **输入**：`storyboard_plan.json`
 
 **输出**：
 - `character_slots.json`（格子映射）
 - `images/character_sheet_4grid.png`（四宫格角色设定图）
+- `images/character_slot1.png`
+- `images/character_slot2.png`
+- `images/character_slot3.png`
+- `images/character_slot4.png`
 
 **固定角色规则**：
 - 必须固定 4 个角色（不足时补充"旁白/路人/道具精灵"等功能角色）
@@ -118,10 +124,10 @@ allowedTools:
 {
   "sheetImage": "images/character_sheet_4grid.png",
   "slots": {
-    "slot1": { "position": "左上", "name": "咪咪", "appearance": "..." },
-    "slot2": { "position": "右上", "name": "猫妈妈", "appearance": "..." },
-    "slot3": { "position": "左下", "name": "小狗豆豆", "appearance": "..." },
-    "slot4": { "position": "右下", "name": "蝴蝶精灵", "appearance": "..." }
+    "slot1": { "position": "左上", "name": "咪咪", "appearance": "...", "imagePath": "images/character_slot1.png" },
+    "slot2": { "position": "右上", "name": "猫妈妈", "appearance": "...", "imagePath": "images/character_slot2.png" },
+    "slot3": { "position": "左下", "name": "小狗豆豆", "appearance": "...", "imagePath": "images/character_slot3.png" },
+    "slot4": { "position": "右下", "name": "蝴蝶精灵", "appearance": "...", "imagePath": "images/character_slot4.png" }
   }
 }
 ```
@@ -138,21 +144,58 @@ generate_image(
 **要求**：
 - 角色提示词必须包含：物种/年龄感/体型/毛色或发色/服装/配饰/表情基调
 - 四格角色差异明显，便于后续分镜准确引用
+- 四宫格角色图生成完成后，必须立即拆分为 4 张独立角色参考图，文件名固定为 `images/character_slot1.png` 到 `images/character_slot4.png`
+- 后续分镜图编辑只能使用拆分后的角色图作为参考输入；若当前环境无法拿到拆分后的 4 张角色图，则必须暂停并提示能力缺口，禁止退回为直接使用整张四宫格图出分镜
 - 使用 write_file 保存到 `character_slots.json`
 
-### 步骤 4：按分镜角色映射生成分镜图
-**任务**：根据 `storyboard_plan.json`，用四宫格角色图生成每页分镜图
+### 步骤 4：生成并确认每页分镜提示词
+**任务**：根据 `storyboard_plan.json` 和 `character_slots.json`，先为每一页生成可执行的分镜出图提示词，并逐页向用户展示确认
 
 **输入**：
 - `storyboard_plan.json`
 - `character_slots.json`
 
+**输出**：`scene_prompt_plan.json`
+
+```json
+{
+  "title": "故事标题",
+  "pages": [
+    {
+      "page": 1,
+      "title": "页面标题",
+      "sceneCharacters": ["咪咪", "猫妈妈"],
+      "referenceImages": [
+        "images/character_slot1.png",
+        "images/character_slot2.png"
+      ],
+      "editPrompt": "角色映射：slot1左上=咪咪，对应参考图1=images/character_slot1.png；slot2右上=猫妈妈，对应参考图2=images/character_slot2.png；slot3左下=小狗豆豆；slot4右下=蝴蝶精灵。本页仅允许 slot1(咪咪)、slot2(猫妈妈) 出镜，禁止未出现角色入镜。场景：花园黄昏重逢，妈妈蹲下抱住咪咪，温暖治愈，儿童绘本卡通风。"
+    }
+  ]
+}
+```
+
+**要求**：
+- 先生成完整的 `scene_prompt_plan.json`，再在聊天中按页展示 `editPrompt` 草案给用户确认
+- 用户可以逐页确认，也可以一次性确认全部页；未被确认的页不得进入出图
+- 若用户要求修改某页提示词，必须先更新该页 `editPrompt` 并再次展示确认，不能直接出图
+- `referenceImages` 只能填写本页实际出场角色对应的拆分角色图，顺序必须与 `editPrompt` 中“参考图1/2/3...”描述一致
+- `editPrompt` 必须包含：四宫格 slot 映射、参考图与角色映射、本页允许出镜角色、禁止入镜角色、场景动作、情绪、构图
+- 使用 write_file 保存到 `scene_prompt_plan.json`
+
+### 步骤 5：按已确认的分镜提示词生成分镜图
+**任务**：仅基于已确认的 `scene_prompt_plan.json` 批量或单页生成分镜图
+
+**输入**：
+- `scene_prompt_plan.json`
+
 **输出**：`scene_images.json`
 
 **分镜规划与 `edit_image` 的关系**：
-- `storyboard_plan.json` 是分镜生成的唯一输入规范。
+- `scene_prompt_plan.json` 是分镜生成的唯一直接输入规范。
 - 每个 `pages[i]` 会映射为一次 `edit_image`（或 `batch_tool_call` 子任务）。
-- `pages[i].imagePrompt` + `pages[i].sceneCharacters` + `character_slots.json` 共同组成该页 `edit_image.prompt`。
+- `pages[i].referenceImages` 直接对应 `edit_image.imagePaths`。
+- `pages[i].editPrompt` 直接作为该页 `edit_image.prompt`。
 - `pages[i].page` 直接决定输出文件名：`scene_{页码}.png`。
 
 **工具调用（首次执行使用批量）**：
@@ -162,10 +205,10 @@ batch_tool_call(
   items: [
     {
       params: {
-        imagePath: "images/character_sheet_4grid.png",
+        imagePaths: ["images/character_slot1.png", "images/character_slot2.png"],
         imageName: "scene_01.png",
         size: "1280*960",
-        prompt: "四宫格角色映射：slot1左上=咪咪，slot2右上=猫妈妈，slot3左下=小狗豆豆，slot4右下=蝴蝶精灵。本页仅出现角色：slot1(咪咪)、slot2(猫妈妈)。只使用对应格子角色，保持脸型、毛色、服装一致。场景：花园黄昏重逢，妈妈蹲下抱住咪咪，温暖治愈，儿童绘本卡通风。"
+        prompt: "角色映射：slot1左上=咪咪，对应参考图1；slot2右上=猫妈妈，对应参考图2；slot3左下=小狗豆豆；slot4右下=蝴蝶精灵。本页仅允许 slot1(咪咪)、slot2(猫妈妈) 出镜，未出现角色不得入镜。保持脸型、毛色、服装一致。场景：花园黄昏重逢，妈妈蹲下抱住咪咪，温暖治愈，儿童绘本卡通风。"
       },
       label: "第1页：重逢"
     }
@@ -174,16 +217,17 @@ batch_tool_call(
 ```
 
 **关键要求**：
-- 禁止把单角色图反复用于多角色分镜
-- `imagePath` 统一使用 `images/character_sheet_4grid.png`
+- 只能对“已确认”的页调用 `edit_image`
+- `imagePaths` 必须来自 `scene_prompt_plan.json.referenceImages`，不得回退为整张四宫格图
 - 每页 prompt 必须写清：
   - 四宫格映射
+  - 参考图与角色映射
   - 本页角色对应的 slot
   - 未出现角色不得入镜
-  - 场景动作和情绪
-- 若重做某页，使用单步：`edit_image(imagePath, imageName, prompt, size)`
+  - 场景动作、情绪和镜头构图
+- 若重做某页，仍需先让用户确认更新后的 prompt，再使用单步：`edit_image(imagePaths, imageName, prompt, size)`
 
-### 步骤 5：基于分镜故事生成台词与配音
+### 步骤 6：基于分镜故事生成台词与配音
 **任务**：使用 `sceneStory` 直接生成台词与配音
 
 **输入**：`storyboard_plan.json`
@@ -215,7 +259,7 @@ batch_tool_call(
 
 若重做某条语音，使用单步：`synthesize_speech_single(text, voice, format)`
 
-### 步骤 6：最终成品
+### 步骤 7：最终成品
 **任务**：整合并完成绘本流程
 
 **输入**：
@@ -237,37 +281,43 @@ batch_tool_call(
 | 场景 | 使用工具 | 原因 |
 |---|---|---|
 | 生成四宫格角色设定图 | `generate_image` | 仅需一张基准角色图 |
-| 批量生成所有分镜图 | `batch_tool_call(tool: "edit_image", items: [...])` | 一次确认、可视化进度 |
-| 重做某个分镜图 | `edit_image` | 单页快速修正 |
+| 逐页确认分镜提示词 | 不调用出图工具 | 先做人审，避免错误提示词直接出图 |
+| 批量生成所有分镜图 | `batch_tool_call(tool: "edit_image", items: [...])` | 基于已确认 prompt 串行生成，可视化进度 |
+| 重做某个分镜图 | `edit_image` | 仅限该页 prompt 重新确认后单页修正 |
 | 批量合成所有语音 | `batch_tool_call(tool: "synthesize_speech_single", items: [...], delayBetweenMs: 2000)` | 限流友好 |
 | 重做某条语音 | `synthesize_speech_single` | 单条快速修正 |
 
 ## Todo 列表管理
 
-为了避免在第一步与用户交互时消息被工具调用吞没，**请在用户明确确认故事大纲后（即完成步骤1确认后），再调用 `write_todos` 创建后续的 5 项 Todo**：
+为了避免在第一步与用户交互时消息被工具调用吞没，**请在用户明确确认故事大纲后（即完成步骤1确认后），再调用 `write_todos` 创建后续的 6 项 Todo**：
 1. "生成结构化分镜规划"
-2. "固定4角色并生成四宫格角色图"
-3. "按角色映射生成分镜图"
-4. "基于分镜故事生成台词与配音"
-5. "整合素材并完成绘本"
+2. "固定4角色并生成四宫格角色图及拆分角色参考图"
+3. "生成并确认每页分镜提示词"
+4. "按角色映射生成分镜图"
+5. "基于分镜故事生成台词与配音"
+6. "整合素材并完成绘本"
 
 每完成一个步骤，立即更新对应 Todo 为 completed。
 
 ## 重要约束
 
-1. 顺序执行：必须按 1 -> 6 顺序执行，不能跳步。
+1. 顺序执行：必须按 1 -> 7 顺序执行，不能跳步。
 2. 未确认禁止继续：步骤 1 未获用户确认前，不能生成角色图和分镜图。
 3. 文件命名规范：
   - 四宫格角色图：`images/character_sheet_4grid.png`
+  - 拆分角色图：`images/character_slot{1|2|3|4}.png`
   - 分镜图：`images/scene_{页码}.png`
   - 台词：`scripts/page_{页码}.txt`
   - 语音：`audio/page_{页码}.mp3`
-4. 角色映射强约束：每页分镜 prompt 必须标注 slot 与角色对应关系。
-5. 台词来源强约束：禁止从分镜图反推台词。
+4. 角色参考图强约束：分镜出图必须使用拆分后的 `imagePaths` 多图输入，禁止仅传整张四宫格图。
+5. 提示词确认强约束：每页分镜 prompt 必须先经用户确认，再允许调用出图工具。
+6. 角色映射强约束：每页分镜 prompt 必须标注 slot、参考图、角色三者的对应关系。
+7. 台词来源强约束：禁止从分镜图反推台词。
 
 ## 重新打开会话处理
 
 当用户重新打开已有会话时：
 1. 读取现有 todo 列表与完成状态。
-2. 读取 `story_outline.json`、`storyboard_plan.json`、`character_slots.json`。
-3. 从用户指定步骤继续，避免重复生成已确认产物。
+2. 读取 `story_outline.json`、`storyboard_plan.json`、`character_slots.json`、`scene_prompt_plan.json`。
+3. 检查哪些页的 prompt 已确认、哪些页仅生成草案但未确认。
+4. 从用户指定步骤继续，避免重复生成已确认产物。
