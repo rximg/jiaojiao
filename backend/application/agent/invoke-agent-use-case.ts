@@ -237,7 +237,7 @@ export async function invokeAgentUseCase(
       const toolCallsRaw = state.tool_calls ?? state.toolCalls;
       const toolCalls = Array.isArray(toolCallsRaw) ? toolCallsRaw : [toolCallsRaw];
       runCtx.messageId = latestAssistantMessageId ?? undefined;
-      const ttsCall = toolCalls.find((tc: any) => tc.name === 'synthesize_speech');
+      const ttsCall = toolCalls.find((tc: any) => tc.name === 'batch_tool_call' || tc.name === 'generate_audio');
       runCtx.toolCallId = ttsCall?.id ?? toolCalls[0]?.id;
       if (callbacks.onToolCall) {
         callbacks.onToolCall(effectiveSessionId, toolCalls);

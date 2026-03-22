@@ -23,7 +23,7 @@ agent:
 
 tools:
   finalize_workflow: {}
-  annotate_image_numbers: {}
+  annotate_image_with_numbers: {}
   delete_artifacts: {}
   generate_image:                # 单步（重做单张角色图 / 单独生成一张图时使用）
     enable: true
@@ -31,7 +31,7 @@ tools:
   edit_image:                    # 单步（重做单张分镜图时使用）
     enable: true
     config_path: ./tools/image_edit.yaml
-  synthesize_speech_single:      # 单步语音（单条合成 / batch_tool_call 内部调用）
+  generate_audio:                # 单步音频（单条生成 / batch_tool_call 内部调用）
     enable: true
     config_path: ./tools/tts.yaml
   batch_tool_call: {}            # 通用批量执行器（首次批量生成时使用）

@@ -1,4 +1,3 @@
-import path from 'path';
 import sharp from 'sharp';
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
@@ -23,8 +22,8 @@ function ensureEvenSplit(value: number, label: string): void {
 }
 
 function create(config: ToolConfig, context: ToolContext) {
-  const toolName = config.name ?? 'split_character_sheet';
-  const description = config.description ?? '将 2x2 四宫格角色图拆分为四张单角色参考图';
+  const toolName = config.name ?? 'split_grid_image';
+  const description = config.description ?? '将 2x2 四宫格图片拆分为四张独立图片';
   const artifactRepo = getArtifactRepository();
 
   return tool(
@@ -46,7 +45,7 @@ function create(config: ToolConfig, context: ToolContext) {
       const metadata = await image.metadata();
 
       if (!metadata.width || !metadata.height) {
-        throw new Error('Unable to determine character sheet dimensions');
+        throw new Error('Unable to determine grid image dimensions');
       }
 
       ensureEvenSplit(metadata.width, 'Image width');
@@ -86,7 +85,7 @@ function create(config: ToolConfig, context: ToolContext) {
       name: toolName,
       description,
       schema: z.object({
-        imagePath: z.string().optional().describe('四宫格角色图路径，可传相对路径或当前会话下的绝对路径'),
+        imagePath: z.string().optional().describe('四宫格图片路径，可传相对路径或当前会话下的绝对路径'),
         outputDir: z.string().optional().describe('输出目录，默认 images'),
         sessionId: z.string().optional().describe('会话ID（留空则使用当前会话）'),
       }),
@@ -94,4 +93,4 @@ function create(config: ToolConfig, context: ToolContext) {
   );
 }
 
-registerTool('split_character_sheet', create);
+registerTool('split_grid_image', create);

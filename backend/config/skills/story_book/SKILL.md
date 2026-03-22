@@ -7,9 +7,9 @@ allowedTools:
   - edit_file
   - write_todos
   - generate_image
-  - split_character_sheet
+  - split_grid_image
   - edit_image
-  - synthesize_speech_single
+  - generate_audio
   - batch_tool_call
   - finalize_workflow
 ---
@@ -94,9 +94,9 @@ allowedTools:
 
 **工具调用要求**：
 - 使用 `generate_image` 生成一张 2x2 四宫格角色设定图。
-- 四宫格角色图生成完成后，必须立即调用 `split_character_sheet(imagePath, outputDir)` 拆分角色图。
+- 四宫格角色图生成完成后，必须立即调用 `split_grid_image(imagePath, outputDir)` 拆分角色图。
 - prompt 必须明确写出四个槽位和四个角色的对应关系。
-- `split_character_sheet` 的默认输出应为：
+- `split_grid_image` 的默认输出应为：
   - `images/character_slot1.png`
   - `images/character_slot2.png`
   - `images/character_slot3.png`
@@ -115,7 +115,7 @@ slot4 右下 = 角色D：...
 
 **切图工具调用示例**：
 ```
-split_character_sheet(
+split_grid_image(
   imagePath: "images/character_sheet_4grid.png",
   outputDir: "images"
 )
@@ -175,8 +175,8 @@ split_character_sheet(
 **配音生成要求**：
 - 当前页音频文本必须直接取自策划稿该页的“故事解说”。
 - 可以做轻微口语化润色，但不得偏离原意、不得新增剧情。
-- 若一次性生成多页音频，可使用 `batch_tool_call(tool: "synthesize_speech_single", items: [...])`。
-- 若重做某页音频，使用单步 `synthesize_speech_single`。
+- 若一次性生成多页音频，可使用 `batch_tool_call(tool: "generate_audio", items: [...])`。
+- 若重做某页音频，使用单步 `generate_audio`。
 
 ### 步骤 6：整合素材并完成绘本
 
@@ -260,9 +260,9 @@ split_character_sheet(
 | 修改已存在策划稿 | `edit_file` | 用户提出修改意见后更新现有 Markdown 文件 |
 | 创建或更新 Todo | `write_todos` | 对话开始即创建；每步完成后立即更新 |
 | 生成四宫格角色图 | `generate_image` | 只生成一张基准角色设定图 |
-| 拆分四宫格角色图 | `split_character_sheet` | 将四宫格切分为 4 张单角色参考图 |
+| 拆分四宫格角色图 | `split_grid_image` | 将四宫格切分为 4 张单角色参考图 |
 | 逐页生成分镜图 | `edit_image` / `batch_tool_call` | 仅限已确认页面，且必须使用拆分后的角色参考图 |
-| 生成配音 | `synthesize_speech_single` / `batch_tool_call` | 文本必须来自策划稿该页“故事解说” |
+| 生成配音 | `generate_audio` / `batch_tool_call` | 文本必须来自策划稿该页“故事解说” |
 | 收尾 | `finalize_workflow` | 全部素材完成后调用 |
 
 ## 重要约束

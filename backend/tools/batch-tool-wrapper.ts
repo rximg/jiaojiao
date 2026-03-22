@@ -101,7 +101,7 @@ function create(_config: ToolConfig, context: ToolContext) {
       schema: z.object({
         tool: z
           .string()
-          .describe('要批量调用的单步工具名称，如 generate_image、edit_image、synthesize_speech_single'),
+          .describe('要批量调用的单步工具名称，如 generate_image、edit_image、generate_audio'),
         items: z
           .array(
             z.object({

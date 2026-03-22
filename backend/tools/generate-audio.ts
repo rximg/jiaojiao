@@ -1,5 +1,5 @@
 /**
- * synthesize_speech_single：合成单条语音（供 synthesize_speech batch wrapper 调用）
+ * generate_audio：生成单条音频（供 batch_tool_call 内部调用）
  */
 import path from 'path';
 import { tool } from '@langchain/core/tools';
@@ -18,8 +18,8 @@ function sanitizeForFilename(text: string, maxLen = 40): string {
 }
 
 function create(config: ToolConfig, context: ToolContext) {
-  const toolName = 'synthesize_speech_single';
-  const description = '合成单条语音（内部工具，供批量壳层调用）';
+  const toolName = config.name ?? 'generate_audio';
+  const description = config.description ?? '生成单条音频（内部工具，供批量壳层调用）';
   const serviceConfig = config.serviceConfig as {
     default_params?: Record<string, unknown>;
   };
@@ -29,7 +29,6 @@ function create(config: ToolConfig, context: ToolContext) {
 
   return tool(
     async (params: { text: string; voice?: string; format?: string; sessionId?: string }) => {
-      // 注意：HITL 由批量壳层统一处理；直接执行时保留 HITL（单步独立调用场景）
       const merged = await context.requestApprovalViaHITL(
         'ai.text2speech',
         params as Record<string, unknown>
@@ -71,7 +70,7 @@ function create(config: ToolConfig, context: ToolContext) {
       name: toolName,
       description,
       schema: z.object({
-        text: z.string().describe('要合成的文本'),
+        text: z.string().describe('要生成音频的文本'),
         voice: z
           .string()
           .optional()
@@ -91,4 +90,4 @@ function create(config: ToolConfig, context: ToolContext) {
   );
 }
 
-registerTool('synthesize_speech_single', create);
+registerTool('generate_audio', create);

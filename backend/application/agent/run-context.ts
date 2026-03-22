@@ -1,6 +1,6 @@
 /**
- * Run 作用域上下文：供流式 run 内工具（如 synthesize_speech）获取 threadId、messageId、toolCallId 与 onTtsProgress 回调
- * 同时使用 AsyncLocalStorage 与模块级 currentRunContext，因 LangGraph 工具可能在另一 async 上下文中执行，ALS 会丢失
+ * Run 作用域上下文：供流式 run 内批量工具获取 threadId、messageId、toolCallId 与进度回调。
+ * 同时使用 AsyncLocalStorage 与模块级 currentRunContext，因 LangGraph 工具可能在另一 async 上下文中执行，ALS 会丢失。
  */
 import { AsyncLocalStorage } from 'async_hooks';
 

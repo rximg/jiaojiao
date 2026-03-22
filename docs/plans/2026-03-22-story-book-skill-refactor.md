@@ -13,7 +13,7 @@
 **Implemented:**
 - Rebuilt `story_book` skill around `《绘本故事策划稿.md》` as the single planning source.
 - Updated skill config copy to match the planning-document-first flow.
-- Added `split_character_sheet` tool and wired it into the skill workflow.
+- Added `split_grid_image` tool and wired it into the skill workflow.
 - Corrected planning-file update guidance to use `edit_file` for existing files.
 
 **Verified:**

@@ -27,16 +27,16 @@ runtime:
 
 tools:
   finalize_workflow: {}
-  annotate_image_numbers: {}
+  annotate_image_with_numbers: {}
   delete_artifacts: {}
-  split_character_sheet: {}
+  split_grid_image: {}
   generate_image:
     enable: true
     config_path: ./tools/t2i.yaml
   edit_image:
     enable: true
     config_path: ./tools/image_edit.yaml
-  synthesize_speech_single:
+  generate_audio:
     enable: true
     config_path: ./tools/tts.yaml
   batch_tool_call: {}

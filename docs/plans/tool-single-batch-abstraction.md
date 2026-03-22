@@ -328,9 +328,9 @@ registerBatchTool({
 });
 ```
 
-#### 4.3.3 `synthesize_speech` 改造（方案 B：拆分单步 + 批量壳层）
+#### 4.3.3 `generate_audio` 改造（方案 B：单步工具 + 通用批量壳层）
 
-`synthesize_speech` 当前已是批量工具（接收 `texts[]` 数组），内部串行合成。为与 `generate_image` / `edit_image` 保持一致的抽象，**采用方案 B**：拆成 `synthesize_speech_single`（单条文本→单条音频）+ `synthesize_speech`（batch wrapper）。
+语音能力当前按单条生成更符合统一抽象。为与 `generate_image` / `edit_image` 保持一致，采用单步工具 `generate_audio`（单条文本→单条音频）+ `batch_tool_call`（批量壳层）的组合。
 
 **采用方案 B 的理由**：
 - 与图片类工具的 single/batch 拆分方式完全一致，架构统一
@@ -338,10 +338,10 @@ registerBatchTool({
 - 批量壳层自动获得 `BatchProgress` 推送、HITL 一次确认等统一能力
 - `onTtsProgress` 可直接废弃，不需要过渡期双发
 
-##### 4.3.3.1 `synthesize_speech_single`（新增单步工具）
+##### 4.3.3.1 `generate_audio`（新增单步工具）
 
 ```typescript
-// backend/tools/synthesize-speech-single.ts
+// backend/tools/generate-audio.ts
 
 import path from 'path';
 import { tool } from '@langchain/core/tools';
@@ -358,7 +358,7 @@ function sanitizeForFilename(text: string, maxLen = 40): string {
 }
 
 function create(config: ToolConfig, context: ToolContext) {
-  const toolName = 'synthesize_speech_single';
+  const toolName = 'generate_audio';
   const description = '合成单条语音（内部工具，供批量壳层调用）';
   const serviceConfig = config.serviceConfig as {
     default_params?: Record<string, unknown>;
@@ -419,12 +419,12 @@ function create(config: ToolConfig, context: ToolContext) {
   );
 }
 
-registerTool('synthesize_speech_single', create);
+registerTool('generate_audio', create);
 ```
 
-> **注意**：需要在 `multimodal-port-impl.ts` 中抽取一个 `synthesizeSpeechSingleItem` 方法，将现有 `synthesizeSpeechImpl` 中的单条合成逻辑独立出来，供单步工具调用。
+> **注意**：需要在 `multimodal-port-impl.ts` 中抽取一个 `synthesizeSpeechSingleItem` 方法，将现有单条合成逻辑独立出来，供 `generate_audio` 调用。
 
-##### 4.3.3.2 `synthesize_speech`（改为 batch wrapper）
+##### 4.3.3.2 `batch_tool_call`（用于语音批量执行）
 
 ```typescript
 // backend/tools/synthesize-speech.ts（改造后）
@@ -433,8 +433,8 @@ import { registerBatchTool } from './batch-tool-wrapper.js';
 import { z } from 'zod';
 
 registerBatchTool({
-  singleToolName: 'synthesize_speech_single',
-  batchToolName: 'synthesize_speech',
+  singleToolName: 'generate_audio',
+  batchToolName: 'batch_tool_call',
   description: '批量合成语音（传入台词数组，串行合成，统一确认）',
   batchSchema: z.object({
     texts: z.array(z.string()).describe('台词文本数组'),
@@ -461,8 +461,7 @@ registerBatchTool({
 });
 ```
 
-**对外接口不变**：Agent 仍然调用 `synthesize_speech(texts: [...], voice, format)`，参数 schema 完全兼容。
-内部变为 batch wrapper → 串行调用 `synthesize_speech_single` × N，自动获得 `BatchProgress` 推送和 HITL 一次确认。
+Agent 侧通过 `batch_tool_call(tool: "generate_audio", items: [...])` 统一批量生成音频，底层串行调用 `generate_audio` × N，自动获得 `BatchProgress` 推送和 HITL 一次确认。
 
 ##### 4.3.3.3 `MultimodalPort` 抽取单条方法
 
@@ -937,32 +936,29 @@ window.electronAPI.agent.onBatchProgress(handleBatchProgress);
 | 合成语音 | `synthesize_speech` | 批量（N 条台词） | **接口不变**（底层改为 batch wrapper，Agent 无感知） |
 | 其他工具 | `generate_script_from_image` 等 | 单步 | **不变** |
 
-**encyclopedia.yaml system_prompt 改动**：无需修改。`synthesize_speech(texts: [...])` 的对外接口完全兼容，Agent 调用方式不变。
+**encyclopedia.yaml system_prompt 改动**：需要改成 `batch_tool_call(tool: "generate_audio", items: [...])`，与当前通用批量工具保持一致。
 
 ```yaml
-# encyclopedia.yaml — system_prompt 无需改动
-# 步骤 4 仍然写：
-#   synthesize_speech(texts: 步骤3的 lines[].text, voice: "chinese_female", format: "mp3")
-# 底层已变为 batch wrapper → synthesize_speech_single × N，Agent 无感知
+# encyclopedia.yaml — system_prompt 改为：
+#   batch_tool_call(tool: "generate_audio", items: [...])
+# 底层为 batch_tool_call → generate_audio × N
 ```
 
-**encyclopedia.yaml tools 配置改动**：新增 `synthesize_speech_single`（作为内部依赖）。
+**encyclopedia.yaml tools 配置改动**：新增 `generate_audio`，并保留 `batch_tool_call` 作为批量执行器。
 
 ```yaml
 # encyclopedia.yaml tools 配置
 tools:
   finalize_workflow: {}
-  annotate_image_numbers: {}
+  annotate_image_with_numbers: {}
   delete_artifacts: {}
   generate_image:              # 单步，不变
     enable: true
     config_path: ./tools/t2i.yaml
-  synthesize_speech_single:    # 新增：单步语音工具（内部依赖，不暴露给 Agent prompt）
+  generate_audio:              # 新增：单步音频工具（供 batch_tool_call 调用）
     enable: true
     config_path: ./tools/tts.yaml
-  synthesize_speech:           # 批量壳层（对外接口不变）
-    enable: true
-    config_path: ./tools/tts.yaml
+  batch_tool_call: {}
   generate_script_from_image:
     enable: true
     config_path: ./tools/vl_script.yaml
@@ -988,9 +984,9 @@ allowedTools:
   - generate_images         # 新增：批量生成角色图
   - edit_image              # 保留：单张编辑仍有场景（如重做某个分镜）
   - edit_images             # 新增：批量生成分镜图
-  - synthesize_speech        # 批量语音合成（接口不变）
+  - generate_audio
   - generate_script_from_image
-  - annotate_image_numbers
+  - annotate_image_with_numbers
   - finalize_workflow
   - write_todos
 ```
@@ -1052,7 +1048,7 @@ allowedTools:
 # story_book.yaml tools 配置
 tools:
   finalize_workflow: {}
-  annotate_image_numbers: {}
+  annotate_image_with_numbers: {}
   delete_artifacts: {}
   generate_image:                # 单步（重做单张用）
     enable: true
@@ -1068,12 +1064,10 @@ tools:
     enable: true
     config_path: ./tools/image_edit.yaml
     batch: true
-  synthesize_speech_single:      # 新增：单步语音（内部依赖）
+  generate_audio:                # 新增：单步音频（内部依赖）
     enable: true
     config_path: ./tools/tts.yaml
-  synthesize_speech:             # 批量壳层
-    enable: true
-    config_path: ./tools/tts.yaml
+  batch_tool_call: {}
   generate_script_from_image:
     enable: true
     config_path: ./tools/vl_script.yaml
@@ -1123,7 +1117,7 @@ onBatchProgress: (
 详细的案例工具配置变更已在 §6.3.1 和 §6.3.2 中给出。核心原则：
 
 1. **批量工具复用单步工具的 `config_path`**：`generate_images` 与 `generate_image` 共享 `./tools/t2i.yaml`
-2. **`synthesize_speech_single` 需要显式注册**：作为 `synthesize_speech` 批量壳层的内部依赖
+2. **`generate_audio` 需要显式注册**：作为 `batch_tool_call` 在语音场景中的单步依赖
 3. **`batch: true` 自动推断**（可选的简写方式）
 
 ```yaml
@@ -1137,12 +1131,10 @@ tools:
     enable: true
     config_path: ./tools/image_edit.yaml
     batch: true  # → 自动注册 edit_images
-  synthesize_speech_single:
+  generate_audio:
     enable: true
     config_path: ./tools/tts.yaml
-  synthesize_speech:  # batch wrapper around synthesize_speech_single
-    enable: true
-    config_path: ./tools/tts.yaml
+  batch_tool_call: {}
 ```
 
 > 展开形式见 §6.3.1（百科）和 §6.3.2（绘本）的完整配置。
@@ -1159,13 +1151,13 @@ tools:
 4. 新增 `BatchWrapper` / `SubTaskCard` 前端组件
 5. ChatProvider 新增 `handleBatchProgress` 监听
 
-### Phase 2：改造 synthesize_speech（方案 B 拆分）
+### Phase 2：接入 generate_audio（方案 B 拆分）
 
-1. 新建 `synthesize_speech_single.ts`，注册单条语音合成工具
+1. 新建 `generate-audio.ts`，注册单条音频生成工具
 2. 在 `multimodal-port-impl.ts` 中抽取 `synthesizeSpeechSingleItem` 方法
-3. 改造 `synthesize-speech.ts`：从手写批量循环改为 `registerBatchTool` 壳层
-4. 对外接口 `synthesize_speech(texts: [...])` 完全兼容，Agent prompt 无需修改
-5. 验证百科案例表现不变（`synthesize_speech` 接口不变，内部走 batch wrapper → single × N）
+3. 接入 `batch_tool_call`：以 `tool: "generate_audio"` 承担批量语音生成
+4. 更新 Agent prompt，统一改为 `batch_tool_call(tool: "generate_audio", items: [...])`
+5. 验证百科案例表现正确（底层走 `batch_tool_call` → `generate_audio` × N）
 
 ### Phase 3：新增批量图片工具 + 修改案例 Prompt
 
@@ -1177,7 +1169,7 @@ tools:
    - 步骤 3 改为调用 `generate_images`
    - 步骤 4 改为调用 `edit_images`
    - 新增「工具选择规则」段落（首次批量，重做单步）
-5. 修改 `encyclopedia.yaml` tools 配置（新增 `synthesize_speech_single` 依赖）
+5. 修改 `encyclopedia.yaml` tools 配置（新增 `generate_audio` 依赖）
 6. 验证两个案例：百科（单步图+批量语音）和绘本（批量图+批量语音）
 
 ### Phase 4：清理
@@ -1197,7 +1189,7 @@ tools:
 |---|---|---|
 | `backend/tools/types.ts` | 新增 `BatchProgress`、`BatchSubTask` 类型 | 1 |
 | `backend/tools/batch-tool-wrapper.ts` | **新建**：通用批量工具壳层 | 2 |
-| `backend/tools/synthesize-speech-single.ts` | **新建**：单条语音合成工具 | 2 |
+| `backend/tools/generate-audio.ts` | **新建**：单条音频生成工具 | 2 |
 | `backend/tools/synthesize-speech.ts` | **改造**：从手写循环改为 `registerBatchTool` 壳层 | 2 |
 | `backend/infrastructure/inference/multimodal-port-impl.ts` | 抽取 `synthesizeSpeechSingleItem` 方法 | 2 |
 | `backend/tools/generate-images.ts` | **新建**：批量文生图工具 | 3 |
@@ -1213,8 +1205,8 @@ tools:
 | `src/app/components/ChatMessage.tsx` | 渲染 `batchOperation` | 1 |
 | `src/app/components/HitlConfirmBlock.tsx` | 批量模式渲染逻辑 | 1 |
 | `src/providers/ChatProvider.tsx` | `handleBatchProgress` | 1 |
-| `backend/config/agent_cases/encyclopedia.yaml` | tools 新增 `synthesize_speech_single` | 3 |
-| `backend/config/agent_cases/story_book.yaml` | tools 新增批量工具 + `synthesize_speech_single` | 3 |
+| `backend/config/agent_cases/encyclopedia.yaml` | tools 新增 `generate_audio` | 3 |
+| `backend/config/agent_cases/story_book.yaml` | tools 新增批量工具 + `generate_audio` | 3 |
 | `.claude/skills/picture-book-story/SKILL.md` | allowedTools、步骤 3/4 改用批量工具、新增工具选择规则 | 3 |
 
 ---
@@ -1227,7 +1219,7 @@ tools:
 | HITL 策略 | 批量整体确认一次 | 大幅减少用户操作次数 |
 | 进度推送 | 统一 `agent:batchProgress` 事件 | 替代 TTS 专用的 `agent:ttsProgress`，一套机制覆盖所有批量场景 |
 | 前端组件 | `BatchWrapper` 包裹 + 复用 `ImageBlock`/`AudioBlock` | 避免重复建设，单步/批量共享 UI |
-| synthesize_speech 处理 | 方案 B：拆成 `synthesize_speech_single` + `synthesize_speech`（batch wrapper） | 与图片类工具一致的 single/batch 拆分，架构统一；`onTtsProgress` 可直接废弃 |
+| 音频生成处理 | 方案 B：拆成 `generate_audio` + `batch_tool_call` | 与图片类工具一致的 single/batch 抽象，架构统一；`onTtsProgress` 可直接废弃 |
 | 单步绕过 HITL | bypass context 注入 | 批量确认后子步骤不再弹窗 |
 | 配置方式 | YAML 中 `batch: true` 自动派生 | 无需手动配置第二个工具名 |
 
@@ -1240,4 +1232,4 @@ tools:
 3. **批量数量上限**：建议对 `items` 数组设置最大长度限制（如 50），防止 Agent 一次传入过多项目。
 4. **Rate Limiting**：批量工具需要在子任务间增加延时（类似 TTS 的 `rateLimitMs`），避免触发 API 限流。可在 `registerBatchTool` 中增加 `delayBetweenMs` 参数。
 5. **单步/批量工具同时存在**：同一个 Agent 可能既有 `generate_image` 又有 `generate_images`。SKILL.md 中通过「工具选择规则」明确：首次执行用批量，重做单个子项用单步。百科案例因只需 1 张图，不注册 `generate_images`，无此问题。
-6. **synthesize_speech_single 不应直接暴露给 Agent**：它是 `synthesize_speech` batch wrapper 的内部依赖。在 tools 描述中标记为内部工具，或在 Agent prompt 中不提及。`synthesize_speech_single` 的 HITL actionType 为 `ai.text2speech_single`，批量壳层会在外层统一 HITL，内部 bypass。
+6. **generate_audio 不应被误写成旧名**：Agent 在批量场景应通过 `batch_tool_call(tool: "generate_audio", items: [...])` 调用，单步重做时才直接使用 `generate_audio`。其 HITL actionType 可继续沿用现有 `ai.text2speech`。

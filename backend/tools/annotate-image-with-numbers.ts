@@ -1,5 +1,5 @@
 /**
- * annotate_image_numbers：在图片上按坐标绘制白底数字标签并保存
+ * annotate_image_with_numbers：在图片上按坐标绘制白底数字标签并保存
  */
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
@@ -31,18 +31,18 @@ function create(_config: ToolConfig, context: ToolContext) {
         } else {
           const config = await loadConfig();
           const { entries } = await readLineNumbers(config.storage.ttsStartNumber ?? 6000);
-          const sessionEntries = entries.filter((e) => e.sessionId === sessionId);
-          const n = input.lines.length;
-          const lastN = sessionEntries.slice(-n);
-          numbers = lastN.map((e) => e.number);
+          const sessionEntries = entries.filter((entry) => entry.sessionId === sessionId);
+          const count = input.lines.length;
+          const lastEntries = sessionEntries.slice(-count);
+          numbers = lastEntries.map((entry) => entry.number);
         }
-        annotations = input.lines.map((line, i) => ({
-          number: numbers[i] ?? i + 1,
+        annotations = input.lines.map((line, index) => ({
+          number: numbers[index] ?? index + 1,
           x: line.x,
           y: line.y,
         }));
       } else {
-        throw new Error('annotate_image_numbers 需要 annotations 或 lines 参数');
+        throw new Error('annotate_image_with_numbers 需要 annotations 或 lines 参数');
       }
 
       let imageWidth: number | undefined;
@@ -58,7 +58,6 @@ function create(_config: ToolConfig, context: ToolContext) {
         imageWidth = meta.width ?? undefined;
         imageHeight = meta.height ?? undefined;
       } catch {
-        // 忽略尺寸获取失败
       }
 
       const hitlPayload: Record<string, unknown> = {
@@ -81,7 +80,7 @@ function create(_config: ToolConfig, context: ToolContext) {
       });
     },
     {
-      name: 'annotate_image_numbers',
+      name: 'annotate_image_with_numbers',
       description:
         '在图片上按坐标绘制白底数字标签并保存为新图（如 images/xxx_annotated.png）。使用 lines 时，优先使用 numbers 参数（来自 TTS 返回），否则从 audio_record.json 读取；使用 annotations 时直接使用传入的 number。',
       schema: z.object({
@@ -108,4 +107,4 @@ function create(_config: ToolConfig, context: ToolContext) {
   );
 }
 
-registerTool('annotate_image_numbers', create);
+registerTool('annotate_image_with_numbers', create);

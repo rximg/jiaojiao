@@ -72,7 +72,7 @@ agent:
     - 当用户**重新打开已有会话**或在对话中说「重新生成图片」「从第 2 步开始」等时，应先理解已完成到哪一步，再用 write_todos 调整状态，只执行需要的步骤。
   
 
-# 主 Agent 工具配置（无需 annotate_image_numbers 和 generate_script_from_image）
+# 主 Agent 工具配置（无需 annotate_image_with_numbers 和 generate_script_from_image）
 tools:
   finalize_workflow: {}      # 检查文件并完成流程
   delete_artifacts: {}       # 删除 session 下产物，重新生成前需先删除

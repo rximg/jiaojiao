@@ -9,7 +9,7 @@ export interface ToolContext {
   getDefaultSessionId: () => string;
   /** Phase 5：Agent 模块使用 FilesystemBackend。按 session 返回 Backend，供 tools 做 session 内文本读写（二进制可保留 WorkspaceFilesystem） */
   getSessionBackend?: (sessionId: string) => FilesystemBackend;
-  /** 当前 run 的上下文，供 synthesize_speech 等工具上报 TTS 进度 */
+  /** 当前 run 的上下文，供 generate_audio 等工具上报批量进度 */
   getRunContext?: () => import('../application/agent/run-context.js').RunContext | undefined;
   /** 按工具名查询已解析的工具配置（供 batch_tool_call 获取单步工具的 serviceConfig） */
   getToolConfig?: (toolName: string) => ToolConfig | undefined;
@@ -17,7 +17,7 @@ export interface ToolContext {
 
 export interface ToolConfig {
   enable?: boolean;
-  /** 服务配置（generate_image、synthesize_speech 等 AI 工具使用） */
+  /** 服务配置（generate_image、generate_audio 等 AI 工具使用） */
   serviceConfig?: {
     service?: {
       type?: string;

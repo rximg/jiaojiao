@@ -4,8 +4,8 @@ import { createTool } from '../../../backend/tools/registry.js';
 import '../../../backend/tools/index.js';
 import { getArtifactRepository } from '../../../backend/infrastructure/repositories.js';
 
-describe('Tools / split_character_sheet', () => {
-  const sessionId = 'split-character-sheet-test';
+describe('Tools / split_grid_image', () => {
+  const sessionId = 'split-grid-image-test';
 
   beforeEach(async () => {
     const artifactRepo = getArtifactRepository();
@@ -13,8 +13,8 @@ describe('Tools / split_character_sheet', () => {
     await artifactRepo.write(sessionId, 'images/.gitkeep', '');
   });
 
-  it('splits a 2x2 character sheet into four slot images', async () => {
-    const sheetBuffer = await sharp({
+  it('splits a 2x2 grid image into four slot images', async () => {
+    const gridBuffer = await sharp({
       create: {
         width: 400,
         height: 400,
@@ -32,10 +32,10 @@ describe('Tools / split_character_sheet', () => {
       .toBuffer();
 
     const artifactRepo = getArtifactRepository();
-    await artifactRepo.write(sessionId, 'images/character_sheet_4grid.png', sheetBuffer);
+    await artifactRepo.write(sessionId, 'images/character_sheet_4grid.png', gridBuffer);
 
     const tool = await createTool(
-      'split_character_sheet',
+      'split_grid_image',
       { enable: true },
       {
         getDefaultSessionId: () => sessionId,
@@ -44,7 +44,7 @@ describe('Tools / split_character_sheet', () => {
     );
 
     if (!tool) {
-      throw new Error('split_character_sheet tool was not registered');
+      throw new Error('split_grid_image tool was not registered');
     }
 
     const result = await tool.invoke({

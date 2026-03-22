@@ -18,8 +18,8 @@ description: 有声绘本制作系统 - 百科类绘本
 1. **提示词**（第 1 项）：task 委派 prompt_generator，在 description 中传入用户回答（即用户本轮输入或用户描述），子代理会 write_file 到 image_prompt.txt
 2. **图片**（第 2 项）：generate_image(promptFile: "image_prompt.txt", size: "960*1280", count: 1)，勿用 prompt 参数
 3. **台词**（第 3 项）：generate_script_from_image(imagePath: 步骤2的图片路径)
-4. **语音**（第 4 项）：synthesize_speech(texts: 步骤3的 lines[].text, voice: "chinese_female", format: "mp3")
-5. **标注**（第 5 项）：annotate_image_numbers(imagePath: 步骤2路径, lines: 步骤3的 lines)，输出 xxx_annotated.png
+4. **语音**（第 4 项）：`batch_tool_call(tool: "generate_audio", items: [...])`，为每条 `lines[].text` 生成一条音频
+5. **标注**（第 5 项）：annotate_image_with_numbers(imagePath: 步骤2路径, lines: 步骤3的 lines)，输出 xxx_annotated.png
 6. **收尾**（第 6 项）：① 调用 finalize_workflow(...)；② 调用 write_todos 将第 6 项标为 completed；③ 向用户展示完成摘要
 
 ## 要求
