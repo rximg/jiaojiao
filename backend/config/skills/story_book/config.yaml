@@ -1,17 +1,17 @@
 name: story_book_agent
-version: 1.1.0
-description: 绘本故事生成系统 - 大纲确认后生成结构化分镜，固定四角色四宫格，保证角色一致性
+version: 2.0.0
+description: 绘本故事生成系统 - 先生成并确认《绘本故事策划稿.md》，再生成固定四角色角色图、逐页确认分镜并完成配音
 
 case:
   id: story_book
   title: 绘本故事
-  description: 大纲确认后生成结构化分镜，固定四角色四宫格
+  description: 先确认策划稿，再生成固定四角色绘本与逐页分镜配音
   order: 2
   cover: 绘本宣传海报生成.jpg
 
 agent:
   name: story_book_agent
-  version: 1.1.0
+  version: 2.0.0
   type: main_agent
 
 runtime:
@@ -29,6 +29,7 @@ tools:
   finalize_workflow: {}
   annotate_image_numbers: {}
   delete_artifacts: {}
+  split_character_sheet: {}
   generate_image:
     enable: true
     config_path: ./tools/t2i.yaml
@@ -45,13 +46,14 @@ sub_agents: {}
 ui:
   welcome:
     title: 欢迎使用绘本故事生成助手
-    subtitle: 我可以帮您生成完整的多页绘本故事，保证角色形象一致
+    subtitle: 我会先生成《绘本故事策划稿.md》供您确认，再生成角色图、分镜图和配音
     instructions:
       title: 请告诉我
       items:
         - 主题：想要讲述的故事（如：小兔子找妈妈、小熊学本领）
         - 年龄：目标儿童的年龄段（如：3-6岁）
         - 页数：想要生成的页数（建议8-16页）
+        - 偏好：希望的画风、情绪或角色设定偏好
     footer: 或者直接点击下方的快捷选项开始！
   quick_options:
     - label: 小兔子勇敢之旅

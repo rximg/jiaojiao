@@ -62,6 +62,14 @@ outputs/workspaces/ # 每次会话生成的产物（图片、音频、日志）
 
 ---
 
+## 计划文档约定
+
+- 任何 skill / workflow 明确要求产出的计划类文档（如 design、plan、implementation plan、task breakdown、review follow-up plan），统一存放到 `docs/plans/`
+- 如果某个 skill 示例、模板或历史约定写了其他目录，以本仓库约定为准，落盘路径仍然使用 `docs/plans/`
+- 文件名可按 skill 要求命名；若 skill 未规定命名格式，优先使用 `YYYY-MM-DD-<topic>-<type>.md`
+
+---
+
 ## 核心架构约束：后端 DDD 分层
 
 > 完整约束见 [`docs/architecture/ddd-constraints.md`](docs/architecture/ddd-constraints.md)
