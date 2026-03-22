@@ -31,9 +31,10 @@ tools:
   generate_image:
     enable: true
     config_path: ./tools/t2i.yaml
-  synthesize_speech:
+  generate_audio:
     enable: true
     config_path: ./tools/tts.yaml
+  batch_tool_call: {}
 
 sub_agents: {}
 

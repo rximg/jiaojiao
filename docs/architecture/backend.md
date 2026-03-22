@@ -250,9 +250,9 @@ interface ToolContext {
 |---|---|---|
 | `generate_image` | `generate-image.ts` | 文生图（T2I），HITL 确认后调用 `MultimodalPort.generateImage()` |
 | `edit_image` | `edit-image.ts` | 图片编辑，调用 `MultimodalPort.editImage()` |
-| `synthesize_speech` | `synthesize-speech-single.ts` + `batch-tool-wrapper.ts` | 批量 TTS，推送 `BatchProgress` |
+| `generate_audio` | `generate-audio.ts` + `batch-tool-wrapper.ts` | 音频生成，批量场景通过 `batch_tool_call` 推送 `BatchProgress` |
 | `generate_script_from_image` | `generate-script-from-image.ts` | 以图生台词+坐标（VL），HITL 确认 |
-| `annotate_image_numbers` | `annotate-image-numbers.ts` | 在图片上标注序号，HITL 确认位置 |
+| `annotate_image_with_numbers` | `annotate-image-with-numbers.ts` | 在图片上标注序号，HITL 确认位置 |
 | `delete_artifacts` | `delete-artifacts.ts` | 删除 session 下指定产物，HITL 确认 |
 | `finalize_workflow` | `finalize-workflow.ts` | 检查图片/音频/台词完整性，广播完成事件 |
 | `line_numbers` | `line-numbers.ts` | 台词行号分配（`readLineNumbers`） |
@@ -334,11 +334,11 @@ flowchart TD
     end
 
     subgraph S4[Step 4: 合成语音]
-        TTS[Tool: synthesize_speech\nconfig/tools/tts.yaml]
+        TTS[Tool: generate_audio\nconfig/tools/tts.yaml]
     end
 
     subgraph S5[Step 5: 标注图片]
-        ANN[Tool: annotate_image_numbers]
+        ANN[Tool: annotate_image_with_numbers]
     end
 
     subgraph S6[Step 6: 完成工作流]

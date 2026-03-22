@@ -13,10 +13,10 @@
 | 案例 | 工具 | 使用方式 | 说明 |
 |---|---|---|---|
 | 百科绘本 | `generate_image` | 单步 | 生成一张图片 |
-| 百科绘本 | `synthesize_speech` | 批量 | 一次调用传入 texts 数组，内部串行合成 |
+| 百科绘本 | `generate_audio` + `batch_tool_call` | 批量 | 通过 `batch_tool_call(tool: "generate_audio")` 串行合成 |
 | 绘本故事 | `generate_image` | 批量（多次单步） | Agent 循环调用 N 次 generate_image 生成 N 个角色图 |
 | 绘本故事 | `edit_image` | 批量（多次单步） | Agent 循环调用 N 次 edit_image 生成 N 个分镜图 |
-| 绘本故事 | `synthesize_speech` | 批量 | 一次调用传入台词数组 |
+| 绘本故事 | `generate_audio` + `batch_tool_call` | 批量 | 通过 `batch_tool_call(tool: "generate_audio")` 生成台词音频 |
 
 ### 核心问题
 
@@ -523,7 +523,7 @@ export interface RunContext {
 }
 ```
 
-> **方案 B 优势**：由于 `synthesize_speech` 已完全改为 batch wrapper，内部不再直接调用 `onTtsProgress`，所以 `onTtsProgress` 可在 Phase 2 完成后立即去除，无需过渡期双发。
+> **方案 B 优势**：由于音频批量生成已统一为 `batch_tool_call(tool: "generate_audio")`，内部不再直接调用 `onTtsProgress`，所以 `onTtsProgress` 可在 Phase 2 完成后立即去除，无需过渡期双发。
 
 ### 4.5 IPC 事件统一
 
@@ -542,7 +542,7 @@ interface BatchProgressEvent {
 }
 ```
 
-`agent:ttsProgress` 在方案 B 下可直接废弃（`synthesize_speech` 已改为 batch wrapper，不再触发 `onTtsProgress`）。Phase 4 中统一清理。
+`agent:ttsProgress` 在方案 B 下可直接废弃（音频批量生成已统一走 `batch_tool_call`，不再触发 `onTtsProgress`）。Phase 4 中统一清理。
 
 ### 4.6 单步工具的直接执行（绕过 HITL）
 
@@ -773,7 +773,7 @@ function ResultRenderer({ toolName, result }: { toolName: string; result: unknow
     return <ImageBlock path={path} prompt={data.prompt as string} />;
   }
 
-  if (toolName === 'synthesize_speech') {
+  if (toolName === 'generate_audio') {
     const path = (data.path ?? data.audioPath ?? '') as string;
     return <AudioBlock path={path} text={data.text as string} />;
   }
@@ -909,7 +909,7 @@ window.electronAPI.agent.onBatchProgress(handleBatchProgress);
 | 场景 | 当前行为 | 用户操作 |
 |---|---|---|
 | 百科：1 次 generate_image | 弹 1 次 HITL | 点 1 次 |
-| 百科：1 次 synthesize_speech（10 条台词） | 弹 1 次 HITL | 点 1 次 |
+| 百科：1 次 `batch_tool_call(tool: "generate_audio")`（10 条台词） | 弹 1 次 HITL | 点 1 次 |
 | 绘本：5 次 generate_image（角色图） | 弹 5 次 HITL | **点 5 次** ❌ |
 | 绘本：10 次 edit_image（分镜图） | 弹 10 次 HITL | **点 10 次** ❌ |
 
@@ -918,7 +918,7 @@ window.electronAPI.agent.onBatchProgress(handleBatchProgress);
 | 场景 | 新行为 | 用户操作 |
 |---|---|---|
 | 百科：1 次 generate_image | 弹 1 次 HITL（不变） | 点 1 次 |
-| 百科：1 次 synthesize_speech | 弹 1 次 HITL（不变） | 点 1 次 |
+| 百科：1 次 `batch_tool_call(tool: "generate_audio")` | 弹 1 次 HITL（不变） | 点 1 次 |
 | 绘本：1 次 generate_images（5 张角色图） | 弹 1 次批量 HITL | **点 1 次** ✅ |
 | 绘本：1 次 edit_images（10 张分镜图） | 弹 1 次批量 HITL | **点 1 次** ✅ |
 
@@ -933,7 +933,7 @@ window.electronAPI.agent.onBatchProgress(handleBatchProgress);
 | 步骤 | 工具 | 模式 | 改动 |
 |---|---|---|---|
 | 生成图片 | `generate_image` | 单步（1 张） | **不变** |
-| 合成语音 | `synthesize_speech` | 批量（N 条台词） | **接口不变**（底层改为 batch wrapper，Agent 无感知） |
+| 合成语音 | `generate_audio` + `batch_tool_call` | 批量（N 条台词） | 通过通用批量工具逐条生成 |
 | 其他工具 | `generate_script_from_image` 等 | 单步 | **不变** |
 
 **encyclopedia.yaml system_prompt 改动**：需要改成 `batch_tool_call(tool: "generate_audio", items: [...])`，与当前通用批量工具保持一致。
@@ -972,7 +972,7 @@ tools:
 |---|---|---|---|
 | 步骤 3：角色图片 | `generate_image` × N | Agent 循环 N 次单步 | **`generate_images`** 批量，一次传入 N 个角色 |
 | 步骤 4：分镜图 | `edit_image` × N | Agent 循环 N 次单步 | **`edit_images`** 批量，一次传入 N 个分镜 |
-| 步骤 5：台词+配音 | `synthesize_speech` | 已是批量 | **不变**（底层改为 batch wrapper） |
+| 步骤 5：台词+配音 | `generate_audio` + `batch_tool_call` | 批量 | 使用通用批量工具执行 |
 | 其他 | 单步工具 | — | **不变** |
 
 **SKILL.md allowedTools 改动**：
@@ -1036,7 +1036,7 @@ allowedTools:
 | 重新生成单个角色图 | `generate_image` | 单步：只改一张 |
 | 一次生成所有分镜图 | `edit_images` | 批量 |
 | 重新生成单个分镜图 | `edit_image` | 单步 |
-| 合成所有台词语音 | `synthesize_speech` | 批量（传入 texts 数组） |
+| 合成所有台词语音 | `generate_audio` + `batch_tool_call` | 批量（逐条 item 传入） |
 | 其他工具 | 各自单步调用 | 无批量需求 |
 
 **核心原则**：首次执行流程时用批量工具，重做某个子项时用单步工具。

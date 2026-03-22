@@ -32,7 +32,7 @@ description: 行为纠正绘本制作系统
      - 分镜2台词：描述严重后果，展现危害，用正向引导语言描述后果或正确做法，（如"宝宝摔下来啦，好痛痛，以后再也不爬高了。用勺子吃饭，干干净净真棒！"）
    - 台词风格：简短（10-20字）、口语化、正向引导、必要时候加一些语气词。
 
-3. **语音**（第 3 项）：synthesize_speech(texts: [分镜1台词, 分镜2台词], voice: "chinese_female", format: "mp3")
+3. **语音**（第 3 项）：`batch_tool_call(tool: "generate_audio", items: [{ params: { text: 分镜1台词, voice: "chinese_female", format: "mp3" } }, { params: { text: 分镜2台词, voice: "chinese_female", format: "mp3" } }])`
 
 4. **收尾**（第 4 项）：① 调用 finalize_workflow(imagePath, audioPath, scriptText)；② 调用 write_todos 将第 4 项标为 completed；③ 向用户展示完成摘要
 

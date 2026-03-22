@@ -15,7 +15,7 @@ export interface InvokeAgentUseCaseCallbacks {
   onToolCall?: (threadId: string, toolCalls: any[]) => void;
   /** TTS 每完成一个文件时推送，用于前端显示「已生成 x/n 份文件」 */
   onTtsProgress?: (threadId: string, messageId: string | undefined, toolCallId: string | undefined, current: number, total: number, path: string) => void;
-  /** 统一批量进度回调，覆盖所有批量工具（generate_images, edit_images, synthesize_speech 等） */
+  /** 统一批量进度回调，覆盖所有批量工具（generate_images, edit_images, generate_audio 等） */
   onBatchProgress?: (threadId: string, messageId: string | undefined, toolCallId: string | undefined, progress: import('../../tools/types.js').BatchProgress) => void;
   onTodoUpdate?: (threadId: string, todos: any[]) => void;
 }

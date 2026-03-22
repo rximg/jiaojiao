@@ -1,12 +1,12 @@
 /**
- * Tools 层：synthesize_speech 集成测试
+ * Tools 层：generate_audio 底层音频生成集成测试
  */
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { promises as fs } from 'fs';
 import { getMultimodalPortAsync } from '../../../backend/infrastructure/repositories.js';
-import { loadConfig, lastLoadedConfigPath } from '../../../backend/app-config';
+import { loadConfig } from '../../../backend/app-config';
 import { resolveWorkspaceRoot } from '../../../backend/services/fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -19,7 +19,7 @@ function debugLog(msg: string) {
   } catch {}
 }
 
-describe('Tools / synthesize_speech', () => {
+describe('Tools / generate_audio', () => {
   const sessionId = 'default';
 
   beforeAll(async () => {
@@ -43,10 +43,10 @@ describe('Tools / synthesize_speech', () => {
     expect(Array.isArray(result.audioPaths)).toBe(true);
     expect(result.audioPaths.length).toBe(texts.length);
     const expectedDir = path.join(resolveWorkspaceRoot(), sessionId, 'audio');
-    for (const p of result.audioPaths) {
-      const exists = await fs.access(p).then(() => true).catch(() => false);
+    for (const audioPath of result.audioPaths) {
+      const exists = await fs.access(audioPath).then(() => true).catch(() => false);
       expect(exists).toBe(true);
-      expect(path.resolve(p).startsWith(path.resolve(expectedDir))).toBe(true);
+      expect(path.resolve(audioPath).startsWith(path.resolve(expectedDir))).toBe(true);
     }
   }, 180_000);
 });
