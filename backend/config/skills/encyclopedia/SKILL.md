@@ -1,6 +1,5 @@
 ---
 name: encyclopedia
-version: 1.0.0
 description: 有声绘本制作系统 - 百科类绘本
 ---
 

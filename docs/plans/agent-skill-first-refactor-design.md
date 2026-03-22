@@ -1,5 +1,7 @@
 # Agent 加载系统 Skill-First 重构设计
 
+> 历史迁移记录：本文中的 `agent_cases`、双读兼容和迁移步骤描述，保留为重构设计背景，不代表当前实现。
+
 ## 1. 背景与目�?
 
 当前 agent 加载仍以 `backend/config/agent_cases/*.yaml` 为主，案例通过 `system_prompt`（内联或 path）驱动，`skill_path` 只是可选增强。此次重构目标是把加载方式统一为：
@@ -195,8 +197,8 @@ ui:
 
 - `backend/config/skills/index.yaml`
 - `backend/config/skills/encyclopedia/config.yaml`
-- `backend/config/skills/story_book/config.yaml`
-- `backend/config/skills/behavior_correction/config.yaml`
+- `backend/config/skills/story-book/config.yaml`
+- `backend/config/skills/behavior-correction/config.yaml`
 - `backend/config/skills/*/cover.*`
 - `docs/plans/agent-skill-first-refactor-design.md`（本文档�?
 

@@ -3,6 +3,6 @@ cases:
   encyclopedia:
     skill_name: encyclopedia
   story_book:
-    skill_name: story_book
+    skill_name: story-book
   behavior_correction:
-    skill_name: behavior_correction
+    skill_name: behavior-correction

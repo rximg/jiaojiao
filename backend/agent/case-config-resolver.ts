@@ -21,7 +21,7 @@ interface SkillIndex {
 }
 
 /**
- * 优先从 skills/index.yaml 解析 caseId → skill 目录；不存在或失败时返回 null（调用方 fallback 到 agent_cases）
+ * 从 skills/index.yaml 解析 caseId → skill 目录；不存在或失败时返回 null。
  */
 export function resolveSkillBundleByCaseId(configDir: string, caseId?: string): SkillBundle | null {
   const effectiveCaseId = caseId?.trim() || DEFAULT_CASE_ID;
@@ -69,27 +69,4 @@ export function resolveSkillBundleByCaseId(configDir: string, caseId?: string): 
     console.warn('[case-config-resolver] 解析 skills/index.yaml 失败:', err);
     return null;
   }
-}
-
-/**
- * 解析案例配置路径：agent_cases/{caseId}.yaml（兼容 fallback）
- * - 有 caseId → agent_cases/{caseId}.yaml（存在时）
- * - 无 caseId → agent_cases/encyclopedia.yaml（默认案例）
- */
-export function resolveMainAgentConfigPath(configDir: string, caseId?: string): string {
-  const effectiveCaseId = caseId?.trim() || DEFAULT_CASE_ID;
-  const caseConfigPath = path.join(configDir, 'agent_cases', `${effectiveCaseId}.yaml`);
-
-  if (fs.existsSync(caseConfigPath)) {
-    return caseConfigPath;
-  }
-
-  // 回退到默认案例
-  const defaultCasePath = path.join(configDir, 'agent_cases', `${DEFAULT_CASE_ID}.yaml`);
-  if (fs.existsSync(defaultCasePath)) {
-    return defaultCasePath;
-  }
-
-  // 最终回退（不应到达，保留防御性）
-  throw new Error(`默认案例配置不存在: ${defaultCasePath}`);
 }

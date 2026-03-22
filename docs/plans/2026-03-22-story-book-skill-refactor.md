@@ -27,7 +27,7 @@
 ### Task 1: Rewrite The Skill Workflow
 
 **Files:**
-- Modify: `backend/config/skills/story_book/SKILL.md`
+- Modify: `backend/config/skills/story-book/SKILL.md`
 
 **Step 1: Replace the first-step contract**
 
@@ -56,8 +56,8 @@
 ### Task 2: Simplify Execution Rules
 
 **Files:**
-- Modify: `backend/config/skills/story_book/SKILL.md`
-- Modify: `backend/config/skills/story_book/config.yaml`
+- Modify: `backend/config/skills/story-book/SKILL.md`
+- Modify: `backend/config/skills/story-book/config.yaml`
 
 **Step 1: Rewrite tool usage sections**
 
@@ -77,8 +77,8 @@
 ### Task 3: Verify Consistency
 
 **Files:**
-- Modify: `backend/config/skills/story_book/SKILL.md`
-- Modify: `backend/config/skills/story_book/config.yaml`
+- Modify: `backend/config/skills/story-book/SKILL.md`
+- Modify: `backend/config/skills/story-book/config.yaml`
 
 **Step 1: Verify terminology**
 

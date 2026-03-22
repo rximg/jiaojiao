@@ -112,9 +112,9 @@ backend/
 │   ├── index.ts
 │   ├── generate-image.ts           # 文生图（T2I）
 │   ├── edit-image.ts               # 图片编辑
-│   ├── synthesize-speech-single.ts # 单条 TTS 合成
+│   ├── generate-audio.ts           # 单条/单批次 TTS 合成入口
 │   ├── generate-script-from-image.ts  # 以图生剧本（VL）
-│   ├── annotate-image-numbers.ts   # 在图片上标注序号
+│   ├── annotate-image-with-numbers.ts # 在图片上标注序号
 │   ├── batch-tool-wrapper.ts       # 批量工具包装器（统一 BatchProgress 推送）
 │   ├── delete-artifacts.ts         # 删除 session 下产物
 │   ├── finalize-workflow.ts        # 检查产物完整性，完成工作流
@@ -126,7 +126,7 @@ backend/
 │   ├── workspace-config.ts
 │   ├── log-config.ts
 │   ├── feature-flags.ts
-│   ├── agent_cases/                # 各案例主配置（encyclopedia.yaml 等）
+│   ├── skills/                     # Skill-First 案例配置（index.yaml + <skill_name>/config.yaml + SKILL.md）
 │   ├── sub_agents/
 │   │   └── prompt_gen.yaml         # 提示词生成子代理
 │   ├── tools/                      # 工具业务参数
@@ -134,7 +134,6 @@ backend/
 │   │   ├── tts.yaml
 │   │   ├── vl_script.yaml
 │   │   └── image_edit.yaml
-│   └── skills/                     # Agent skill 配置
 │
 ├── interfaces/
 │   └── http/                       # HTTP 路由（已实现，但 Electron 主进程未挂载 Express）
@@ -156,7 +155,9 @@ backend/
 ```mermaid
 flowchart TD
     AF[AgentFactory.create]
-    CC[case-config-resolver\n按 AGENT_CASE_ID 选择 case yaml]
+    CC[case-config-resolver\n按 AGENT_CASE_ID 选择 skills/index.yaml]
+    SC[skills/<skill>/config.yaml]
+    SM[skills/<skill>/SKILL.md]
     CL[ConfigLoader]
     RM[RuntimeManager\ncreateAgentRuntime]
     TR[registry.createTool × N]
@@ -164,17 +165,20 @@ flowchart TD
     MP[MultimodalPortImpl]
     DA[createDeepAgent\n→ AgentInstance]
 
-    AF --> CC --> CL
+    AF --> CC --> SC --> CL
+    AF --> CC --> SM
     AF --> RM
     AF --> TR
     AF --> LLM
     AF --> MP
+    SM --> DA
     LLM --> DA
     MP --> DA
     TR --> DA
 ```
 
-- 读取 `backend/config/agent_cases/{caseId}.yaml` 主配置（默认 `encyclopedia.yaml`）
+- 读取 `backend/config/skills/index.yaml`，将 `caseId` 路由到 `backend/config/skills/<skill_name>/`
+- 从 `config.yaml` 加载 tools / sub_agents / ui / runtime 配置，从 `SKILL.md` 加载主提示词
 - 按 `tools` 段调用 `registry.createTool(name, config, context)`，注入 HITL、MultimodalPort、FilesystemBackend
 - 绑定 LangSmith 追踪（通过环境变量 `LANGCHAIN_TRACING_V2` 开启）
 - 注入 `WorkspaceCheckpointSaver` 支持 LangGraph checkpoint
@@ -234,7 +238,7 @@ flowchart LR
 
 ### 5. Tools 与 Registry（`backend/tools/`）
 
-工具遵循**配置驱动**模式，由 `agent_cases/{caseId}.yaml` 的 `tools` 段声明，`registry.createTool` 负责实例化：
+工具遵循**配置驱动**模式，由 `skills/<skill_name>/config.yaml` 的 `tools` 段声明，`registry.createTool` 负责实例化：
 
 ```typescript
 interface ToolContext {
@@ -361,13 +365,17 @@ flowchart TD
     ENV[.env\n开发环境变量]
     UC[userData/config.json\nelectron-store\nAPI Key / provider / model]
     AIM[backend/config/ai_models.json\nendpoint / model 元数据]
-    MAIN[backend/config/agent_cases/{caseId}.yaml\n主 Agent 定义]
+    INDEX[backend/config/skills/index.yaml\ncaseId → skill_name]
+    MAIN[backend/config/skills/{skill_name}/config.yaml\n主 Agent 运行时配置]
+    SKILL[backend/config/skills/{skill_name}/SKILL.md\n主 Agent 提示词]
     SUB[backend/config/sub_agents/*.yaml\n子代理]
     TOOL[backend/config/tools/*.yaml\n工具业务参数]
 
     ENV -->|最高优先级| UC
     UC --> AIM
-    AIM --> MAIN
+    AIM --> INDEX
+    INDEX --> MAIN
+    INDEX --> SKILL
     MAIN --> SUB
     MAIN --> TOOL
 ```
@@ -376,7 +384,9 @@ flowchart TD
 |---|---|
 | `userData/config.json` | API Key、provider、model、outputPath 等用户持久化设置 |
 | `backend/config/ai_models.json` | 各 provider 下 llm / vl / tts / t2i 的 endpoint、model、taskEndpoint |
-| `backend/config/agent_cases/*.yaml` | 主 Agent 定义：tools 段（含 config_path）、sub_agents 段、workflow |
+| `backend/config/skills/index.yaml` | `caseId` 到 `skill_name` 的路由索引 |
+| `backend/config/skills/*/config.yaml` | 主 Agent 运行时定义：tools 段（含 config_path）、sub_agents 段、ui、runtime |
+| `backend/config/skills/*/SKILL.md` | 主 Agent 提示词正文与 deepagents skill 元数据 |
 | `backend/config/tools/*.yaml` | 工具业务参数（negativePrompt、voice、size 等） |
 | `backend/config/sub_agents/*.yaml` | 子代理提示词与配置 |
 
@@ -415,7 +425,7 @@ flowchart TD
 ### 新增工具
 
 1. 在 `backend/tools/` 实现工具（`registerTool(name, factory)` 注册）
-2. 在主配置 `agent_cases/{caseId}.yaml` 的 `tools` 段添加条目，`config_path` 指向 `config/tools/*.yaml`
+2. 在主配置 `skills/{skill_name}/config.yaml` 的 `tools` 段添加条目，`config_path` 指向 `config/tools/*.yaml`
 3. 如需批量执行，用 `batch-tool-wrapper.ts` 包装单步工具
 
 ### 新增子代理

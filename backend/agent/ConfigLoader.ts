@@ -256,59 +256,6 @@ export class ConfigLoader {
   }
 
   /**
-   * 加载主配置并递归加载所有子配置
-   */
-  loadMainConfig(configPath?: string): AgentConfig {
-    const mainConfigPath = configPath || path.join(this.configDir, 'agent_cases', 'encyclopedia.yaml');
-    const config = this.loadYaml<AgentConfig>(mainConfigPath);
-    // 确保 sub_agents 始终为对象，避免 YAML 缺失或打包后配置不完整导致 Object.entries 报错
-    if (config.sub_agents == null || typeof config.sub_agents !== 'object') {
-      config.sub_agents = {};
-    }
-
-    // 加载工具配置（含 config_path 的从文件加载）
-    if (config.tools) {
-      for (const [key, toolEntry] of Object.entries(config.tools)) {
-        const entry = toolEntry as { enable?: boolean; config_path?: string; config?: any };
-        if (entry.config_path) {
-          try {
-            entry.config = this.loadYaml<any>(entry.config_path);
-          } catch (error) {
-            console.warn(`加载工具配置失败 (${key}):`, error);
-          }
-        }
-      }
-    }
-
-    // 加载所有SubAgent配置
-    if (config.sub_agents) {
-      for (const [key, subAgentEntry] of Object.entries(config.sub_agents)) {
-        if (subAgentEntry.enable && subAgentEntry.config_path) {
-          try {
-            const subConfig = this.loadYaml<any>(subAgentEntry.config_path);
-            subAgentEntry.config = subConfig;
-
-            // 加载SubAgent的提示词（支持直接嵌入或外部文件）
-            if (typeof subConfig.sub_agent.system_prompt === 'string') {
-              // 直接嵌入的提示词
-              subAgentEntry.config.system_prompt_text = subConfig.sub_agent.system_prompt;
-            } else if (subConfig.sub_agent.system_prompt?.path) {
-              // 外部文件引用（向后兼容）
-              const promptPath = subConfig.sub_agent.system_prompt.path;
-              const promptYamlPath = path.resolve(this.projectRoot, promptPath);
-              subAgentEntry.config.system_prompt_text = this.loadPromptFromYaml(promptYamlPath);
-            }
-          } catch (error) {
-            console.warn(`加载SubAgent配置失败 (${key}):`, error);
-          }
-        }
-      }
-    }
-
-    return config;
-  }
-
-  /**
    * 验证配置
    * @param config 主配置或 Skill 配置
    * @param isSkillConfig 是否 Skill-First 配置（主 prompt 来自 SKILL.md，不校验 system_prompt）

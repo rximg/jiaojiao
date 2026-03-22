@@ -1,8 +1,7 @@
 ---
-name: story_book
-version: 2.0.0
+name: story-book
 description: 绘本故事生成系统 - 先生成并确认《绘本故事策划稿.md》，再基于策划稿生成四宫格角色图、逐页确认分镜提示词并生成配图与配音
-allowedTools:
+allowed-tools:
   - write_file
   - edit_file
   - write_todos

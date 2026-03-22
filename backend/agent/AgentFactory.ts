@@ -330,7 +330,7 @@ export class AgentFactory {
     // 这样可以避免 middleware 重复定义的错误
     // @ts-ignore - Type compatibility with deepagents
     const agent = createDeepAgent({
-      model: llm,
+      model: llm as any,
       tools,
       systemPrompt: mainSystemPrompt,
       subagents: subAgents,

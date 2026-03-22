@@ -1,6 +1,5 @@
 ---
-name: behavior_correction
-version: 1.0.0
+name: behavior-correction
 description: 行为纠正绘本制作系统
 ---
 

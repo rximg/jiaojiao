@@ -159,7 +159,7 @@ function loadCaseMetasFromSkill(configDir: string): CaseMeta[] | null {
   }
 }
 
-/** 读取案例元数据：优先 skills/index，失败则 fallback agent_cases */
+/** 读取案例元数据：仅从 skills/index + skills/<name>/config.yaml 读取 */
 function loadCaseMetas(configDir: string): CaseMeta[] {
   const fromSkill = loadCaseMetasFromSkill(configDir);
   if (fromSkill && fromSkill.length > 0) {
@@ -167,32 +167,8 @@ function loadCaseMetas(configDir: string): CaseMeta[] {
     return fromSkill;
   }
 
-  try {
-    const casesDir = path.join(configDir, 'agent_cases');
-    const files = fs.readdirSync(casesDir).filter((f) => f.endsWith('.yaml'));
-    const metas: CaseMeta[] = files.map((file) => {
-      const id = path.basename(file, '.yaml');
-      try {
-        const content = fs.readFileSync(path.join(casesDir, file), 'utf-8');
-        const parsed = yaml.load(content) as Record<string, unknown>;
-        const c = (parsed?.case as Record<string, unknown>) ?? {};
-        return {
-          id,
-          title: (c.title as string) ?? id,
-          description: (c.description as string) ?? '',
-          cover: (c.cover as string) ?? null,
-          coverUrl: null,
-          order: typeof c.order === 'number' ? c.order : 99,
-        };
-      } catch {
-        return { id, title: id, description: '', cover: null, coverUrl: null, order: 99 };
-      }
-    });
-    return metas.sort((a, b) => a.order - b.order);
-  } catch (error) {
-    log.error('[config] loadCaseMetas failed:', error);
-    return [];
-  }
+  log.warn('[config] loadCaseMetas found no cases in skills/index.yaml');
+  return [];
 }
 
 /** 默认案例 ID */
@@ -254,7 +230,7 @@ function loadUIConfigFromSkill(configDir: string, caseId: string): Record<string
   }
 }
 
-/** 加载案例 UI 配置：优先 skill，失败则 fallback agent_cases */
+/** 加载案例 UI 配置：仅从 skill config.yaml 读取 */
 function loadUIConfig(caseId?: string): Record<string, unknown> {
   try {
     const configDir = resolveBackendConfigDir();
@@ -266,17 +242,8 @@ function loadUIConfig(caseId?: string): Record<string, unknown> {
       return fromSkill;
     }
 
-    const configPath = path.join(configDir, 'agent_cases', `${effectiveCaseId}.yaml`);
-    if (!fs.existsSync(configPath)) {
-      const fallbackPath = path.join(configDir, 'agent_cases', `${DEFAULT_CASE_ID}.yaml`);
-      if (!fs.existsSync(fallbackPath)) return {};
-      const content = fs.readFileSync(fallbackPath, 'utf-8');
-      const config = yaml.load(content) as { ui?: Record<string, unknown> };
-      return config?.ui ?? {};
-    }
-    const fileContent = fs.readFileSync(configPath, 'utf-8');
-    const config = yaml.load(fileContent) as { ui?: Record<string, unknown> };
-    return config?.ui ?? {};
+    log.warn(`[config] Case UI missing in skill config (${effectiveCaseId})`);
+    return {};
   } catch (error) {
     log.error('[config] loadUIConfig failed:', error);
     return {};

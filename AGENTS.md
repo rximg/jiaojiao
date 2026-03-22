@@ -10,7 +10,7 @@
 
 - **桌面框架**：Electron 32 + Vite 5
 - **前端**：React 18 + TypeScript 5.5 + Tailwind CSS + Radix UI
-- **智能体框架**：deepagents 1.3 + LangChain 1.2 + LangGraph 1.1
+- **智能体框架**：deepagents 1.8.4 + LangChain 1.2 + LangGraph 1.1
 - **AI 服务商**：DashScope（通义千问 / wan2.6-t2i / qwen-tts）、Zhipu（GLM-4 / glm-tts）
 - **持久化**：electron-store（用户配置）+ 文件系统（会话产物）
 - **测试**：Vitest 1.6（单元 + 集成）
@@ -36,8 +36,7 @@ backend/            # 后端服务
   services/         # 运行时服务（RuntimeManager 等）
   tools/            # 内置 Agent 工具（generate-image、edit-image、synthesize-speech 等）
   config/           # YAML 智能体配置
-    skills/         # Skill-First 案例配置（优先）；index.yaml + <skill_name>/{config.yaml, SKILL.md, cover.*}
-    agent_cases/    # 旧案例配置（过渡期 fallback）
+    skills/         # Skill-First 案例配置；index.yaml + <skill_name>/{config.yaml, SKILL.md, cover.*}
     sub_agents/     # 子代理配置
     tools/          # 工具 AI 服务配置
     ai_models.json  # 模型与网关配置
